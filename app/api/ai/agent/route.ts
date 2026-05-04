@@ -5,7 +5,7 @@ import { getRequestUser, type AuthUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { checkRateLimit } from "@/lib/security/api";
 
-export const preferredRegion = "hkg1";
+export const preferredRegion = "sin1";
 
 type ChatRole = "user" | "assistant";
 type ChatMessage = { role: ChatRole; content: string };

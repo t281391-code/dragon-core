@@ -5,7 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { getRequestUser } from "@/lib/auth";
 import { checkRateLimit, forbidden, normalizePageLimit, requireDepartmentWrite } from "@/lib/security/api";
 
-export const preferredRegion = "hkg1";
+export const preferredRegion = "sin1";
 
 const dateInput = z.string().trim().min(1).max(64).refine((value) => !Number.isNaN(Date.parse(value)), "Invalid date");
 

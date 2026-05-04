@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getRequestUser } from "@/lib/auth";
 
-export const preferredRegion = "hkg1";
+export const preferredRegion = "sin1";
 
 export async function GET() {
   const user = await getRequestUser();

@@ -4,7 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { getRequestUser } from "@/lib/auth";
 import { checkRateLimit, forbidden, requireDepartmentWrite } from "@/lib/security/api";
 
-export const preferredRegion = "hkg1";
+export const preferredRegion = "sin1";
 
 const materialSchema = z.object({
   name: z.string().trim().min(1).max(160),
