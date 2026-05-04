@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { destroySession } from "@/lib/session";
 
-export const preferredRegion = "sin1";
+export const preferredRegion = "hkg1";
 
 export async function POST() {
   await destroySession();

@@ -5,7 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { getRequestUser, hashPassword } from "@/lib/auth";
 import { checkRateLimit, forbidden, normalizePageLimit, requireRole } from "@/lib/security/api";
 
-export const preferredRegion = "sin1";
+export const preferredRegion = "hkg1";
 
 const userCreateSchema = z.object({
   fullName: z.string().trim().min(2).max(120),

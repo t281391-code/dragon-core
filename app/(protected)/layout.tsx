@@ -5,7 +5,7 @@ import { AiAgentWidget } from "@/components/AiAgentWidget";
 import Sidebar from "@/components/Sidebar";
 import { ThemeProvider } from "@/components/ThemeProvider";
 
-export const preferredRegion = "sin1";
+export const preferredRegion = "hkg1";
 
 export default async function ProtectedLayout({ children }: { children: React.ReactNode }) {
   const user = await getCurrentUser();

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
 
-export const preferredRegion = "sin1";
+export const preferredRegion = "hkg1";
 
 export async function GET() {
   const user = await getCurrentUser();

@@ -7,7 +7,7 @@ import { blockIp, getClientIpFromHeaders, honeypotCookieOptions } from "@/lib/se
 import { checkRateLimit } from "@/lib/security/api";
 import type { RoleName, DepartmentName } from "@/lib/permissions";
 
-export const preferredRegion = "sin1";
+export const preferredRegion = "hkg1";
 
 const registerSchema = z.object({
   fullName: z.string().trim().min(2).max(120),

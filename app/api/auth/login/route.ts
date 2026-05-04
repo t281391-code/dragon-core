@@ -7,7 +7,7 @@ import { blockIp, getClientIpFromHeaders, honeypotCookieOptions } from "@/lib/se
 import { checkRateLimit } from "@/lib/security/api";
 import type { RoleName, DepartmentName } from "@/lib/permissions";
 
-export const preferredRegion = "sin1";
+export const preferredRegion = "hkg1";
 
 const loginSchema = z.object({
   email: z.string().trim().email().max(254).transform((value) => value.toLowerCase()),
