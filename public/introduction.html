@@ -1,0 +1,1402 @@
+<!DOCTYPE html>
+<html lang="mn">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>EXPLO-KPI — Системийн танилцуулга</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
+
+    @page { size: A4 portrait; margin: 0; }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --amber:   #F59E0B;
+      --green:   #10B981;
+      --red:     #EF4444;
+      --blue:    #3B82F6;
+      --purple:  #8B5CF6;
+      --dark:    #0F172A;
+      --ink:     #1E293B;
+      --muted:   #64748B;
+      --light:   #F8FAFC;
+      --border:  #E2E8F0;
+      --white:   #FFFFFF;
+    }
+
+    html { font-size: 13px; }
+    body {
+      font-family: 'Inter', sans-serif;
+      color: var(--ink);
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+    }
+    @media screen {
+      body { background: #F1F5F9; }
+    }
+
+    /* ─── PAGE WRAPPER ─────────────────────────── */
+    .page {
+      width: 210mm;
+      height: 297mm;
+      overflow: hidden;
+      padding: 0;
+      page-break-after: always;
+      page-break-inside: avoid;
+      position: relative;
+      background: var(--white);
+    }
+    .page:last-child { page-break-after: auto; }
+    @media screen {
+      .page { margin: 0 auto 16mm; box-shadow: 0 4px 40px rgba(0,0,0,0.10); }
+      .page:last-child { margin-bottom: 0; }
+    }
+
+    /* ─── COVER PAGE ──────────────────────────── */
+    .cover {
+      background: linear-gradient(145deg, #0A0F1E 0%, #0F172A 40%, #1E2A48 100%);
+      color: white;
+      display: flex;
+      flex-direction: column;
+      height: 100%;
+      padding: 0;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .cover-bg-circle {
+      position: absolute;
+      border-radius: 50%;
+      pointer-events: none;
+    }
+    .cover-bg-circle-1 {
+      width: 500px; height: 500px;
+      background: radial-gradient(circle, rgba(245,158,11,0.12) 0%, transparent 70%);
+      top: -180px; right: -180px;
+    }
+    .cover-bg-circle-2 {
+      width: 400px; height: 400px;
+      background: radial-gradient(circle, rgba(59,130,246,0.08) 0%, transparent 70%);
+      bottom: -100px; left: -120px;
+    }
+    .cover-bg-grid {
+      position: absolute;
+      inset: 0;
+      background-image:
+        linear-gradient(rgba(255,255,255,0.025) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255,255,255,0.025) 1px, transparent 1px);
+      background-size: 28px 28px;
+    }
+
+    .cover-header {
+      position: relative;
+      z-index: 1;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 30px 40px 0;
+    }
+    .cover-logo-group {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+    .cover-logo-icon {
+      width: 52px; height: 52px;
+      background: linear-gradient(135deg, #F59E0B, #FBBF24);
+      border-radius: 14px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 26px;
+      box-shadow: 0 0 24px rgba(245,158,11,0.4);
+      flex-shrink: 0;
+    }
+    .cover-logo-text { line-height: 1; }
+    .cover-logo-name {
+      font-size: 22px;
+      font-weight: 900;
+      letter-spacing: -0.04em;
+      color: white;
+    }
+    .cover-logo-sub {
+      font-size: 9px;
+      font-weight: 700;
+      letter-spacing: 0.22em;
+      color: #F59E0B;
+      text-transform: uppercase;
+      margin-top: 3px;
+    }
+    .cover-badge {
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      color: rgba(255,255,255,0.45);
+      border: 1px solid rgba(255,255,255,0.15);
+      padding: 6px 14px;
+      border-radius: 999px;
+    }
+
+    .cover-body {
+      position: relative;
+      z-index: 1;
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 40px;
+      text-align: center;
+    }
+
+    .cover-tag {
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.22em;
+      text-transform: uppercase;
+      color: #F59E0B;
+      background: rgba(245,158,11,0.12);
+      border: 1px solid rgba(245,158,11,0.28);
+      padding: 6px 16px;
+      border-radius: 999px;
+      margin-bottom: 28px;
+      display: inline-block;
+    }
+    .cover-title {
+      font-size: 48px;
+      font-weight: 900;
+      line-height: 1.05;
+      letter-spacing: -0.03em;
+      color: white;
+      margin-bottom: 12px;
+    }
+    .cover-title span { color: #F59E0B; }
+    .cover-subtitle {
+      font-size: 15px;
+      font-weight: 400;
+      color: rgba(255,255,255,0.58);
+      max-width: 480px;
+      line-height: 1.7;
+      margin-bottom: 48px;
+    }
+
+    .cover-stats {
+      display: flex;
+      gap: 0;
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 18px;
+      overflow: hidden;
+      background: rgba(255,255,255,0.04);
+      backdrop-filter: blur(10px);
+    }
+    .cover-stat {
+      padding: 20px 32px;
+      border-right: 1px solid rgba(255,255,255,0.08);
+      text-align: center;
+    }
+    .cover-stat:last-child { border-right: none; }
+    .cover-stat-num {
+      font-size: 32px;
+      font-weight: 900;
+      letter-spacing: -0.04em;
+      color: white;
+      line-height: 1;
+    }
+    .cover-stat-num.amber { color: #F59E0B; }
+    .cover-stat-num.green { color: #10B981; }
+    .cover-stat-num.red   { color: #EF4444; }
+    .cover-stat-num.blue  { color: #3B82F6; }
+    .cover-stat-label {
+      font-size: 10px;
+      font-weight: 600;
+      letter-spacing: 0.1em;
+      color: rgba(255,255,255,0.38);
+      text-transform: uppercase;
+      margin-top: 6px;
+    }
+
+    .cover-footer {
+      position: relative;
+      z-index: 1;
+      padding: 28px 40px;
+      border-top: 1px solid rgba(255,255,255,0.07);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .cover-footer-left {
+      font-size: 11px;
+      color: rgba(255,255,255,0.3);
+    }
+    .cover-footer-left strong { color: rgba(255,255,255,0.55); }
+    .cover-footer-right {
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.12em;
+      color: rgba(255,255,255,0.28);
+      text-transform: uppercase;
+    }
+
+    /* ─── CONTENT PAGES ───────────────────────── */
+    .content-page {
+      padding: 0;
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    .page-header {
+      padding: 18px 36px 14px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-shrink: 0;
+    }
+    .page-header-logo {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .page-header-dot {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      background: var(--amber);
+    }
+    .page-header-name {
+      font-size: 12px;
+      font-weight: 800;
+      letter-spacing: -0.02em;
+      color: var(--ink);
+    }
+    .page-header-sub {
+      font-size: 10px;
+      color: var(--muted);
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+    }
+    .page-header-num {
+      font-size: 11px;
+      color: var(--muted);
+    }
+
+    .page-content {
+      padding: 18px 36px 10px;
+      flex: 1;
+      overflow: hidden;
+    }
+
+    .page-footer {
+      padding: 9px 36px;
+      border-top: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 10px;
+      color: var(--muted);
+      flex-shrink: 0;
+    }
+    .page-footer-center { color: var(--amber); font-weight: 700; }
+
+    /* ─── TYPOGRAPHY ──────────────────────────── */
+    .section-tag {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 9px;
+      font-weight: 700;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: var(--amber);
+      background: rgba(245,158,11,0.08);
+      border: 1px solid rgba(245,158,11,0.2);
+      padding: 4px 11px;
+      border-radius: 999px;
+      margin-bottom: 8px;
+    }
+    .section-tag::before {
+      content: '';
+      width: 6px; height: 6px;
+      border-radius: 50%;
+      background: var(--amber);
+      display: inline-block;
+    }
+
+    h1.page-title {
+      font-size: 22px;
+      font-weight: 900;
+      letter-spacing: -0.03em;
+      color: var(--dark);
+      margin-bottom: 5px;
+    }
+    h2.section-title {
+      font-size: 15px;
+      font-weight: 800;
+      letter-spacing: -0.02em;
+      color: var(--dark);
+      margin-bottom: 5px;
+    }
+    .page-desc {
+      font-size: 12px;
+      color: var(--muted);
+      line-height: 1.6;
+      max-width: 600px;
+      margin-bottom: 14px;
+    }
+
+    /* ─── OVERVIEW CARDS ──────────────────────── */
+    .overview-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin-bottom: 14px;
+    }
+    .overview-card {
+      background: var(--light);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 13px;
+      position: relative;
+      overflow: hidden;
+    }
+    .overview-card::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 3px;
+      background: var(--card-color, var(--amber));
+    }
+    .overview-card-icon {
+      font-size: 18px;
+      margin-bottom: 6px;
+    }
+    .overview-card-title {
+      font-size: 12px;
+      font-weight: 800;
+      color: var(--dark);
+      margin-bottom: 4px;
+    }
+    .overview-card-body {
+      font-size: 11px;
+      color: var(--muted);
+      line-height: 1.55;
+    }
+
+    /* ─── DEPT CARDS ──────────────────────────── */
+    .dept-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin-bottom: 12px;
+    }
+    .dept-card {
+      border-radius: 12px;
+      border: 1px solid var(--border);
+      overflow: hidden;
+    }
+    .dept-card-header {
+      padding: 10px 14px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .dept-icon {
+      width: 34px; height: 34px;
+      border-radius: 9px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 16px;
+      flex-shrink: 0;
+    }
+    .dept-card-name {
+      font-size: 13px;
+      font-weight: 800;
+      color: var(--dark);
+    }
+    .dept-card-code {
+      font-size: 9px;
+      font-weight: 700;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      margin-top: 1px;
+    }
+    .dept-card-body {
+      padding: 0 14px 12px;
+    }
+    .dept-feature {
+      display: flex;
+      align-items: flex-start;
+      gap: 6px;
+      font-size: 10.5px;
+      color: #475569;
+      margin-bottom: 4px;
+      line-height: 1.4;
+    }
+    .dept-feature::before {
+      content: '▸';
+      color: var(--dept-color, var(--amber));
+      font-size: 10px;
+      margin-top: 2px;
+      flex-shrink: 0;
+    }
+
+    /* ─── TECH STACK ──────────────────────────── */
+    .tech-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+      margin-bottom: 14px;
+    }
+    .tech-card {
+      background: var(--light);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 10px 10px 9px;
+      text-align: center;
+    }
+    .tech-icon {
+      font-size: 20px;
+      margin-bottom: 5px;
+    }
+    .tech-name {
+      font-size: 11.5px;
+      font-weight: 800;
+      color: var(--dark);
+      margin-bottom: 2px;
+    }
+    .tech-desc {
+      font-size: 9.5px;
+      color: var(--muted);
+      line-height: 1.45;
+    }
+    .tech-badge {
+      display: inline-block;
+      font-size: 8px;
+      font-weight: 700;
+      padding: 2px 7px;
+      border-radius: 999px;
+      margin-top: 5px;
+      background: rgba(245,158,11,0.1);
+      color: var(--amber);
+    }
+
+    /* ─── SCHEMA TABLE ────────────────────────── */
+    .schema-block {
+      margin-bottom: 10px;
+    }
+    .schema-block-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 5px;
+    }
+    .schema-model-name {
+      font-size: 13px;
+      font-weight: 800;
+      color: var(--dark);
+    }
+    .schema-model-badge {
+      font-size: 9px;
+      font-weight: 700;
+      padding: 2px 8px;
+      border-radius: 6px;
+      background: rgba(59,130,246,0.1);
+      color: var(--blue);
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+    }
+    .schema-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 11.5px;
+    }
+    .schema-table th {
+      text-align: left;
+      padding: 5px 10px;
+      font-size: 9px;
+      font-weight: 700;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--muted);
+      background: var(--light);
+      border-bottom: 1px solid var(--border);
+    }
+    .schema-table td {
+      padding: 5px 10px;
+      color: #334155;
+      border-bottom: 1px solid rgba(15,23,42,0.05);
+      vertical-align: top;
+    }
+    .schema-table tr:last-child td { border-bottom: none; }
+    .field-name {
+      font-weight: 700;
+      color: var(--dark);
+      font-family: 'Courier New', monospace;
+      font-size: 11px;
+    }
+    .field-type {
+      color: var(--blue);
+      font-family: 'Courier New', monospace;
+      font-size: 11px;
+    }
+    .field-note { color: var(--muted); }
+
+    /* ─── ROLES TABLE ─────────────────────────── */
+    .roles-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 11px;
+      margin-bottom: 14px;
+    }
+    .roles-table th {
+      text-align: left;
+      padding: 7px 12px;
+      font-size: 9px;
+      font-weight: 700;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--muted);
+      background: var(--light);
+      border-bottom: 1px solid var(--border);
+    }
+    .roles-table td {
+      padding: 8px 12px;
+      color: #334155;
+      border-bottom: 1px solid rgba(15,23,42,0.05);
+      vertical-align: top;
+      line-height: 1.5;
+    }
+    .roles-table tr:last-child td { border-bottom: none; }
+    .role-badge {
+      display: inline-flex;
+      align-items: center;
+      padding: 3px 10px;
+      border-radius: 999px;
+      font-size: 10px;
+      font-weight: 700;
+    }
+    .role-admin {
+      background: rgba(245,158,11,0.12);
+      color: #D97706;
+      border: 1px solid rgba(245,158,11,0.25);
+    }
+    .role-mod {
+      background: rgba(59,130,246,0.1);
+      color: #2563EB;
+      border: 1px solid rgba(59,130,246,0.22);
+    }
+    .role-viewer {
+      background: rgba(100,116,139,0.1);
+      color: #475569;
+      border: 1px solid rgba(100,116,139,0.2);
+    }
+
+    /* ─── FEATURE LIST ────────────────────────── */
+    .feature-list {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      margin-bottom: 14px;
+    }
+    .feature-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+      padding: 9px 12px;
+      background: var(--light);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+    }
+    .feature-check {
+      width: 20px; height: 20px;
+      border-radius: 6px;
+      background: rgba(16,185,129,0.12);
+      color: #10B981;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 12px;
+      font-weight: 900;
+      flex-shrink: 0;
+    }
+    .feature-text { font-size: 12px; color: #334155; line-height: 1.5; }
+    .feature-text strong { color: var(--dark); font-weight: 700; display: block; margin-bottom: 1px; }
+
+    /* ─── DATA FLOW DIAGRAM ───────────────────── */
+    .flow-diagram {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0;
+      margin: 12px 0;
+      flex-wrap: wrap;
+    }
+    .flow-box {
+      padding: 10px 14px;
+      border-radius: 10px;
+      text-align: center;
+      min-width: 80px;
+    }
+    .flow-box-icon { font-size: 17px; margin-bottom: 3px; }
+    .flow-box-label {
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--dark);
+    }
+    .flow-box-sub {
+      font-size: 9.5px;
+      color: var(--muted);
+      margin-top: 2px;
+    }
+    .flow-arrow {
+      font-size: 18px;
+      color: var(--border);
+      margin: 0 4px;
+    }
+    .flow-db {
+      background: rgba(59,130,246,0.08);
+      border: 1px solid rgba(59,130,246,0.2);
+    }
+    .flow-api {
+      background: rgba(245,158,11,0.08);
+      border: 1px solid rgba(245,158,11,0.2);
+    }
+    .flow-ui {
+      background: rgba(16,185,129,0.08);
+      border: 1px solid rgba(16,185,129,0.2);
+    }
+    .flow-rt {
+      background: rgba(139,92,246,0.08);
+      border: 1px solid rgba(139,92,246,0.2);
+    }
+
+    /* ─── DIVIDER ─────────────────────────────── */
+    .divider {
+      border: none;
+      border-top: 1px solid var(--border);
+      margin: 12px 0;
+    }
+
+    /* ─── INFO BOX ────────────────────────────── */
+    .info-box {
+      padding: 10px 14px;
+      border-radius: 10px;
+      font-size: 11px;
+      line-height: 1.6;
+      margin-bottom: 12px;
+      display: flex;
+      gap: 10px;
+      align-items: flex-start;
+    }
+    .info-box.amber {
+      background: rgba(245,158,11,0.07);
+      border: 1px solid rgba(245,158,11,0.22);
+      color: #92400E;
+    }
+    .info-box.blue {
+      background: rgba(59,130,246,0.07);
+      border: 1px solid rgba(59,130,246,0.2);
+      color: #1E40AF;
+    }
+    .info-box.green {
+      background: rgba(16,185,129,0.07);
+      border: 1px solid rgba(16,185,129,0.2);
+      color: #065F46;
+    }
+    .info-box-icon { font-size: 16px; flex-shrink: 0; }
+
+    /* ─── TIMELINE ────────────────────────────── */
+    .timeline { position: relative; padding-left: 24px; }
+    .timeline::before {
+      content: '';
+      position: absolute;
+      left: 6px; top: 0; bottom: 0;
+      width: 2px;
+      background: var(--border);
+    }
+    .timeline-item {
+      position: relative;
+      margin-bottom: 12px;
+    }
+    .timeline-dot {
+      position: absolute;
+      left: -20px;
+      top: 4px;
+      width: 12px; height: 12px;
+      border-radius: 50%;
+      background: var(--amber);
+      border: 2px solid white;
+      box-shadow: 0 0 0 2px var(--amber);
+    }
+    .timeline-dot.green { background: var(--green); box-shadow: 0 0 0 2px var(--green); }
+    .timeline-dot.blue  { background: var(--blue);  box-shadow: 0 0 0 2px var(--blue); }
+    .timeline-dot.red   { background: var(--red);   box-shadow: 0 0 0 2px var(--red); }
+    .timeline-title {
+      font-size: 11.5px;
+      font-weight: 700;
+      color: var(--dark);
+      margin-bottom: 2px;
+    }
+    .timeline-body {
+      font-size: 10.5px;
+      color: var(--muted);
+      line-height: 1.5;
+    }
+
+    /* ─── PRINT BUTTON ────────────────────────── */
+    .print-btn-wrap {
+      position: fixed;
+      bottom: 28px;
+      right: 28px;
+      z-index: 999;
+    }
+    .print-btn {
+      display: flex;
+      align-items: center;
+      gap: 9px;
+      padding: 13px 22px;
+      background: linear-gradient(135deg, #F59E0B, #FBBF24);
+      color: #0F172A;
+      border: none;
+      border-radius: 12px;
+      font-size: 13px;
+      font-weight: 800;
+      cursor: pointer;
+      box-shadow: 0 6px 24px rgba(245,158,11,0.4);
+      transition: all 0.2s;
+      font-family: 'Inter', sans-serif;
+    }
+    .print-btn:hover { transform: translateY(-2px); box-shadow: 0 10px 28px rgba(245,158,11,0.45); }
+
+    @media print {
+      html, body { background: white; margin: 0; padding: 0; }
+      .page { box-shadow: none !important; margin: 0 !important; }
+      .print-btn-wrap { display: none !important; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════════ -->
+<!--  PAGE 1 — COVER                            -->
+<!-- ═══════════════════════════════════════════ -->
+<div class="page cover">
+  <div class="cover-bg-circle cover-bg-circle-1"></div>
+  <div class="cover-bg-circle cover-bg-circle-2"></div>
+  <div class="cover-bg-grid"></div>
+
+  <div class="cover-header">
+    <div class="cover-logo-group">
+      <div class="cover-logo-icon">💎</div>
+      <div class="cover-logo-text">
+        <div class="cover-logo-name">EXPLO-KPI</div>
+        <div class="cover-logo-sub">Mining System</div>
+      </div>
+    </div>
+    <div class="cover-badge">СИСТЕМИЙН ТАНИЛЦУУЛГА · 2026</div>
+  </div>
+
+  <div class="cover-body">
+    <span class="cover-tag">Уул уурхайн KPI Хяналтын Систем</span>
+
+    <h1 class="cover-title">
+      Тэсрэх бодисын<br/>
+      <span>оновчтой удирдлага</span>
+    </h1>
+
+    <p class="cover-subtitle">
+      Агуулах, Үйлдвэрлэл, Аюулгүй байдал, Тээвэрлэлт хэлтсийн
+      бодит цагийн KPI хяналт, дүн шинжилгээ болон тайлагналын
+      нэгдсэн платформ.
+    </p>
+
+    <div class="cover-stats">
+      <div class="cover-stat">
+        <div class="cover-stat-num amber">4</div>
+        <div class="cover-stat-label">Хэлтэс</div>
+      </div>
+      <div class="cover-stat">
+        <div class="cover-stat-num green">10</div>
+        <div class="cover-stat-label">Материал</div>
+      </div>
+      <div class="cover-stat">
+        <div class="cover-stat-num blue">5</div>
+        <div class="cover-stat-label">DB модел</div>
+      </div>
+      <div class="cover-stat">
+        <div class="cover-stat-num" style="color:#A78BFA">10сек</div>
+        <div class="cover-stat-label">Refresh</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="cover-footer">
+    <div class="cover-footer-left">
+      Бэлтгэсэн: <strong>EXPLO-KPI Team</strong> &nbsp;·&nbsp;
+      Огноо: <strong>2026 оны 4 сар</strong> &nbsp;·&nbsp;
+      Хувилбар: <strong>v0.1.0</strong>
+    </div>
+    <div class="cover-footer-right">НУУЦ · КОМПАНИЙН ДОТООД</div>
+  </div>
+</div>
+
+
+<!-- ═══════════════════════════════════════════ -->
+<!--  PAGE 2 — SYSTEM OVERVIEW                  -->
+<!-- ═══════════════════════════════════════════ -->
+<div class="page content-page">
+  <div class="page-header">
+    <div class="page-header-logo">
+      <div class="page-header-dot"></div>
+      <div>
+        <div class="page-header-name">EXPLO-KPI Mining System</div>
+        <div class="page-header-sub">Системийн танилцуулга</div>
+      </div>
+    </div>
+    <div class="page-header-num">Хуудас 2 / 5</div>
+  </div>
+
+  <div class="page-content">
+    <div class="section-tag">01 — Ерөнхий танилцуулга</div>
+    <h1 class="page-title">Систем яагаад хэрэгтэй вэ?</h1>
+    <p class="page-desc">
+      EXPLO-KPI нь тэсрэх бодис ашигладаг уул уурхайн байгууллагуудад зориулсан
+      бодит цагийн KPI хяналт, мэдээлэл дүн шинжилгээний нэгдсэн платформ юм.
+      4 гол хэлтсийн үйл ажиллагааг нэг дэлгэц дээр төвлөрүүлэн удирдана.
+    </p>
+
+    <div class="overview-grid">
+      <div class="overview-card" style="--card-color: #F59E0B">
+        <div class="overview-card-icon">📦</div>
+        <div class="overview-card-title">Агуулахын удирдлага</div>
+        <div class="overview-card-body">
+          10 төрлийн материалын нөөцийг бодит цагаар хянана. Критик нөөц багасах үед автоматаар анхааруулга өгнө. Орлого/зарлагын бүртгэл, тренд шинжилгээ.
+        </div>
+      </div>
+      <div class="overview-card" style="--card-color: #10B981">
+        <div class="overview-card-icon">⚙️</div>
+        <div class="overview-card-title">Үйлдвэрлэлийн хяналт</div>
+        <div class="overview-card-body">
+          Лот дугаар, гаралтын тоо хэмжээ, ээлжийн бүртгэл. Планын биелэлт болон зогсолтын цагийг тайлагнах. Материалын хэрэглээний бүртгэл.
+        </div>
+      </div>
+      <div class="overview-card" style="--card-color: #EF4444">
+        <div class="overview-card-icon">🛡️</div>
+        <div class="overview-card-title">ХЭАБО — Аюулгүй байдал</div>
+        <div class="overview-card-body">
+          Осол, аюулгүй байдлын зөрчлийг хүндийн зэргээр ангилан бүртгэнэ. Нээлттэй болон шийдвэрлэсэн тохиолдлуудыг ажлын урсгалаар хянана.
+        </div>
+      </div>
+      <div class="overview-card" style="--card-color: #3B82F6">
+        <div class="overview-card-icon">🚛</div>
+        <div class="overview-card-title">Тээвэрлэлтийн хяналт</div>
+        <div class="overview-card-body">
+          Ачааны хүргэлт, чиглэл, статус бодит цагаар. Leaflet газрын зурган дээр тээврийн маршрутыг харуулна. Хүргэлтийн хугацаа болон агуулахын уялдаа.
+        </div>
+      </div>
+    </div>
+
+    <div class="info-box amber">
+      <span class="info-box-icon">💡</span>
+      <span>
+        <strong>Зорилго:</strong> Хэлтсийн удирдлага болон компанийн захирал нарт хурал болгоны өмнө тоо баримтыг цаасаар тарааж тайлагнах хэрэгцээг арилгаж,
+        нэг дэлгэц дээрх бодит цагийн мэдээллээр шийдвэр гаргах явцыг хурдасгах.
+      </span>
+    </div>
+
+    <hr class="divider" />
+
+    <h2 class="section-title">Өгөгдлийн урсгал</h2>
+    <div class="flow-diagram">
+      <div class="flow-box flow-db">
+        <div class="flow-box-icon">🗄️</div>
+        <div class="flow-box-label">MySQL</div>
+        <div class="flow-box-sub">Мэдээллийн сан</div>
+      </div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-box flow-api">
+        <div class="flow-box-icon">⚡</div>
+        <div class="flow-box-label">Prisma ORM</div>
+        <div class="flow-box-sub">Хандалтын давхарга</div>
+      </div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-box flow-api">
+        <div class="flow-box-icon">🔌</div>
+        <div class="flow-box-label">Next.js API</div>
+        <div class="flow-box-sub">REST endpoint</div>
+      </div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-box flow-ui">
+        <div class="flow-box-icon">🖥️</div>
+        <div class="flow-box-label">React UI</div>
+        <div class="flow-box-sub">Dashboard харагдац</div>
+      </div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-box flow-rt">
+        <div class="flow-box-icon">🔄</div>
+        <div class="flow-box-label">Auto-refresh</div>
+        <div class="flow-box-sub">10 секунд тутам</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="page-footer">
+    <span>EXPLO-KPI Mining System · Нууц баримт</span>
+    <span class="page-footer-center">— 2 —</span>
+    <span>© 2026 EXPLO-KPI Team</span>
+  </div>
+</div>
+
+
+<!-- ═══════════════════════════════════════════ -->
+<!--  PAGE 3 — DEPARTMENTS                      -->
+<!-- ═══════════════════════════════════════════ -->
+<div class="page content-page">
+  <div class="page-header">
+    <div class="page-header-logo">
+      <div class="page-header-dot"></div>
+      <div>
+        <div class="page-header-name">EXPLO-KPI Mining System</div>
+        <div class="page-header-sub">Системийн танилцуулга</div>
+      </div>
+    </div>
+    <div class="page-header-num">Хуудас 3 / 5</div>
+  </div>
+
+  <div class="page-content">
+    <div class="section-tag">02 — Хэлтсүүд ба модулиуд</div>
+    <h1 class="page-title">4 хэлтсийн бүрэн функц</h1>
+    <p class="page-desc">
+      Тус бүрийн хэлтэс өөрийн гэсэн KPI хяналтын хэсэгтэй бөгөөд
+      зөвхөн тухайн хэлтсийн ажилтан болон системийн администратор хандах эрхтэй.
+    </p>
+
+    <div class="dept-grid">
+      <!-- WAREHOUSE -->
+      <div class="dept-card" style="--dept-color:#F59E0B">
+        <div class="dept-card-header" style="background:rgba(245,158,11,0.06); border-bottom:1px solid rgba(245,158,11,0.15)">
+          <div class="dept-icon" style="background:rgba(245,158,11,0.12)">📦</div>
+          <div>
+            <div class="dept-card-name">Агуулах</div>
+            <div class="dept-card-code" style="color:#D97706">WAREHOUSE</div>
+          </div>
+        </div>
+        <div class="dept-card-body" style="margin-top:12px">
+          <div class="dept-feature">10 материалын бодит нөөц хянах</div>
+          <div class="dept-feature">Орлого / зарлагын гүйлгээ бүртгэх</div>
+          <div class="dept-feature">Критик, бага, хэвийн нөөцийн ангилал</div>
+          <div class="dept-feature">Сүүлийн 10 хоногийн тренд шинжилгээ</div>
+          <div class="dept-feature">Нөөцийн ангиллын Funnel дүрслэл</div>
+          <div class="dept-feature">Quick Actions — Excel, PDF экспорт</div>
+          <div class="dept-feature">Автомат анхааруулгын жагсаалт</div>
+        </div>
+      </div>
+
+      <!-- PRODUCTION -->
+      <div class="dept-card" style="--dept-color:#10B981">
+        <div class="dept-card-header" style="background:rgba(16,185,129,0.06); border-bottom:1px solid rgba(16,185,129,0.15)">
+          <div class="dept-icon" style="background:rgba(16,185,129,0.12)">⚙️</div>
+          <div>
+            <div class="dept-card-name">Үйлдвэрлэл</div>
+            <div class="dept-card-code" style="color:#059669">PRODUCTION</div>
+          </div>
+        </div>
+        <div class="dept-card-body" style="margin-top:12px">
+          <div class="dept-feature">Лот дугаараар бүтээгдэхүүн бүртгэх</div>
+          <div class="dept-feature">Ааваш / шөнийн ээлжийн ялгаа</div>
+          <div class="dept-feature">Зогсолтын цагийн бүртгэл (минут)</div>
+          <div class="dept-feature">Гаралтын тоо хэмжээний тренд</div>
+          <div class="dept-feature">Зориулалтын уурхайн тэмдэглэл</div>
+          <div class="dept-feature">Материалын хэрэглээний уялдаа</div>
+          <div class="dept-feature">Статус: бэлэн, явцад, дууссан</div>
+        </div>
+      </div>
+
+      <!-- SAFETY -->
+      <div class="dept-card" style="--dept-color:#EF4444">
+        <div class="dept-card-header" style="background:rgba(239,68,68,0.06); border-bottom:1px solid rgba(239,68,68,0.15)">
+          <div class="dept-icon" style="background:rgba(239,68,68,0.12)">🛡️</div>
+          <div>
+            <div class="dept-card-name">ХЭАБО</div>
+            <div class="dept-card-code" style="color:#DC2626">SAFETY</div>
+          </div>
+        </div>
+        <div class="dept-card-body" style="margin-top:12px">
+          <div class="dept-feature">Осол тохиолдлын хүндийн зэрэг</div>
+          <div class="dept-feature">Нээлттэй / шийдвэрлэсэн статус</div>
+          <div class="dept-feature">Тохиолдлын байршлын бүртгэл</div>
+          <div class="dept-feature">Дэлгэрэнгүй тайлбар + огноо</div>
+          <div class="dept-feature">Severity: өндөр, дунд, бага</div>
+          <div class="dept-feature">Бүртгэсэн ажилтны мэдээлэл</div>
+          <div class="dept-feature">KPI: нийт, нээлттэй, шийдвэрлэсэн</div>
+        </div>
+      </div>
+
+      <!-- LOGISTICS -->
+      <div class="dept-card" style="--dept-color:#3B82F6">
+        <div class="dept-card-header" style="background:rgba(59,130,246,0.06); border-bottom:1px solid rgba(59,130,246,0.15)">
+          <div class="dept-icon" style="background:rgba(59,130,246,0.12)">🚛</div>
+          <div>
+            <div class="dept-card-name">Тээвэрлэлт</div>
+            <div class="dept-card-code" style="color:#2563EB">LOGISTICS</div>
+          </div>
+        </div>
+        <div class="dept-card-body" style="margin-top:12px">
+          <div class="dept-feature">Тээвэрлэлтийн даалгаврын бүртгэл</div>
+          <div class="dept-feature">Хүргэлтийн байршил — Leaflet газрын зураг</div>
+          <div class="dept-feature">Статус: явж байна, хүргэсэн, хойшилсон</div>
+          <div class="dept-feature">Агуулах руу буцах материал бүртгэл</div>
+          <div class="dept-feature">Хариуцсан жолооч / ажилтны хуваарилалт</div>
+          <div class="dept-feature">Хүргэлтийн төлөвлөсөн / бодит огноо</div>
+          <div class="dept-feature">KPI: нийт, явагдаж байгаа, хоцорсон</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="info-box blue">
+      <span class="info-box-icon">🔐</span>
+      <span>
+        <strong>Нэвтрэх эрхийн хяналт:</strong> ADMIN роль бүх хэлтсийн мэдээллийг харах, засах эрхтэй.
+        MODERATOR роль зөвхөн өөрийн хэлтсийн мэдээллийг оруулах, засварлах эрхтэй.
+        Бусад хэрэглэгчид зөвхөн харах эрхтэй.
+      </span>
+    </div>
+  </div>
+
+  <div class="page-footer">
+    <span>EXPLO-KPI Mining System · Нууц баримт</span>
+    <span class="page-footer-center">— 3 —</span>
+    <span>© 2026 EXPLO-KPI Team</span>
+  </div>
+</div>
+
+
+<!-- ═══════════════════════════════════════════ -->
+<!--  PAGE 4 — TECH STACK + DATABASE            -->
+<!-- ═══════════════════════════════════════════ -->
+<div class="page content-page">
+  <div class="page-header">
+    <div class="page-header-logo">
+      <div class="page-header-dot"></div>
+      <div>
+        <div class="page-header-name">EXPLO-KPI Mining System</div>
+        <div class="page-header-sub">Системийн танилцуулга</div>
+      </div>
+    </div>
+    <div class="page-header-num">Хуудас 4 / 5</div>
+  </div>
+
+  <div class="page-content">
+    <div class="section-tag">03 — Технологийн стек</div>
+    <h1 class="page-title">Ашигласан технологиуд</h1>
+
+    <div class="tech-grid">
+      <div class="tech-card">
+        <div class="tech-icon">▲</div>
+        <div class="tech-name">Next.js 14+</div>
+        <div class="tech-desc">App Router, Server Components, API Routes — фронт болон бэкенд нэгдсэн</div>
+        <span class="tech-badge">Framework</span>
+      </div>
+      <div class="tech-card">
+        <div class="tech-icon">⚛️</div>
+        <div class="tech-name">React 18+</div>
+        <div class="tech-desc">Client components, useState, useMemo, useEffect hooks ашиглан UI удирдлага</div>
+        <span class="tech-badge" style="background:rgba(59,130,246,0.1);color:#3B82F6">UI Library</span>
+      </div>
+      <div class="tech-card">
+        <div class="tech-icon">🔷</div>
+        <div class="tech-name">TypeScript</div>
+        <div class="tech-desc">Бүрэн type-safe кодын бааз. API response, props, state бүгд typed</div>
+        <span class="tech-badge" style="background:rgba(59,130,246,0.1);color:#3B82F6">Language</span>
+      </div>
+      <div class="tech-card">
+        <div class="tech-icon">🌿</div>
+        <div class="tech-name">Prisma ORM</div>
+        <div class="tech-desc">MySQL мэдээллийн сантай харилцах type-safe ORM. Auto-migration дэмжлэг</div>
+        <span class="tech-badge" style="background:rgba(16,185,129,0.1);color:#10B981">Database</span>
+      </div>
+      <div class="tech-card">
+        <div class="tech-icon">📊</div>
+        <div class="tech-name">Recharts 3.x</div>
+        <div class="tech-desc">Line, Area, Bar, Pie, Funnel chart. Responsive, animated, custom tooltip</div>
+        <span class="tech-badge" style="background:rgba(139,92,246,0.1);color:#8B5CF6">Charts</span>
+      </div>
+      <div class="tech-card">
+        <div class="tech-icon">🗺️</div>
+        <div class="tech-name">Leaflet.js</div>
+        <div class="tech-desc">Тээвэрлэлтийн маршрутыг интерактив газрын зурган дээр дүрслэх</div>
+        <span class="tech-badge" style="background:rgba(16,185,129,0.1);color:#10B981">Maps</span>
+      </div>
+      <div class="tech-card">
+        <div class="tech-icon">🎨</div>
+        <div class="tech-name">Tailwind CSS</div>
+        <div class="tech-desc">Utility-first CSS framework. Dark/light theme дэмжлэг бүхий хариу үйлчлэлтэй UI</div>
+        <span class="tech-badge" style="background:rgba(59,130,246,0.1);color:#3B82F6">Styling</span>
+      </div>
+      <div class="tech-card">
+        <div class="tech-icon">🔌</div>
+        <div class="tech-name">Socket.io</div>
+        <div class="tech-desc">Бодит цагийн мэдэгдэл, push notification — клиент-сервер холболт</div>
+        <span class="tech-badge" style="background:rgba(139,92,246,0.1);color:#8B5CF6">Realtime</span>
+      </div>
+      <div class="tech-card">
+        <div class="tech-icon">🎭</div>
+        <div class="tech-name">Three.js / GSAP</div>
+        <div class="tech-desc">Нүүр хуудасны 3D загвар харагдалт болон анимейшн эффект</div>
+        <span class="tech-badge" style="background:rgba(245,158,11,0.1);color:#F59E0B">3D / FX</span>
+      </div>
+    </div>
+
+    <hr class="divider" />
+
+    <div class="section-tag">04 — Мэдээллийн сангийн бүтэц</div>
+    <h2 class="section-title" style="margin-bottom:16px">Prisma Schema — Гол загварууд</h2>
+
+    <div style="display:grid; grid-template-columns:1fr 1fr; gap:14px">
+      <div class="schema-block">
+        <div class="schema-block-header">
+          <div class="schema-model-name">Material</div>
+          <div class="schema-model-badge">Агуулах</div>
+        </div>
+        <table class="schema-table">
+          <thead><tr><th>Талбар</th><th>Төрөл</th><th>Тайлбар</th></tr></thead>
+          <tbody>
+            <tr><td><span class="field-name">name</span></td><td><span class="field-type">String</span></td><td class="field-note">Материалын нэр</td></tr>
+            <tr><td><span class="field-name">currentStock</span></td><td><span class="field-type">Float</span></td><td class="field-note">Одоогийн нөөц</td></tr>
+            <tr><td><span class="field-name">minimumStock</span></td><td><span class="field-type">Float</span></td><td class="field-note">Доод хязгаар</td></tr>
+            <tr><td><span class="field-name">maximumStock</span></td><td><span class="field-type">Float</span></td><td class="field-note">Дээд хязгаар</td></tr>
+            <tr><td><span class="field-name">location</span></td><td><span class="field-type">String</span></td><td class="field-note">Байршил</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="schema-block">
+        <div class="schema-block-header">
+          <div class="schema-model-name">ProductionLog</div>
+          <div class="schema-model-badge">Үйлдвэрлэл</div>
+        </div>
+        <table class="schema-table">
+          <thead><tr><th>Талбар</th><th>Төрөл</th><th>Тайлбар</th></tr></thead>
+          <tbody>
+            <tr><td><span class="field-name">lotNumber</span></td><td><span class="field-type">String</span></td><td class="field-note">Лот дугаар</td></tr>
+            <tr><td><span class="field-name">productName</span></td><td><span class="field-type">String</span></td><td class="field-note">Бүтээгдэхүүний нэр</td></tr>
+            <tr><td><span class="field-name">outputQuantity</span></td><td><span class="field-type">Float</span></td><td class="field-note">Гаралтын хэмжээ</td></tr>
+            <tr><td><span class="field-name">shift</span></td><td><span class="field-type">String</span></td><td class="field-note">Ааваш / Шөнийн ээлж</td></tr>
+            <tr><td><span class="field-name">downtimeMinutes</span></td><td><span class="field-type">Int</span></td><td class="field-note">Зогсолтын цаг</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="schema-block">
+        <div class="schema-block-header">
+          <div class="schema-model-name">SafetyIncident</div>
+          <div class="schema-model-badge">ХЭАБО</div>
+        </div>
+        <table class="schema-table">
+          <thead><tr><th>Талбар</th><th>Төрөл</th><th>Тайлбар</th></tr></thead>
+          <tbody>
+            <tr><td><span class="field-name">title</span></td><td><span class="field-type">String</span></td><td class="field-note">Тохиолдлын гарчиг</td></tr>
+            <tr><td><span class="field-name">severity</span></td><td><span class="field-type">String</span></td><td class="field-note">high / medium / low</td></tr>
+            <tr><td><span class="field-name">status</span></td><td><span class="field-type">String</span></td><td class="field-note">open / closed</td></tr>
+            <tr><td><span class="field-name">incidentDate</span></td><td><span class="field-type">DateTime</span></td><td class="field-note">Болсон огноо</td></tr>
+            <tr><td><span class="field-name">location</span></td><td><span class="field-type">String</span></td><td class="field-note">Байршил</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="schema-block">
+        <div class="schema-block-header">
+          <div class="schema-model-name">Transport</div>
+          <div class="schema-model-badge">Тээвэрлэлт</div>
+        </div>
+        <table class="schema-table">
+          <thead><tr><th>Талбар</th><th>Төрөл</th><th>Тайлбар</th></tr></thead>
+          <tbody>
+            <tr><td><span class="field-name">destinationSite</span></td><td><span class="field-type">String</span></td><td class="field-note">Очих байршил</td></tr>
+            <tr><td><span class="field-name">quantity</span></td><td><span class="field-type">Float</span></td><td class="field-note">Хэмжээ</td></tr>
+            <tr><td><span class="field-name">status</span></td><td><span class="field-type">String</span></td><td class="field-note">Явцын статус</td></tr>
+            <tr><td><span class="field-name">transportDate</span></td><td><span class="field-type">DateTime</span></td><td class="field-note">Явсан огноо</td></tr>
+            <tr><td><span class="field-name">deliveryDate</span></td><td><span class="field-type">DateTime?</span></td><td class="field-note">Хүргэсэн огноо</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div class="page-footer">
+    <span>EXPLO-KPI Mining System · Нууц баримт</span>
+    <span class="page-footer-center">— 4 —</span>
+    <span>© 2026 EXPLO-KPI Team</span>
+  </div>
+</div>
+
+
+<!-- ═══════════════════════════════════════════ -->
+<!--  PAGE 5 — FEATURES + ROLES + ROADMAP       -->
+<!-- ═══════════════════════════════════════════ -->
+<div class="page content-page">
+  <div class="page-header">
+    <div class="page-header-logo">
+      <div class="page-header-dot"></div>
+      <div>
+        <div class="page-header-name">EXPLO-KPI Mining System</div>
+        <div class="page-header-sub">Системийн танилцуулга</div>
+      </div>
+    </div>
+    <div class="page-header-num">Хуудас 5 / 5</div>
+  </div>
+
+  <div class="page-content">
+    <div class="section-tag">05 — Гол онцлогууд</div>
+    <h1 class="page-title">Системийн давуу тал</h1>
+
+    <div class="feature-list">
+      <div class="feature-item">
+        <div class="feature-check">✓</div>
+        <div class="feature-text">
+          <strong>Бодит цагийн хяналт</strong>
+          10 секунд тутам автомат refresh — хуудсыг дахин ачаалахгүйгээр мэдээлэл шинэчлэгдэнэ
+        </div>
+      </div>
+      <div class="feature-item">
+        <div class="feature-check">✓</div>
+        <div class="feature-text">
+          <strong>Харанхуй / Гэрэл горим</strong>
+          Dark/Light theme дэмжлэг — хэрэглэгч бүр өөрийн дуртай горимд ажиллана
+        </div>
+      </div>
+      <div class="feature-item">
+        <div class="feature-check">✓</div>
+        <div class="feature-text">
+          <strong>Хариу үйлчлэлтэй дизайн</strong>
+          Desktop, tablet, гар утасны хэмжээнд тохирсон мобайл-дружелюбный интерфэйс
+        </div>
+      </div>
+      <div class="feature-item">
+        <div class="feature-check">✓</div>
+        <div class="feature-text">
+          <strong>Автомат анхааруулга</strong>
+          Критик нөөц богиносох үед хэрэглэгчид дэлгэцэн дээр шууд анхааруулга харагдана
+        </div>
+      </div>
+      <div class="feature-item">
+        <div class="feature-check">✓</div>
+        <div class="feature-text">
+          <strong>Интерактив график</strong>
+          Recharts — Area, Bar, Pie, Line chart. Hover tooltip, legend, gradient fill
+        </div>
+      </div>
+      <div class="feature-item">
+        <div class="feature-check">✓</div>
+        <div class="feature-text">
+          <strong>Роль дагуу эрх</strong>
+          ADMIN бүгдийг удирдана. MODERATOR зөвхөн өөрийнхийг. Аюулгүй нэвтрэх систем
+        </div>
+      </div>
+      <div class="feature-item">
+        <div class="feature-check">✓</div>
+        <div class="feature-text">
+          <strong>Хайлт ба шүүлт</strong>
+          Материалын хүснэгтэд нэрэн хайлт болон нөөцийн статусаар шүүх боломжтой
+        </div>
+      </div>
+      <div class="feature-item">
+        <div class="feature-check">✓</div>
+        <div class="feature-text">
+          <strong>3D нүүр хуудас</strong>
+          Three.js + GSAP анимейшнтай зориулалтын landing page. Хэлтсийн интерактив сонголт
+        </div>
+      </div>
+    </div>
+
+    <hr class="divider" />
+
+    <div style="display:grid; grid-template-columns:1fr 1fr; gap:24px">
+      <div>
+        <div class="section-tag" style="margin-bottom:14px">06 — Хэрэглэгчийн роль</div>
+        <table class="roles-table">
+          <thead>
+            <tr>
+              <th>Роль</th>
+              <th>Хандах эрх</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><span class="role-badge role-admin">ADMIN</span></td>
+              <td>Бүх хэлтэс. Хэрэглэгч удирдлага. Бүх мэдээлэл унших, засах, устгах.</td>
+            </tr>
+            <tr>
+              <td><span class="role-badge role-mod">MODERATOR</span></td>
+              <td>Зөвхөн хуваарилагдсан хэлтэс. Гүйлгээ оруулах, засах боломжтой.</td>
+            </tr>
+            <tr>
+              <td><span class="role-badge role-viewer">VIEWER</span></td>
+              <td>Зөвхөн өөрийн хэлтсийн KPI харах. Засах эрхгүй.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div>
+        <div class="section-tag" style="margin-bottom:14px">07 — Хөгжлийн замнал</div>
+        <div class="timeline">
+          <div class="timeline-item">
+            <div class="timeline-dot"></div>
+            <div class="timeline-title">v0.1.0 — Суурь бүтэц ✅</div>
+            <div class="timeline-body">4 хэлтсийн хяналтын модуль, Prisma + MySQL, нэвтрэх систем, dark/light theme</div>
+          </div>
+          <div class="timeline-item">
+            <div class="timeline-dot green"></div>
+            <div class="timeline-title">v0.2.0 — UI сайжруулалт ✅</div>
+            <div class="timeline-body">Enterprise дизайн: sparkline, funnel chart, доnut, stacked bar, Quick Actions, анхааруулгын хэсэг</div>
+          </div>
+          <div class="timeline-item">
+            <div class="timeline-dot blue"></div>
+            <div class="timeline-title">v0.3.0 — Тайлан & Экспорт</div>
+            <div class="timeline-body">Excel/PDF экспорт, сарын тайлан үүсгэх, имэйл мэдэгдэл, хэвлэх горим</div>
+          </div>
+          <div class="timeline-item">
+            <div class="timeline-dot red"></div>
+            <div class="timeline-title">v1.0.0 — Бүрэн нэвтрүүлэлт</div>
+            <div class="timeline-body">Олон байршил дэмжлэг, API интеграци, аудит бүртгэл, хяналтын самбар тохиргоо</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <hr class="divider" style="margin-top:10px" />
+
+    <div class="info-box green">
+      <span class="info-box-icon">🚀</span>
+      <span>
+        <strong>Нэвтрүүлэх заавар:</strong>
+        <code style="font-size:11px; background:rgba(16,185,129,0.1); padding:2px 6px; border-radius:4px; margin:0 4px">npm run dev</code>
+        — localhost:3001 дээр ажиллана.
+        Мэдээллийн сан: MySQL + Prisma migration.
+        <code style="font-size:11px; background:rgba(16,185,129,0.1); padding:2px 6px; border-radius:4px; margin:0 4px">npm run prisma:seed</code>
+        — туршилтын өгөгдөл оруулна.
+      </span>
+    </div>
+  </div>
+
+  <div class="page-footer">
+    <span>EXPLO-KPI Mining System · Нууц баримт</span>
+    <span class="page-footer-center">— 5 —</span>
+    <span>© 2026 EXPLO-KPI Team</span>
+  </div>
+</div>
+
+
+<!-- PRINT BUTTON -->
+<div class="print-btn-wrap">
+  <button class="print-btn" onclick="window.print()">
+    🖨️ PDF хэлбэрээр хадгалах
+  </button>
+</div>
+
+</body>
+</html>

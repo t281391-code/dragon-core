@@ -1,0 +1,12 @@
+node_modules
+.next
+.vercel
+.claude
+out
+dist
+.env
+*.log
+*.tsbuildinfo
+*.db
+*.db-journal
+prisma/dev.db

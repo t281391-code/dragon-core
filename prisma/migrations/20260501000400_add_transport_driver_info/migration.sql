@@ -1,0 +1,1 @@
+ALTER TABLE `Transport` ADD COLUMN `driverInfo` VARCHAR(191) NULL;

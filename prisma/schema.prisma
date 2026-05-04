@@ -1,0 +1,132 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+model Role {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  users     User[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Department {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  users     User[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model User {
+  id                   String                 @id @default(cuid())
+  fullName             String
+  email                String                 @unique
+  passwordHash         String
+  roleId               String
+  departmentId         String
+  isActive             Boolean                @default(true)
+  createdAt            DateTime               @default(now())
+  updatedAt            DateTime               @updatedAt
+  role                 Role                   @relation(fields: [roleId], references: [id])
+  department           Department             @relation(fields: [departmentId], references: [id])
+  productionLogs       ProductionLog[]
+  reportedIncidents    SafetyIncident[]
+  assignedTransports   Transport[]
+  materialTransactions MaterialTransaction[]
+}
+
+model Material {
+  id               String               @id @default(cuid())
+  name             String
+  category         String
+  unit             String
+  currentStock     Float
+  minimumStock     Float
+  maximumStock     Float                @default(0)
+  location         String
+  transactions     MaterialTransaction[]
+  productionLogs   ProductionLog[]
+  transports       Transport[]
+  createdAt        DateTime             @default(now())
+  updatedAt        DateTime             @updatedAt
+}
+
+model MaterialTransaction {
+  id              String   @id @default(cuid())
+  materialId      String
+  type            String   // "IN" or "OUT"
+  quantity        Float
+  note            String?
+  transactionDate DateTime @default(now())
+  createdById     String
+  createdAt       DateTime @default(now())
+  material        Material @relation(fields: [materialId], references: [id])
+  createdBy       User     @relation(fields: [createdById], references: [id])
+}
+
+model ProductionLog {
+  id              String    @id @default(cuid())
+  lotNumber       String
+  productionDate  DateTime
+  shift           String    @default("өдрийн")
+  productName     String
+  outputQuantity  Float
+  scheduledDate   DateTime?
+  destinationMine String?
+  status          String    @default("ready")
+  materialId      String
+  quantityUsed    Float     @default(0)
+  downtimeMinutes Int       @default(0)
+  workerInfo      String?   @db.Text
+  density         Float?
+  note            String?   @db.Text
+  createdById     String
+  createdAt       DateTime  @default(now())
+  material        Material  @relation(fields: [materialId], references: [id])
+  createdBy       User      @relation(fields: [createdById], references: [id])
+}
+
+model DailyProductionPlan {
+  id             String   @id @default(cuid())
+  planDate       DateTime @unique
+  targetQuantity Float
+  createdById    String
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+}
+
+model SafetyIncident {
+  id           String   @id @default(cuid())
+  title        String
+  description  String   @db.Text
+  severity     String
+  status       String   @default("open")
+  incidentDate DateTime
+  location     String
+  reportedById String
+  createdAt    DateTime @default(now())
+  reportedBy   User     @relation(fields: [reportedById], references: [id])
+}
+
+model Transport {
+  id              String    @id @default(cuid())
+  materialId      String
+  quantity        Float
+  destinationSite String
+  driverInfo      String?
+  vehicleInfo     String?
+  transportDate   DateTime
+  deliveryDate    DateTime?
+  status          String
+  note            String?
+  assignedUserId  String
+  createdAt       DateTime  @default(now())
+  material        Material  @relation(fields: [materialId], references: [id])
+  assignedUser    User      @relation(fields: [assignedUserId], references: [id])
+}

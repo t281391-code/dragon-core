@@ -1,0 +1,13 @@
+.container {
+  overflow: hidden;
+}
+
+.text {
+  display: inline-block;
+  white-space: pre-wrap;
+}
+
+.char {
+  display: inline-block;
+  will-change: opacity, transform;
+}
