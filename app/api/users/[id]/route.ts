@@ -4,7 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { getRequestUser } from "@/lib/auth";
 import { checkRateLimit, forbidden, requireRole } from "@/lib/security/api";
 
-export const preferredRegion = "bom1";
+export const preferredRegion = "sin1";
 
 const rolePatchSchema = z.object({
   roleName: z.enum(["USER", "MODERATOR", "ADMIN"]),
