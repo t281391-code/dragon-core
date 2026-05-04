@@ -30,6 +30,10 @@ const orbitron = Orbitron({
 export const metadata: Metadata = {
   title: "EXPLO-KPI · Тэсрэх бодисын үйлдвэр",
   description: "KPI Dashboard · Тэсрэх бодисын үйлдвэрийн удирдлагын систем",
+  icons: {
+    icon: [{ url: "/favicon.ico?v=20260504", sizes: "16x16 32x32 48x48", type: "image/x-icon" }],
+    shortcut: [{ url: "/favicon.ico?v=20260504", type: "image/x-icon" }],
+  },
 };
 
 export default function RootLayout({
