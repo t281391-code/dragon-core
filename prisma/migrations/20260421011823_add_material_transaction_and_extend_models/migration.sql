@@ -6,10 +6,10 @@
 
 */
 -- AlterTable
-ALTER TABLE `material` ADD COLUMN `maximumStock` DOUBLE NOT NULL DEFAULT 0;
+ALTER TABLE `Material` ADD COLUMN `maximumStock` DOUBLE NOT NULL DEFAULT 0;
 
 -- AlterTable
-ALTER TABLE `productionlog` ADD COLUMN `destinationMine` VARCHAR(191) NULL,
+ALTER TABLE `ProductionLog` ADD COLUMN `destinationMine` VARCHAR(191) NULL,
     ADD COLUMN `lotNumber` VARCHAR(191) NOT NULL,
     ADD COLUMN `note` TEXT NULL,
     ADD COLUMN `productName` VARCHAR(191) NOT NULL,
@@ -20,10 +20,10 @@ ALTER TABLE `productionlog` ADD COLUMN `destinationMine` VARCHAR(191) NULL,
     MODIFY `downtimeMinutes` INTEGER NOT NULL DEFAULT 0;
 
 -- AlterTable
-ALTER TABLE `safetyincident` MODIFY `status` VARCHAR(191) NOT NULL DEFAULT 'open';
+ALTER TABLE `SafetyIncident` MODIFY `status` VARCHAR(191) NOT NULL DEFAULT 'open';
 
 -- AlterTable
-ALTER TABLE `transport` ADD COLUMN `note` VARCHAR(191) NULL;
+ALTER TABLE `Transport` ADD COLUMN `note` VARCHAR(191) NULL;
 
 -- CreateTable
 CREATE TABLE `MaterialTransaction` (
