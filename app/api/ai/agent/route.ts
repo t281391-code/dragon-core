@@ -1,9 +1,11 @@
 import { NextResponse } from "next/server";
 import type { Prisma } from "@prisma/client";
 import { z } from "zod";
-import { getCurrentUser, type AuthUser } from "@/lib/auth";
+import { getRequestUser, type AuthUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { checkRateLimit } from "@/lib/security/api";
+
+export const preferredRegion = "bom1";
 
 type ChatRole = "user" | "assistant";
 type ChatMessage = { role: ChatRole; content: string };
@@ -769,7 +771,7 @@ async function runTool(user: AuthUser, call: FunctionCall) {
 }
 
 export async function POST(request: Request) {
-  const user = await getCurrentUser();
+  const user = await getRequestUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const rateLimited = await checkRateLimit(request, `ai-agent:${user.id}`, 60, 60 * 60_000);

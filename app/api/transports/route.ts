@@ -1,8 +1,11 @@
 import { NextResponse } from "next/server";
+import { Prisma } from "@prisma/client";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
-import { getCurrentUser } from "@/lib/auth";
+import { getRequestUser } from "@/lib/auth";
 import { checkRateLimit, forbidden, normalizePageLimit, requireDepartmentWrite } from "@/lib/security/api";
+
+export const preferredRegion = "bom1";
 
 const dateInput = z.string().trim().min(1).max(64).refine((value) => !Number.isNaN(Date.parse(value)), "Invalid date");
 const nullableDateInput = z.preprocess((value) => value === "" ? null : value, dateInput.nullable().optional());
@@ -50,17 +53,61 @@ const transportSelect = {
 } as const;
 
 export async function GET(request: Request) {
-  const user = await getCurrentUser();
+  const user = await getRequestUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const { searchParams } = new URL(request.url);
   const limit = normalizePageLimit(searchParams.get("limit"), 50, 200);
 
-  const transports = await prisma.transport.findMany({
-    orderBy: { transportDate: "desc" },
-    take: limit,
-    select: transportSelect,
-  });
+  type TransportRow = {
+    id: string;
+    quantity: number;
+    destinationSite: string;
+    driverInfo: string | null;
+    vehicleInfo: string | null;
+    transportDate: Date;
+    deliveryDate: Date | null;
+    status: string;
+    note: string | null;
+    materialName: string;
+    materialUnit: string;
+    assignedUserFullName: string;
+  };
+
+  const rows = await prisma.$queryRaw<TransportRow[]>(Prisma.sql`
+    SELECT
+      t.id,
+      t.quantity,
+      t.destinationSite,
+      t.driverInfo,
+      t.vehicleInfo,
+      t.transportDate,
+      t.deliveryDate,
+      t.status,
+      t.note,
+      m.name AS materialName,
+      m.unit AS materialUnit,
+      u.fullName AS assignedUserFullName
+    FROM \`Transport\` t
+    INNER JOIN \`Material\` m ON m.id = t.materialId
+    INNER JOIN \`User\` u ON u.id = t.assignedUserId
+    ORDER BY t.transportDate DESC
+    LIMIT ${limit}
+  `);
+
+  const transports = rows.map((row) => ({
+    id: row.id,
+    quantity: row.quantity,
+    destinationSite: row.destinationSite,
+    driverInfo: row.driverInfo,
+    vehicleInfo: row.vehicleInfo,
+    transportDate: row.transportDate,
+    deliveryDate: row.deliveryDate,
+    status: row.status,
+    note: row.note,
+    material: { name: row.materialName, unit: row.materialUnit },
+    assignedUser: { fullName: row.assignedUserFullName },
+  }));
 
   return NextResponse.json({ data: transports });
 }
@@ -69,7 +116,7 @@ export async function POST(request: Request) {
   const rateLimited = await checkRateLimit(request, "transports:post", 60, 60_000);
   if (rateLimited) return rateLimited;
 
-  const user = await getCurrentUser();
+  const user = await getRequestUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   if (!requireDepartmentWrite(user, "LOGISTICS")) return forbidden("Logistics write permission required");
 
@@ -151,7 +198,7 @@ export async function PATCH(request: Request) {
   const rateLimited = await checkRateLimit(request, "transports:patch", 60, 60_000);
   if (rateLimited) return rateLimited;
 
-  const user = await getCurrentUser();
+  const user = await getRequestUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   if (!requireDepartmentWrite(user, "LOGISTICS")) return forbidden("Logistics update permission required");
 

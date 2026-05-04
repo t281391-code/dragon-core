@@ -39,6 +39,8 @@ model User {
   reportedIncidents    SafetyIncident[]
   assignedTransports   Transport[]
   materialTransactions MaterialTransaction[]
+
+  @@index([isActive, fullName])
 }
 
 model Material {
@@ -55,6 +57,8 @@ model Material {
   transports       Transport[]
   createdAt        DateTime             @default(now())
   updatedAt        DateTime             @updatedAt
+
+  @@index([name])
 }
 
 model MaterialTransaction {
@@ -68,6 +72,10 @@ model MaterialTransaction {
   createdAt       DateTime @default(now())
   material        Material @relation(fields: [materialId], references: [id])
   createdBy       User     @relation(fields: [createdById], references: [id])
+
+  @@index([transactionDate])
+  @@index([type, transactionDate])
+  @@index([materialId, transactionDate])
 }
 
 model ProductionLog {
@@ -90,6 +98,10 @@ model ProductionLog {
   createdAt       DateTime  @default(now())
   material        Material  @relation(fields: [materialId], references: [id])
   createdBy       User      @relation(fields: [createdById], references: [id])
+
+  @@index([productionDate])
+  @@index([scheduledDate])
+  @@index([materialId, productionDate])
 }
 
 model DailyProductionPlan {
@@ -112,6 +124,9 @@ model SafetyIncident {
   reportedById String
   createdAt    DateTime @default(now())
   reportedBy   User     @relation(fields: [reportedById], references: [id])
+
+  @@index([incidentDate])
+  @@index([status, incidentDate])
 }
 
 model Transport {
@@ -129,4 +144,8 @@ model Transport {
   createdAt       DateTime  @default(now())
   material        Material  @relation(fields: [materialId], references: [id])
   assignedUser    User      @relation(fields: [assignedUserId], references: [id])
+
+  @@index([transportDate])
+  @@index([status, transportDate])
+  @@index([materialId, transportDate])
 }

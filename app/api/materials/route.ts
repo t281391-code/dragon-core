@@ -1,8 +1,10 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
-import { getCurrentUser } from "@/lib/auth";
+import { getRequestUser } from "@/lib/auth";
 import { checkRateLimit, forbidden, requireDepartmentWrite } from "@/lib/security/api";
+
+export const preferredRegion = "bom1";
 
 const materialSchema = z.object({
   name: z.string().trim().min(1).max(160),
@@ -15,10 +17,22 @@ const materialSchema = z.object({
 });
 
 export async function GET() {
-  const user = await getCurrentUser();
+  const user = await getRequestUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const materials = await prisma.material.findMany({ orderBy: { name: "asc" } });
+  const materials = await prisma.material.findMany({
+    orderBy: { name: "asc" },
+    select: {
+      id: true,
+      name: true,
+      category: true,
+      unit: true,
+      currentStock: true,
+      minimumStock: true,
+      maximumStock: true,
+      location: true,
+    },
+  });
   return NextResponse.json({ data: materials });
 }
 
@@ -26,7 +40,7 @@ export async function POST(request: Request) {
   const rateLimited = await checkRateLimit(request, "materials:post", 30, 60_000);
   if (rateLimited) return rateLimited;
 
-  const user = await getCurrentUser();
+  const user = await getRequestUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   if (!requireDepartmentWrite(user, "WAREHOUSE")) return forbidden("Зөвхөн агуулахын эрхтэй хэрэглэгч материал нэмнэ");
 

@@ -1,8 +1,10 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
-import { getCurrentUser } from "@/lib/auth";
+import { getRequestUser } from "@/lib/auth";
 import { checkRateLimit, forbidden, requireRole } from "@/lib/security/api";
+
+export const preferredRegion = "bom1";
 
 const rolePatchSchema = z.object({
   roleName: z.enum(["USER", "MODERATOR", "ADMIN"]),
@@ -15,7 +17,7 @@ export async function PATCH(
   const rateLimited = await checkRateLimit(request, "users:patch", 30, 60_000);
   if (rateLimited) return rateLimited;
 
-  const user = await getCurrentUser();
+  const user = await getRequestUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   if (!requireRole(user, "ADMIN")) return forbidden("Admin permission required");
 
@@ -67,7 +69,7 @@ export async function DELETE(
   const rateLimited = await checkRateLimit(request, "users:delete", 20, 60_000);
   if (rateLimited) return rateLimited;
 
-  const user = await getCurrentUser();
+  const user = await getRequestUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   if (!requireRole(user, "ADMIN")) return forbidden("Admin permission required");
 

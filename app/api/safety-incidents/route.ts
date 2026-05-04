@@ -1,8 +1,11 @@
 import { NextResponse } from "next/server";
+import { Prisma } from "@prisma/client";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
-import { getCurrentUser } from "@/lib/auth";
+import { getRequestUser } from "@/lib/auth";
 import { checkRateLimit, forbidden, normalizePageLimit, requireDepartmentWrite } from "@/lib/security/api";
+
+export const preferredRegion = "bom1";
 
 const dateInput = z.string().trim().min(1).max(64).refine((value) => !Number.isNaN(Date.parse(value)), "Invalid date");
 const severitySchema = z.enum(["low", "medium", "high"]);
@@ -19,7 +22,7 @@ const incidentCreateSchema = z.object({
 });
 
 export async function GET(request: Request) {
-  const user = await getCurrentUser();
+  const user = await getRequestUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const { searchParams } = new URL(request.url);
@@ -30,21 +33,44 @@ export async function GET(request: Request) {
   }
   const limit = normalizePageLimit(searchParams.get("limit"), 50, 200);
 
-  const incidents = await prisma.safetyIncident.findMany({
-    where: status?.success ? { status: status.data } : undefined,
-    orderBy: { incidentDate: "desc" },
-    take: limit,
-    select: {
-      id: true,
-      title: true,
-      description: true,
-      severity: true,
-      status: true,
-      incidentDate: true,
-      location: true,
-      reportedBy: { select: { fullName: true } },
-    },
-  });
+  type SafetyIncidentRow = {
+    id: string;
+    title: string;
+    description: string;
+    severity: string;
+    status: string;
+    incidentDate: Date;
+    location: string;
+    reportedByFullName: string;
+  };
+
+  const rows = await prisma.$queryRaw<SafetyIncidentRow[]>(Prisma.sql`
+    SELECT
+      si.id,
+      si.title,
+      si.description,
+      si.severity,
+      si.status,
+      si.incidentDate,
+      si.location,
+      u.fullName AS reportedByFullName
+    FROM \`SafetyIncident\` si
+    INNER JOIN \`User\` u ON u.id = si.reportedById
+    ${status?.success ? Prisma.sql`WHERE si.status = ${status.data}` : Prisma.empty}
+    ORDER BY si.incidentDate DESC
+    LIMIT ${limit}
+  `);
+
+  const incidents = rows.map((row) => ({
+    id: row.id,
+    title: row.title,
+    description: row.description,
+    severity: row.severity,
+    status: row.status,
+    incidentDate: row.incidentDate,
+    location: row.location,
+    reportedBy: { fullName: row.reportedByFullName },
+  }));
 
   return NextResponse.json({ data: incidents });
 }
@@ -53,7 +79,7 @@ export async function POST(request: Request) {
   const rateLimited = await checkRateLimit(request, "safety-incidents:post", 60, 60_000);
   if (rateLimited) return rateLimited;
 
-  const user = await getCurrentUser();
+  const user = await getRequestUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   if (!requireDepartmentWrite(user, "SAFETY")) return forbidden("Safety write permission required");
 

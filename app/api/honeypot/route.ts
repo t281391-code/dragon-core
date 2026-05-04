@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { blockIp, getClientIpFromHeaders, honeypotCookieOptions } from "@/lib/security/edge";
 
+export const preferredRegion = "bom1";
+
 export async function GET(request: Request) {
   const ip = getClientIpFromHeaders(request.headers);
   await blockIp(ip);

@@ -1,8 +1,11 @@
 import { NextResponse } from "next/server";
+import { Prisma } from "@prisma/client";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
-import { getCurrentUser } from "@/lib/auth";
+import { getRequestUser } from "@/lib/auth";
 import { checkRateLimit, forbidden, normalizePageLimit, requireDepartmentWrite } from "@/lib/security/api";
+
+export const preferredRegion = "bom1";
 
 const dateInput = z.string().trim().min(1).max(64).refine((value) => !Number.isNaN(Date.parse(value)), "Invalid date");
 const nullableDateInput = z.preprocess((value) => value === "" ? null : value, dateInput.nullable().optional());
@@ -33,7 +36,7 @@ const shipmentPatchSchema = z.object({
 });
 
 export async function GET(request: Request) {
-  const user = await getCurrentUser();
+  const user = await getRequestUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const { searchParams } = new URL(request.url);
@@ -46,26 +49,46 @@ export async function GET(request: Request) {
   planEnd.setDate(now.getDate() + 7);
   planEnd.setHours(23, 59, 59, 999);
 
-  const [logs, plans] = await Promise.all([
-    prisma.productionLog.findMany({
-      orderBy: { productionDate: "desc" },
-      take: limit,
-      select: {
-        id: true,
-        lotNumber: true,
-        productionDate: true,
-        productName: true,
-        outputQuantity: true,
-        scheduledDate: true,
-        destinationMine: true,
-        status: true,
-        workerInfo: true,
-        density: true,
-        note: true,
-        material: { select: { name: true, unit: true } },
-        createdBy: { select: { fullName: true } },
-      },
-    }),
+  type ProductionLogRow = {
+    id: string;
+    lotNumber: string;
+    productionDate: Date;
+    productName: string;
+    outputQuantity: number;
+    scheduledDate: Date | null;
+    destinationMine: string | null;
+    status: string;
+    workerInfo: string | null;
+    density: number | null;
+    note: string | null;
+    materialName: string;
+    materialUnit: string;
+    createdByFullName: string;
+  };
+
+  const [logRows, plans] = await Promise.all([
+    prisma.$queryRaw<ProductionLogRow[]>(Prisma.sql`
+      SELECT
+        pl.id,
+        pl.lotNumber,
+        pl.productionDate,
+        pl.productName,
+        pl.outputQuantity,
+        pl.scheduledDate,
+        pl.destinationMine,
+        pl.status,
+        pl.workerInfo,
+        pl.density,
+        pl.note,
+        m.name AS materialName,
+        m.unit AS materialUnit,
+        u.fullName AS createdByFullName
+      FROM \`ProductionLog\` pl
+      INNER JOIN \`Material\` m ON m.id = pl.materialId
+      INNER JOIN \`User\` u ON u.id = pl.createdById
+      ORDER BY pl.productionDate DESC
+      LIMIT ${limit}
+    `),
     prisma.dailyProductionPlan.findMany({
       where: { planDate: { gte: planStart, lte: planEnd } },
       orderBy: { planDate: "asc" },
@@ -77,6 +100,22 @@ export async function GET(request: Request) {
     }),
   ]);
 
+  const logs = logRows.map((row) => ({
+    id: row.id,
+    lotNumber: row.lotNumber,
+    productionDate: row.productionDate,
+    productName: row.productName,
+    outputQuantity: row.outputQuantity,
+    scheduledDate: row.scheduledDate,
+    destinationMine: row.destinationMine,
+    status: row.status,
+    workerInfo: row.workerInfo,
+    density: row.density,
+    note: row.note,
+    material: { name: row.materialName, unit: row.materialUnit },
+    createdBy: { fullName: row.createdByFullName },
+  }));
+
   return NextResponse.json({ data: logs, plans });
 }
 
@@ -84,7 +123,7 @@ export async function POST(request: Request) {
   const rateLimited = await checkRateLimit(request, "production-logs:post", 60, 60_000);
   if (rateLimited) return rateLimited;
 
-  const user = await getCurrentUser();
+  const user = await getRequestUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   if (!requireDepartmentWrite(user, "PRODUCTION")) return forbidden("Production write permission required");
 
@@ -141,7 +180,7 @@ export async function DELETE(request: Request) {
   const rateLimited = await checkRateLimit(request, "production-logs:delete", 30, 60_000);
   if (rateLimited) return rateLimited;
 
-  const user = await getCurrentUser();
+  const user = await getRequestUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   if (!requireDepartmentWrite(user, "PRODUCTION")) return forbidden("Production delete permission required");
 
@@ -177,7 +216,7 @@ export async function PATCH(request: Request) {
   const rateLimited = await checkRateLimit(request, "production-logs:patch", 60, 60_000);
   if (rateLimited) return rateLimited;
 
-  const user = await getCurrentUser();
+  const user = await getRequestUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   if (!requireDepartmentWrite(user, "PRODUCTION")) return forbidden("Production update permission required");
 

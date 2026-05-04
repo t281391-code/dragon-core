@@ -7,6 +7,8 @@ import { blockIp, getClientIpFromHeaders, honeypotCookieOptions } from "@/lib/se
 import { checkRateLimit } from "@/lib/security/api";
 import type { RoleName, DepartmentName } from "@/lib/permissions";
 
+export const preferredRegion = "bom1";
+
 const loginSchema = z.object({
   email: z.string().trim().email().max(254).transform((value) => value.toLowerCase()),
   password: z.string().min(1).max(256),
@@ -32,7 +34,15 @@ export async function POST(request: Request) {
 
   const user = await prisma.user.findUnique({
     where: { email: body.email },
-    include: { role: true, department: true },
+    select: {
+      id: true,
+      fullName: true,
+      email: true,
+      passwordHash: true,
+      isActive: true,
+      role: { select: { name: true } },
+      department: { select: { name: true } },
+    },
   });
 
   if (!user || !user.isActive || !verifyPassword(body.password, user.passwordHash)) {

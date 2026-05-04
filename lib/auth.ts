@@ -1,5 +1,5 @@
 import { scryptSync, randomBytes, timingSafeEqual } from "crypto";
-import type { DepartmentName, RoleName } from "@/lib/permissions";
+import { DEPARTMENTS, ROLES, type DepartmentName, type RoleName } from "@/lib/permissions";
 
 export type AuthUser = {
   id: string;
@@ -9,6 +9,49 @@ export type AuthUser = {
   department: DepartmentName;
   isActive: boolean;
 };
+
+const ROLE_NAMES = new Set<string>(Object.values(ROLES));
+const DEPARTMENT_NAMES = new Set<string>(Object.values(DEPARTMENTS));
+
+function isRoleName(value: string | null): value is RoleName {
+  return typeof value === "string" && ROLE_NAMES.has(value);
+}
+
+function isDepartmentName(value: string | null): value is DepartmentName {
+  return typeof value === "string" && DEPARTMENT_NAMES.has(value);
+}
+
+export async function getRequestUser(): Promise<AuthUser | null> {
+  const { headers } = await import("next/headers");
+  const requestHeaders = await headers();
+  const id = requestHeaders.get("x-user-id");
+  const role = requestHeaders.get("x-user-role");
+  const department = requestHeaders.get("x-user-department");
+
+  if (id && isRoleName(role) && isDepartmentName(department)) {
+    return {
+      id,
+      fullName: requestHeaders.get("x-user-full-name") ?? "",
+      email: requestHeaders.get("x-user-email") ?? "",
+      role,
+      department,
+      isActive: true,
+    };
+  }
+
+  const { getSession } = await import("@/lib/session");
+  const session = await getSession();
+  if (!session || !isRoleName(session.role) || !isDepartmentName(session.department)) return null;
+
+  return {
+    id: session.id,
+    fullName: "",
+    email: session.email,
+    role: session.role,
+    department: session.department,
+    isActive: true,
+  };
+}
 
 export async function getCurrentUser(): Promise<AuthUser | null> {
   const { headers } = await import("next/headers");

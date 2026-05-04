@@ -1,8 +1,11 @@
 import { NextResponse } from "next/server";
+import { Prisma } from "@prisma/client";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
-import { getCurrentUser } from "@/lib/auth";
+import { getRequestUser } from "@/lib/auth";
 import { checkRateLimit, forbidden, normalizePageLimit, requireDepartmentWrite } from "@/lib/security/api";
+
+export const preferredRegion = "bom1";
 
 const dateInput = z.string().trim().min(1).max(64).refine((value) => !Number.isNaN(Date.parse(value)), "Invalid date");
 
@@ -15,7 +18,7 @@ const transactionSchema = z.object({
 });
 
 export async function GET(request: Request) {
-  const user = await getCurrentUser();
+  const user = await getRequestUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const { searchParams } = new URL(request.url);
@@ -30,20 +33,46 @@ export async function GET(request: Request) {
     since.setHours(0, 0, 0, 0);
   }
 
-  const txns = await prisma.materialTransaction.findMany({
-    where: since ? { transactionDate: { gte: since } } : undefined,
-    orderBy: { transactionDate: "desc" },
-    take: limit,
-    select: {
-      id: true,
-      type: true,
-      quantity: true,
-      note: true,
-      transactionDate: true,
-      material: { select: { id: true, name: true, unit: true } },
-      createdBy: { select: { fullName: true } },
-    },
-  });
+  type TransactionRow = {
+    id: string;
+    type: "IN" | "OUT";
+    quantity: number;
+    note: string | null;
+    transactionDate: Date;
+    materialId: string;
+    materialName: string;
+    materialUnit: string;
+    createdByFullName: string;
+  };
+
+  const rows = await prisma.$queryRaw<TransactionRow[]>(Prisma.sql`
+    SELECT
+      mt.id,
+      mt.type,
+      mt.quantity,
+      mt.note,
+      mt.transactionDate,
+      m.id AS materialId,
+      m.name AS materialName,
+      m.unit AS materialUnit,
+      u.fullName AS createdByFullName
+    FROM \`MaterialTransaction\` mt
+    INNER JOIN \`Material\` m ON m.id = mt.materialId
+    INNER JOIN \`User\` u ON u.id = mt.createdById
+    ${since ? Prisma.sql`WHERE mt.transactionDate >= ${since}` : Prisma.empty}
+    ORDER BY mt.transactionDate DESC
+    LIMIT ${limit}
+  `);
+
+  const txns = rows.map((row) => ({
+    id: row.id,
+    type: row.type,
+    quantity: row.quantity,
+    note: row.note,
+    transactionDate: row.transactionDate,
+    material: { id: row.materialId, name: row.materialName, unit: row.materialUnit },
+    createdBy: { fullName: row.createdByFullName },
+  }));
 
   return NextResponse.json({ data: txns });
 }
@@ -52,7 +81,7 @@ export async function POST(request: Request) {
   const rateLimited = await checkRateLimit(request, "materials-transactions:post", 60, 60_000);
   if (rateLimited) return rateLimited;
 
-  const user = await getCurrentUser();
+  const user = await getRequestUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   if (!requireDepartmentWrite(user, "WAREHOUSE")) return forbidden("Зөвхөн агуулахын эрхтэй хэрэглэгч бичих боломжтой");
 

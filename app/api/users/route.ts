@@ -1,8 +1,11 @@
 import { NextResponse } from "next/server";
+import { Prisma } from "@prisma/client";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
-import { getCurrentUser, hashPassword } from "@/lib/auth";
+import { getRequestUser, hashPassword } from "@/lib/auth";
 import { checkRateLimit, forbidden, normalizePageLimit, requireRole } from "@/lib/security/api";
+
+export const preferredRegion = "bom1";
 
 const userCreateSchema = z.object({
   fullName: z.string().trim().min(2).max(120),
@@ -25,7 +28,7 @@ const userSelect = {
 } as const;
 
 export async function GET(request: Request) {
-  const user = await getCurrentUser();
+  const user = await getRequestUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const { searchParams } = new URL(request.url);
@@ -41,38 +44,82 @@ export async function GET(request: Request) {
     return forbidden("Admin permission required");
   }
 
+  type UserRow = {
+    id: string;
+    fullName: string;
+    email: string;
+    isActive: boolean | number;
+    createdAt: Date;
+    updatedAt: Date;
+    roleId: string;
+    roleName: string;
+    departmentId: string;
+    departmentName: string;
+  };
+
+  function mapUserRow(row: UserRow) {
+    return {
+      id: row.id,
+      fullName: row.fullName,
+      email: row.email,
+      isActive: Boolean(row.isActive),
+      createdAt: row.createdAt,
+      updatedAt: row.updatedAt,
+      role: { id: row.roleId, name: row.roleName },
+      department: { id: row.departmentId, name: row.departmentName },
+    };
+  }
+
   if (hasSearch) {
     if (!requireRole(user, "MODERATOR")) return forbidden("Member search permission required");
 
     const limit = normalizePageLimit(searchParams.get("limit"), 10, 25);
-    const users = await prisma.user.findMany({
-      where: {
-        isActive: true,
-        OR: [
-          { fullName: { contains: query } },
-          { email: { contains: query } },
-        ],
-      },
-      orderBy: { fullName: "asc" },
-      take: limit,
-      select: {
-        id: true,
-        fullName: true,
-        email: true,
-        isActive: true,
-        role: { select: { name: true } },
-        department: { select: { name: true } },
-      },
-    });
+    const rows = await prisma.$queryRaw<UserRow[]>(Prisma.sql`
+      SELECT
+        u.id,
+        u.fullName,
+        u.email,
+        u.isActive,
+        u.createdAt,
+        u.updatedAt,
+        r.id AS roleId,
+        r.name AS roleName,
+        d.id AS departmentId,
+        d.name AS departmentName
+      FROM \`User\` u
+      INNER JOIN \`Role\` r ON r.id = u.roleId
+      INNER JOIN \`Department\` d ON d.id = u.departmentId
+      WHERE u.isActive = TRUE
+        AND (u.fullName LIKE ${`%${query}%`} OR u.email LIKE ${`%${query}%`})
+      ORDER BY u.fullName ASC
+      LIMIT ${limit}
+    `);
+    const users = rows.map(mapUserRow);
 
     return NextResponse.json({ data: users });
   }
 
-  const users = await prisma.user.findMany({
-    where: includeInactive ? undefined : { isActive: true },
-    orderBy: { fullName: "asc" },
-    select: userSelect,
-  });
+  const limit = normalizePageLimit(searchParams.get("limit"), 100, 500);
+  const rows = await prisma.$queryRaw<UserRow[]>(Prisma.sql`
+    SELECT
+      u.id,
+      u.fullName,
+      u.email,
+      u.isActive,
+      u.createdAt,
+      u.updatedAt,
+      r.id AS roleId,
+      r.name AS roleName,
+      d.id AS departmentId,
+      d.name AS departmentName
+    FROM \`User\` u
+    INNER JOIN \`Role\` r ON r.id = u.roleId
+    INNER JOIN \`Department\` d ON d.id = u.departmentId
+    ${includeInactive ? Prisma.empty : Prisma.sql`WHERE u.isActive = TRUE`}
+    ORDER BY u.fullName ASC
+    LIMIT ${limit}
+  `);
+  const users = rows.map(mapUserRow);
 
   return NextResponse.json({ data: users });
 }
@@ -81,7 +128,7 @@ export async function POST(request: Request) {
   const rateLimited = await checkRateLimit(request, "users:post", 30, 60_000);
   if (rateLimited) return rateLimited;
 
-  const user = await getCurrentUser();
+  const user = await getRequestUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   if (!requireRole(user, "ADMIN")) return forbidden("Admin permission required");
 

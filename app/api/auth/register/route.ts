@@ -7,6 +7,8 @@ import { blockIp, getClientIpFromHeaders, honeypotCookieOptions } from "@/lib/se
 import { checkRateLimit } from "@/lib/security/api";
 import type { RoleName, DepartmentName } from "@/lib/permissions";
 
+export const preferredRegion = "bom1";
+
 const registerSchema = z.object({
   fullName: z.string().trim().min(2).max(120),
   email: z.string().trim().email().max(254).transform((value) => value.toLowerCase()),
@@ -32,14 +34,14 @@ export async function POST(request: Request) {
     return response;
   }
 
-  const existing = await prisma.user.findUnique({ where: { email: body.email } });
+  const existing = await prisma.user.findUnique({ where: { email: body.email }, select: { id: true } });
   if (existing) {
     return NextResponse.json({ error: "Энэ имэйл бүртгэлтэй байна" }, { status: 409 });
   }
 
   const [userRole, department] = await Promise.all([
-    prisma.role.findUnique({ where: { name: "USER" } }),
-    prisma.department.findUnique({ where: { name: body.departmentName } }),
+    prisma.role.findUnique({ where: { name: "USER" }, select: { id: true } }),
+    prisma.department.findUnique({ where: { name: body.departmentName }, select: { id: true } }),
   ]);
 
   if (!userRole || !department) {
@@ -55,7 +57,14 @@ export async function POST(request: Request) {
       departmentId: department.id,
       isActive: true,
     },
-    include: { role: true, department: true },
+    select: {
+      id: true,
+      fullName: true,
+      email: true,
+      isActive: true,
+      role: { select: { name: true } },
+      department: { select: { name: true } },
+    },
   });
 
   const authUser = {
