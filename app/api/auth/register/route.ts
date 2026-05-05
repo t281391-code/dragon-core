@@ -13,6 +13,7 @@ const registerSchema = z.object({
   fullName: z.string().trim().min(2).max(120),
   email: z.string().trim().email().max(254).transform((value) => value.toLowerCase()),
   password: z.string().min(6).max(256),
+  companyCode: z.string().trim().regex(/^\d{4}$/),
   departmentName: z.enum(["WAREHOUSE", "PRODUCTION", "SAFETY", "LOGISTICS"]),
   website: z.string().max(200).optional().default(""),
 });
@@ -26,6 +27,11 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Бүх талбарыг зөв бөглөнө үү" }, { status: 400 });
   }
   const body = parsed.data;
+  const codeNum = Number.parseInt(body.companyCode, 10);
+  if (codeNum < 1 || codeNum > 2215) {
+    return NextResponse.json({ error: "MR код буруу байна. 0001-2215 хооронд байх ёстой." }, { status: 400 });
+  }
+  const mrCode = `MR-${body.companyCode}`;
 
   if (body.website.trim()) {
     await blockIp(getClientIpFromHeaders(request.headers));
@@ -37,6 +43,11 @@ export async function POST(request: Request) {
   const existing = await prisma.user.findUnique({ where: { email: body.email }, select: { id: true } });
   if (existing) {
     return NextResponse.json({ error: "Энэ имэйл бүртгэлтэй байна" }, { status: 409 });
+  }
+
+  const existingMrCode = await prisma.user.findUnique({ where: { mrCode }, select: { id: true } });
+  if (existingMrCode) {
+    return NextResponse.json({ error: "Энэ MR код бүртгэлтэй байна." }, { status: 409 });
   }
 
   const [userRole, department] = await Promise.all([
@@ -52,6 +63,7 @@ export async function POST(request: Request) {
     data: {
       fullName: body.fullName,
       email: body.email,
+      mrCode,
       passwordHash: hashPassword(body.password),
       roleId: userRole.id,
       departmentId: department.id,

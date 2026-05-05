@@ -47,6 +47,7 @@ export default function RegisterPage() {
           fullName,
           email,
           password,
+          companyCode,
           departmentName: department,
           website: String(new FormData(event.currentTarget).get("website") ?? ""),
         }),

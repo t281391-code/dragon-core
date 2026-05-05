@@ -10,6 +10,7 @@ export const preferredRegion = "sin1";
 const userCreateSchema = z.object({
   fullName: z.string().trim().min(2).max(120),
   email: z.string().trim().email().max(254).transform((value) => value.toLowerCase()),
+  mrCode: z.string().trim().regex(/^MR-\d{4}$/).optional(),
   password: z.string().min(6).max(256),
   roleId: z.string().trim().min(1).max(128),
   departmentId: z.string().trim().min(1).max(128),
@@ -20,6 +21,7 @@ const userSelect = {
   id: true,
   fullName: true,
   email: true,
+  mrCode: true,
   isActive: true,
   createdAt: true,
   updatedAt: true,
@@ -35,6 +37,7 @@ export async function GET(request: Request) {
   const query = (searchParams.get("q") ?? searchParams.get("search") ?? "").trim();
   const hasSearch = query.length > 0;
   const includeInactive = searchParams.get("includeInactive") === "1";
+  const canViewMrCode = requireRole(user, "ADMIN");
 
   if (query.length > 120) {
     return NextResponse.json({ error: "Search query is too long" }, { status: 400 });
@@ -48,6 +51,7 @@ export async function GET(request: Request) {
     id: string;
     fullName: string;
     email: string;
+    mrCode: string | null;
     isActive: boolean | number;
     createdAt: Date;
     updatedAt: Date;
@@ -62,6 +66,7 @@ export async function GET(request: Request) {
       id: row.id,
       fullName: row.fullName,
       email: row.email,
+      mrCode: canViewMrCode ? row.mrCode : null,
       isActive: Boolean(row.isActive),
       createdAt: row.createdAt,
       updatedAt: row.updatedAt,
@@ -79,6 +84,7 @@ export async function GET(request: Request) {
         u.id,
         u.fullName,
         u.email,
+        NULL AS mrCode,
         u.isActive,
         u.createdAt,
         u.updatedAt,
@@ -105,6 +111,7 @@ export async function GET(request: Request) {
       u.id,
       u.fullName,
       u.email,
+      u.mrCode,
       u.isActive,
       u.createdAt,
       u.updatedAt,
@@ -155,6 +162,7 @@ export async function POST(request: Request) {
     data: {
       fullName: body.fullName,
       email: body.email,
+      mrCode: body.mrCode ?? null,
       passwordHash: hashPassword(body.password),
       roleId: role.id,
       departmentId: department.id,

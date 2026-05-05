@@ -6,6 +6,7 @@ import { useEscapeClose } from "@/hooks/useEscapeClose";
 
 type User = {
   id: string; fullName: string; email: string;
+  mrCode: string | null;
   isActive: boolean;
   role: { name: string };
   department: { name: string };
@@ -115,8 +116,11 @@ export default function UsersPage() {
 
   const filtered = users.filter(u =>
     u.fullName.toLowerCase().includes(search.toLowerCase()) ||
-    u.email.toLowerCase().includes(search.toLowerCase())
+    u.email.toLowerCase().includes(search.toLowerCase()) ||
+    (u.mrCode ?? "").toLowerCase().includes(search.toLowerCase())
   );
+  const showMrCodes = me?.role === "ADMIN";
+  const tableColumnCount = showMrCodes ? 7 : 6;
 
   if (loading) return (
     <div className="content" style={{ display: "flex", alignItems: "center", justifyContent: "center", height: 300 }}>
@@ -202,6 +206,7 @@ export default function UsersPage() {
                 <tr>
                   <th>Нэр</th>
                   <th>Email</th>
+                  {showMrCodes && <th>MR код</th>}
                   <th>Дүр</th>
                   <th>Хэлтэс</th>
                   <th>Статус</th>
@@ -210,7 +215,7 @@ export default function UsersPage() {
               </thead>
               <tbody>
                 {filtered.length === 0 && (
-                  <tr><td colSpan={6} style={{ textAlign: "center", color: "#64748b", padding: 20 }}>Ажилтан олдсонгүй</td></tr>
+                  <tr><td colSpan={tableColumnCount} style={{ textAlign: "center", color: "#64748b", padding: 20 }}>Ажилтан олдсонгүй</td></tr>
                 )}
                 {filtered.map(u => (
                   <tr key={u.id}>
@@ -234,6 +239,11 @@ export default function UsersPage() {
                       </div>
                     </td>
                     <td style={{ color: "#94a3b8", fontSize: 12 }}>{u.email}</td>
+                    {showMrCodes && (
+                      <td style={{ color: "var(--text)", fontSize: 12, fontFamily: "var(--font-numeric)", fontVariantNumeric: "tabular-nums", fontWeight: 700 }}>
+                        {u.mrCode ?? "—"}
+                      </td>
+                    )}
                     <td><span className={`bg ${ROLE_BADGE[u.role.name] ?? "bg-gr"}`}>{ROLE_MN[u.role.name] ?? u.role.name}</span></td>
                     <td><span className="bg bg-gr">{DEPT_MN[u.department.name] ?? u.department.name}</span></td>
                     <td><span className={`bg ${u.isActive ? "bg-g" : "bg-r"}`}>{u.isActive ? "Идэвхтэй" : "Идэвхгүй"}</span></td>
@@ -287,6 +297,11 @@ export default function UsersPage() {
               <div>
                 <div style={{ fontWeight: 700, fontSize: 14 }}>{selected.fullName}</div>
                 <div style={{ fontSize: 11, color: "var(--muted)" }}>{selected.email}</div>
+                {showMrCodes && (
+                  <div style={{ fontSize: 11, color: "var(--text)", marginTop: 3, fontFamily: "var(--font-numeric)", fontVariantNumeric: "tabular-nums", fontWeight: 700 }}>
+                    MR: {selected.mrCode ?? "—"}
+                  </div>
+                )}
                 <div style={{ marginTop: 4 }}>
                   <span className={`bg ${ROLE_BADGE[selected.role.name] ?? "bg-gr"}`} style={{ marginRight: 6 }}>
                     {ROLE_MN[selected.role.name]}
