@@ -479,18 +479,38 @@ export default function ProductionPage() {
     [logs, todayKey]
   );
   const totalProduced = useMemo(() => logs.reduce((s,l)=>s+l.outputQuantity,0), [logs]);
-  const upcomingShipments = useMemo(
+  const scheduledShipments = useMemo(
     () => logs
-      .filter(l=>l.scheduledDate && l.scheduledDate.slice(0,10) >= todayKey)
-      .sort((a,b)=>a.scheduledDate!.slice(0,10).localeCompare(b.scheduledDate!.slice(0,10))),
+      .filter(l=>l.scheduledDate)
+      .sort((a,b)=>{
+        const aDate = a.scheduledDate!.slice(0,10);
+        const bDate = b.scheduledDate!.slice(0,10);
+        const aFuture = aDate >= todayKey;
+        const bFuture = bDate >= todayKey;
+        if (aFuture && bFuture) return aDate.localeCompare(bDate);
+        if (aFuture) return -1;
+        if (bFuture) return 1;
+        return bDate.localeCompare(aDate);
+      }),
     [logs, todayKey]
   );
+  const upcomingShipments = useMemo(
+    () => scheduledShipments.filter(l=>l.scheduledDate!.slice(0,10) >= todayKey),
+    [scheduledShipments, todayKey]
+  );
   const pendingCount = upcomingShipments.length;
-  const nextShipmentLog = upcomingShipments[0] ?? null;
+  const nextShipmentLog = upcomingShipments[0] ?? scheduledShipments[0] ?? null;
   const nextShipmentDate = nextShipmentLog?.scheduledDate?.slice(0,10) ?? "—";
   const nextShipmentDays = nextShipmentLog
-    ? Math.max(0, Math.round((new Date(nextShipmentDate).getTime() - new Date(todayKey).getTime()) / 86400000))
+    ? Math.round((new Date(nextShipmentDate).getTime() - new Date(todayKey).getTime()) / 86400000)
     : null;
+  const nextShipmentTimeText = nextShipmentDays === null
+    ? ""
+    : nextShipmentDays === 0
+      ? "өнөөдөр"
+      : nextShipmentDays > 0
+        ? `${nextShipmentDays} хоногийн дараа`
+        : `${Math.abs(nextShipmentDays)} хоногийн өмнө`;
   const nextShipmentSummary = nextShipmentLog
     ? `${nextShipmentLog.productName} · ${fmtDisplay(nextShipmentLog.outputQuantity)}${nextShipmentLog.destinationMine ? ` · ${nextShipmentLog.destinationMine}` : ""}`
     : "Ачигдах бүртгэл алга";
@@ -706,7 +726,7 @@ export default function ProductionPage() {
                 ДАРААГИЙН АЧИЛТ: {nextShipmentDate}
               </div>
               <div style={{fontSize:11,color:"var(--muted)",marginTop:2,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>
-                {nextShipmentLog ? `${nextShipmentSummary} · ${nextShipmentDays===0?"өнөөдөр":`${nextShipmentDays} хоногийн дараа`}` : "Ачигдах бүртгэл алга"}
+                {nextShipmentLog ? `${nextShipmentSummary} · ${nextShipmentTimeText}` : "Ачигдах бүртгэл алга"}
               </div>
             </div>
           </div>
