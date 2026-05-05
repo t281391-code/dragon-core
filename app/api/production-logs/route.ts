@@ -33,7 +33,7 @@ const shipmentPatchSchema = z.object({
   scheduledDate: dateInput,
   destinationMine: z.string().trim().min(1).max(160),
   productName: z.string().trim().min(1).max(160),
-  outputQuantity: z.coerce.number().positive().max(1_000_000_000),
+  shipmentQuantity: z.coerce.number().positive().max(1_000_000_000),
 });
 
 export async function GET(request: Request) {
@@ -56,6 +56,7 @@ export async function GET(request: Request) {
     productionDate: Date;
     productName: string;
     outputQuantity: number;
+    quantityUsed: number;
     scheduledDate: Date | null;
     destinationMine: string | null;
     status: string;
@@ -75,6 +76,7 @@ export async function GET(request: Request) {
         pl.productionDate,
         pl.productName,
         pl.outputQuantity,
+        pl.quantityUsed,
         pl.scheduledDate,
         pl.destinationMine,
         pl.status,
@@ -107,6 +109,7 @@ export async function GET(request: Request) {
     productionDate: row.productionDate,
     productName: row.productName,
     outputQuantity: row.outputQuantity,
+    shipmentQuantity: row.quantityUsed,
     scheduledDate: row.scheduledDate,
     destinationMine: row.destinationMine,
     status: row.status,
@@ -254,12 +257,13 @@ export async function PATCH(request: Request) {
         scheduledDate: new Date(body.scheduledDate),
         destinationMine: body.destinationMine,
         productName: body.productName,
-        outputQuantity: body.outputQuantity,
+        quantityUsed: body.shipmentQuantity,
       },
       select: {
         id: true,
         productName: true,
         outputQuantity: true,
+        quantityUsed: true,
         scheduledDate: true,
         destinationMine: true,
       },

@@ -29,6 +29,7 @@ type ProductionLog = {
   productionDate: string;
   productName: string;
   outputQuantity: number;
+  shipmentQuantity: number;
   scheduledDate: string | null;
   destinationMine: string | null;
   status: string;
@@ -105,6 +106,10 @@ function fmtDensity(v: number | null) {
   return typeof v === "number" && Number.isFinite(v) ? `${v.toLocaleString("mn-MN")} г/см³` : "Бүртгээгүй";
 }
 
+function getShipmentQuantity(log: ProductionLog) {
+  return log.shipmentQuantity > 0 ? log.shipmentQuantity : log.outputQuantity;
+}
+
 function splitWorkerInfo(value: string | null) {
   return (value ?? "")
     .split(/\r?\n|,/)
@@ -136,7 +141,7 @@ function buildDailySeries(logs: ProductionLog[], plans: ProductionPlan[], anchor
   for (const l of logs) {
     const b = map.get(l.productionDate.slice(0,10));
     if (b) b.produced += l.outputQuantity;
-    if (l.scheduledDate) { const s = map.get(l.scheduledDate.slice(0,10)); if (s) s.shipment += l.outputQuantity; }
+    if (l.scheduledDate) { const s = map.get(l.scheduledDate.slice(0,10)); if (s) s.shipment += getShipmentQuantity(l); }
   }
   for (const plan of plans) {
     const b = map.get(plan.planDate.slice(0,10));
@@ -171,7 +176,7 @@ function buildProductionReportDailyRows(logs: ProductionLog[], plans: Production
     }
     if (log.scheduledDate) {
       const shipmentRow = map.get(log.scheduledDate.slice(0, 10));
-      if (shipmentRow) shipmentRow.shipment += log.outputQuantity;
+      if (shipmentRow) shipmentRow.shipment += getShipmentQuantity(log);
     }
   }
 
@@ -249,6 +254,8 @@ export default function ProductionPage() {
   const [selectedLog, setSelectedLog] = useState<ProductionLog | null>(null);
   const [shipmentLog, setShipmentLog] = useState<ProductionLog | null>(null);
   const [shipmentProductName, setShipmentProductName] = useState("");
+  const [shipmentAmount, setShipmentAmount] = useState("");
+  const [shipmentAmountUnit, setShipmentAmountUnit] = useState<"kg" | "ton">("ton");
   const [shipmentDate, setShipmentDate] = useState("");
   const [shipmentDestinationMine, setShipmentDestinationMine] = useState("");
   const [shipmentError, setShipmentError] = useState("");
@@ -401,6 +408,20 @@ export default function ProductionPage() {
   function applyShipmentForm(log: ProductionLog | null) {
     setShipmentLog(log);
     setShipmentProductName(log?.productName ?? PRODUCTS[0]);
+    if (log) {
+      const quantity = getShipmentQuantity(log);
+      if (quantity >= 1000) {
+        const tons = quantity / 1000;
+        setShipmentAmount(tons % 1 === 0 ? String(tons) : String(Number(tons.toFixed(1))));
+        setShipmentAmountUnit("ton");
+      } else {
+        setShipmentAmount(String(quantity));
+        setShipmentAmountUnit("kg");
+      }
+    } else {
+      setShipmentAmount("");
+      setShipmentAmountUnit("ton");
+    }
     const scheduledKey = log?.scheduledDate?.slice(0,10);
     setShipmentDate(scheduledKey && scheduledKey >= todayKey ? scheduledKey : todayKey);
     setShipmentDestinationMine(log?.destinationMine ?? "");
@@ -416,6 +437,8 @@ export default function ProductionPage() {
     setShipmentModal(false);
     setShipmentLog(null);
     setShipmentProductName("");
+    setShipmentAmount("");
+    setShipmentAmountUnit("ton");
     setShipmentDate("");
     setShipmentDestinationMine("");
     setShipmentError("");
@@ -438,6 +461,11 @@ export default function ProductionPage() {
       setShipmentError("Бүтээгдэхүүний нэр оруулна уу");
       return;
     }
+    const shipmentQuantity = toKg(shipmentAmount, shipmentAmountUnit);
+    if (!shipmentQuantity) {
+      setShipmentError("Ачилтын хэмжээг зөв оруулна уу");
+      return;
+    }
     if (!shipmentDestinationMine.trim()) {
       setShipmentError("Очих газар оруулна уу");
       return;
@@ -451,7 +479,7 @@ export default function ProductionPage() {
       body: JSON.stringify({
         id: shipmentLog.id,
         productName: shipmentProductName.trim(),
-        outputQuantity: shipmentLog.outputQuantity,
+        shipmentQuantity,
         scheduledDate: shipmentDate,
         destinationMine: shipmentDestinationMine.trim(),
       }),
@@ -506,14 +534,14 @@ export default function ProductionPage() {
         ? `${nextShipmentDays} хоногийн дараа`
         : `${Math.abs(nextShipmentDays)} хоногийн өмнө`;
   const nextShipmentSummary = nextShipmentLog
-    ? `${nextShipmentLog.productName} · ${fmtDisplay(nextShipmentLog.outputQuantity)}${nextShipmentLog.destinationMine ? ` · ${nextShipmentLog.destinationMine}` : ""}`
+    ? `${nextShipmentLog.productName} · ${fmtDisplay(getShipmentQuantity(nextShipmentLog))}${nextShipmentLog.destinationMine ? ` · ${nextShipmentLog.destinationMine}` : ""}`
     : "Ачигдах бүртгэл алга";
   const shipmentEditableLog = nextShipmentLog
     ?? logs.find((log) => !log.scheduledDate || log.scheduledDate.slice(0,10) < todayKey)
     ?? logs[0]
     ?? null;
   const shipmentReadyTotal = useMemo(
-    () => upcomingShipments.reduce((s,l)=>s+l.outputQuantity,0),
+    () => upcomingShipments.reduce((s,l)=>s+getShipmentQuantity(l),0),
     [upcomingShipments]
   );
 
@@ -628,7 +656,7 @@ export default function ProductionPage() {
   );
   const reportTotalProduced = reportLogs.reduce((sum, log) => sum + log.outputQuantity, 0);
   const reportTotalTarget = reportPlans.reduce((sum, plan) => sum + plan.targetQuantity, 0);
-  const reportShipmentTotal = reportShipments.reduce((sum, log) => sum + log.outputQuantity, 0);
+  const reportShipmentTotal = reportShipments.reduce((sum, log) => sum + getShipmentQuantity(log), 0);
   const reportEfficiencyPct = reportTotalTarget > 0 ? Math.round((reportTotalProduced / reportTotalTarget) * 100) : 0;
   const reportAverageDaily = Math.round(reportTotalProduced / REPORT_DAYS);
   const reportProductRows = useMemo(
@@ -639,7 +667,7 @@ export default function ProductionPage() {
         .map((log) => log.density)
         .filter((value): value is number => typeof value === "number" && Number.isFinite(value));
       const produced = productLogs.reduce((sum, log) => sum + log.outputQuantity, 0);
-      const shipped = productShipments.reduce((sum, log) => sum + log.outputQuantity, 0);
+      const shipped = productShipments.reduce((sum, log) => sum + getShipmentQuantity(log), 0);
       const averageDensity = densityValues.length
         ? densityValues.reduce((sum, value) => sum + value, 0) / densityValues.length
         : null;
@@ -1407,6 +1435,16 @@ export default function ProductionPage() {
                   </select>
                 </div>
                 <div className="fr2">
+                  <div className="fg"><label>Хэдэн хэмжээ ачих вэ?</label>
+                    <input type="number" min="0" step="0.1" value={shipmentAmount} onChange={e=>setShipmentAmount(e.target.value)} placeholder="Жишээ: 7"/>
+                  </div>
+                  <div className="fg"><label>Нэгж</label>
+                    <select value={shipmentAmountUnit} onChange={e=>setShipmentAmountUnit(e.target.value as "kg" | "ton")}>
+                      <option value="kg">Кг</option><option value="ton">Тонн</option>
+                    </select>
+                  </div>
+                </div>
+                <div className="fr2">
                   <div className="fg"><label>Хэзээ ачих вэ?</label>
                     <input type="date" value={shipmentDate} onChange={e=>setShipmentDate(e.target.value)}/>
                   </div>
@@ -1453,6 +1491,7 @@ export default function ProductionPage() {
                 ["Нягт", fmtDensity(selectedLog.density)],
                 ["Материал", `${selectedLog.material.name} (${selectedLog.material.unit})`],
                 ["Ачигдах өдөр", selectedLog.scheduledDate ? selectedLog.scheduledDate.slice(0,10) : "—"],
+                ["Ачилтын хэмжээ", selectedLog.scheduledDate ? fmtDisplay(getShipmentQuantity(selectedLog)) : "—"],
                 ["Очих уурхай", selectedLog.destinationMine ?? "—"],
                 ["Бүртгэсэн", selectedLog.createdBy.fullName],
               ].map(([label,value])=>(
