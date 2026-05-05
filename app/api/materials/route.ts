@@ -6,6 +6,19 @@ import { checkRateLimit, forbidden, requireDepartmentWrite } from "@/lib/securit
 
 export const preferredRegion = "sin1";
 
+const WAREHOUSE_MATERIALS = [
+  "АМИАКИЙН ШҮҮ",
+  "ЦУУНЫ ХҮЧИЛ",
+  "ХҮХРИЙН ХҮЧИЛ",
+  "ШИЛЭН БӨМБӨЛӨГ",
+  "ТҮЛШ",
+  "НИТРИТ НАТРИ",
+  "ЭМУЛЬГАТОР",
+  "ХАТУУРУУЛАГЧ",
+  "ГИДРОКСИД",
+  "ЦАГААН ТОС",
+];
+
 const materialSchema = z.object({
   name: z.string().trim().min(1).max(160),
   category: z.string().trim().max(120).optional().default("Бусад"),
@@ -20,8 +33,28 @@ export async function GET() {
   const user = await getRequestUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
+  const existingWarehouseMaterials = await prisma.material.findMany({
+    where: { name: { in: WAREHOUSE_MATERIALS } },
+    select: { name: true },
+  });
+  const existingNames = new Set(existingWarehouseMaterials.map((material) => material.name));
+  const missingNames = WAREHOUSE_MATERIALS.filter((name) => !existingNames.has(name));
+
+  if (missingNames.length > 0) {
+    await prisma.material.createMany({
+      data: missingNames.map((name) => ({
+        name,
+        category: "Агуулах",
+        unit: "КГ",
+        currentStock: 0,
+        minimumStock: 0,
+        maximumStock: 0,
+        location: "Агуулах",
+      })),
+    });
+  }
+
   const materials = await prisma.material.findMany({
-    orderBy: { name: "asc" },
     select: {
       id: true,
       name: true,
@@ -33,7 +66,15 @@ export async function GET() {
       location: true,
     },
   });
-  return NextResponse.json({ data: materials });
+  const orderMap = new Map(WAREHOUSE_MATERIALS.map((name, index) => [name, index]));
+  const sortedMaterials = materials.sort((a, b) => {
+    const aIndex = orderMap.get(a.name) ?? 999;
+    const bIndex = orderMap.get(b.name) ?? 999;
+    if (aIndex !== bIndex) return aIndex - bIndex;
+    return a.name.localeCompare(b.name);
+  });
+
+  return NextResponse.json({ data: sortedMaterials });
 }
 
 export async function POST(request: Request) {

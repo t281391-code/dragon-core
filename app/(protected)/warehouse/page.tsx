@@ -392,6 +392,13 @@ export default function WarehousePage() {
 
     return () => window.clearInterval(intervalId);
   }, [mutateMaterials, mutateReportTxns, mutateStats, mutateTxns, reportModal]);
+
+  useEffect(() => {
+    if (modal && !WAREHOUSE_PRIORITY.includes(materialName)) {
+      setMaterialName(WAREHOUSE_PRIORITY[0]);
+    }
+  }, [materialName, modal]);
+
   async function submitTransaction(event: { preventDefault(): void }) {
     event.preventDefault();
     const selectedMaterialName = materialName || WAREHOUSE_PRIORITY[0];
