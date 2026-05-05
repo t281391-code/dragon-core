@@ -85,6 +85,71 @@ input[type="date"] {
   font-feature-settings: "tnum" 1;
 }
 
+.department-warehouse,
+.department-production,
+.department-safety,
+.department-logistics {
+  font-variant-numeric: tabular-nums;
+}
+
+:is(.department-warehouse, .department-production, .department-safety, .department-logistics)
+  :is(.kpi-val, .kv, .panel-val, .mf-val, .prod-item-val, .realtime-badge strong, .pgi, .pgb) {
+  font-family: var(--font-numeric) !important;
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1;
+  letter-spacing: 0 !important;
+}
+
+:is(.department-warehouse, .department-production, .department-safety, .department-logistics)
+  :is(.panel, .mc, .safety-table, .tw)
+  :is(
+    [style*="font-size: 20"],
+    [style*="font-size:20"],
+    [style*="font-size: 22"],
+    [style*="font-size:22"],
+    [style*="font-family"],
+    [style*="fontWeight: 700"],
+    [style*="fontWeight:700"],
+    [style*="fontWeight: 800"],
+    [style*="fontWeight:800"],
+    [style*="fontWeight: 850"],
+    [style*="fontWeight:850"],
+    [style*="fontWeight: 900"],
+    [style*="fontWeight:900"],
+    [style*="font-weight: 700"],
+    [style*="font-weight:700"],
+    [style*="font-weight: 800"],
+    [style*="font-weight:800"],
+    [style*="font-weight: 850"],
+    [style*="font-weight:850"],
+    [style*="font-weight: 900"],
+    [style*="font-weight:900"]
+  ) {
+  font-family: var(--font-numeric) !important;
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1;
+  letter-spacing: 0 !important;
+}
+
+:is(.department-warehouse, .department-production, .department-safety, .department-logistics)
+  :is(.panel, .mc)
+  :is(
+    [style*="fontWeight: 800"],
+    [style*="fontWeight:800"],
+    [style*="fontWeight: 850"],
+    [style*="fontWeight:850"],
+    [style*="fontWeight: 900"],
+    [style*="fontWeight:900"],
+    [style*="font-weight: 800"],
+    [style*="font-weight:800"],
+    [style*="font-weight: 850"],
+    [style*="font-weight:850"],
+    [style*="font-weight: 900"],
+    [style*="font-weight:900"]
+  ) {
+  font-weight: 650 !important;
+}
+
 .sidebar {
   width: 264px;
   background: var(--base2);
