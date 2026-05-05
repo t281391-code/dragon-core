@@ -425,7 +425,6 @@ export default function ProductionPage() {
   }
 
   function openShipmentDateModal(log: ProductionLog | null) {
-    if (!canEdit) return;
     applyShipmentForm(log);
     setShipmentModal(true);
   }
@@ -448,6 +447,10 @@ export default function ProductionPage() {
   }
 
   async function saveShipmentDate() {
+    if (!canEdit) {
+      setShipmentError("Ачилт хадгалах эрхгүй байна");
+      return;
+    }
     if (!shipmentLog) {
       setShipmentError("Ачилт холбох үйлдвэрлэлийн бүртгэл сонгоно уу");
       return;
@@ -710,16 +713,16 @@ export default function ProductionPage() {
             </div>
           </div>
           <div
-            role={canEdit ? "button" : undefined}
-            tabIndex={canEdit ? 0 : undefined}
-            onClick={canEdit ? ()=>openShipmentDateModal(shipmentEditableLog) : undefined}
-            onKeyDown={canEdit ? (event)=>{
+            role="button"
+            tabIndex={0}
+            onClick={()=>openShipmentDateModal(shipmentEditableLog)}
+            onKeyDown={(event)=>{
               if (event.key === "Enter" || event.key === " ") {
                 event.preventDefault();
                 openShipmentDateModal(shipmentEditableLog);
               }
-            } : undefined}
-            style={{flex:"1 1 260px",padding:"12px 16px",borderRadius:12,border:"1px solid rgba(59,130,246,0.24)",background:"rgba(59,130,246,0.06)",display:"flex",alignItems:"center",gap:12,cursor:canEdit?"pointer":"default"}}
+            }}
+            style={{flex:"1 1 260px",padding:"12px 16px",borderRadius:12,border:"1px solid rgba(59,130,246,0.24)",background:"rgba(59,130,246,0.06)",display:"flex",alignItems:"center",gap:12,cursor:"pointer"}}
           >
             <span style={{fontSize:16}}>🚚</span>
             <div style={{minWidth:0}}>
@@ -751,7 +754,7 @@ export default function ProductionPage() {
           <KpiCard label="Дараагийн ачилт" value={nextShipmentDate}
             valueClass="white" change={nextShipmentSummary}
             icon={<span style={{fontSize:20}}>🚚</span>} sparkline={shipSparkline} sparklineColor="#3B82F6"
-            onClick={canEdit ? ()=>openShipmentDateModal(shipmentEditableLog) : undefined} />
+            onClick={()=>openShipmentDateModal(shipmentEditableLog)} />
           <KpiCard label="Хүлээгдэж буй" value={pendingCount}
             valueStyle={{color:"#F59E0B"}} change={`${fmtDisplay(shipmentReadyTotal)} ачигдахаар байна`}
             icon={<span style={{fontSize:20}}>⏳</span>}
