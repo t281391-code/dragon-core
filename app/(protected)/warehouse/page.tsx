@@ -981,7 +981,6 @@ export default function WarehousePage() {
                     <th style={{ width: 32 }}>№</th>
                     <th>Материал</th>
                     <th>Үлдэгдэл (КГ)</th>
-                    <th>Өөрчлөлт </th>
                     <th>Дүүргэлтийн хувь</th>
                     <th>Төлөв</th>
                     <th>Сүүлийнх</th>
@@ -991,7 +990,7 @@ export default function WarehousePage() {
                 <tbody>
                   {filteredMaterials.length === 0 ? (
                     <tr className="empty-row">
-                      <td colSpan={8} style={{ padding: "32px 16px" }}>
+                      <td colSpan={7} style={{ padding: "32px 16px" }}>
                         <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 10 }}>
                           <span style={{ fontSize: 32 }}>📦</span>
                           <div style={{ fontWeight: 700, color: "var(--text)", fontSize: 14 }}>Материал олдсонгүй</div>
@@ -1010,11 +1009,6 @@ export default function WarehousePage() {
                           <td style={{ color: "var(--muted)", fontSize: 11 }}>{idx + 1}</td>
                           <td><strong style={{ color: "var(--text)", fontSize: 13 }}>{m.name}</strong></td>
                           <td style={{ fontFamily: "var(--font-mono), monospace", fontWeight: 600 }}>{formatValue(m.currentStock, m.unit)}</td>
-                          <td>
-                            <span style={{ color: m.currentStock >= m.minimumStock ? "#10B981" : "#EF4444", fontSize: 12, fontWeight: 700 }}>
-                              {m.currentStock >= m.minimumStock ? "→ 0" : `↓ ${(m.minimumStock - m.currentStock).toLocaleString("mn-MN")}`}
-                            </span>
-                          </td>
                           <td style={{ minWidth: 140 }}>
                             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                               <div style={{ flex: 1, height: 8, borderRadius: 999, background: "var(--base3)", overflow: "hidden" }}>
