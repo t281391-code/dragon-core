@@ -126,8 +126,8 @@ function rowUrgency(l: ProductionLog): "crit" | "warn" | "ok" {
   return "ok";
 }
 
-function buildDailySeries(logs: ProductionLog[], plans: ProductionPlan[]) {
-  const now = new Date();
+function buildDailySeries(logs: ProductionLog[], plans: ProductionPlan[], anchor = new Date()) {
+  const now = new Date(anchor);
   const pts = Array.from({ length: 14 }, (_, i) => {
     const d = new Date(now); d.setDate(now.getDate() - 6 + i);
     return { key: d.toISOString().slice(0,10), date:`${d.getMonth()+1}/${d.getDate()}`, produced:0, shipment:0, target:null as number | null };
@@ -264,8 +264,6 @@ export default function ProductionPage() {
   const [productionDate, setProductionDate] = useState(toDateInputValue());
   const [amount, setAmount] = useState("");
   const [amountUnit, setAmountUnit] = useState<"kg"|"ton">("kg");
-  const [dailyTarget, setDailyTarget] = useState("");
-  const [dailyTargetUnit, setDailyTargetUnit] = useState<"kg"|"ton">("kg");
   const [destinationMine, setDestinationMine] = useState(MINE_OPTIONS[0]);
   const [workerInfo, setWorkerInfo] = useState("");
   const [density, setDensity] = useState("");
@@ -338,8 +336,6 @@ export default function ProductionPage() {
     setProductionDate(toDateInputValue());
     setAmount("");
     setAmountUnit("kg");
-    setDailyTarget("");
-    setDailyTargetUnit("kg");
     setDestinationMine(MINE_OPTIONS[0]);
     setWorkerInfo("");
     setDensity("");
@@ -357,19 +353,17 @@ export default function ProductionPage() {
   async function submitLog(e: { preventDefault(): void }) {
     e.preventDefault();
     const qty = toKg(amount, amountUnit);
-    const dailyTargetQty = dailyTarget.trim() ? toKg(dailyTarget, dailyTargetUnit) : null;
     const densityValue = density.trim() ? Number(density) : null;
     if (!qty) { setError("Үйлдвэрлэсэн хэмжээг зөв оруулна уу"); return; }
-    if (dailyTarget.trim() && !dailyTargetQty) { setError("Өдрийн үйлдвэрлэлийн төлөвлөгөөг зөв оруулна уу"); return; }
     if (densityValue === null || !Number.isFinite(densityValue) || densityValue <= 0) { setError("Нягтын утгыг заавал зөв оруулна уу"); return; }
     setSubmitting(true); setError("");
     const res = await fetch("/api/production-logs", {
       method:"POST", headers:{"Content-Type":"application/json"},
-      body: JSON.stringify({ lotNumber:makeLotNumber(), productionDate, productName, outputQuantity:qty, dailyTargetQuantity:dailyTargetQty, destinationMine, materialId:selectedMaterialId || null, workerInfo:workerInfo.trim()||null, density:densityValue, note:note||null }),
+      body: JSON.stringify({ lotNumber:makeLotNumber(), productionDate, productName, outputQuantity:qty, destinationMine, materialId:selectedMaterialId || null, workerInfo:workerInfo.trim()||null, density:densityValue, note:note||null }),
     });
     const data = await res.json();
     if (!res.ok) { setError(data.error??"Алдаа гарлаа"); setSubmitting(false); return; }
-    setModal(false); setSubmitting(false); setAmount(""); setDailyTarget(""); setWorkerInfo(""); setDensity(""); setNote("");
+    setModal(false); setSubmitting(false); setAmount(""); setWorkerInfo(""); setDensity(""); setNote("");
     await Promise.all([mutateLogs(), mutateMaterials()]);
   }
 
@@ -523,11 +517,12 @@ export default function ProductionPage() {
     [upcomingShipments]
   );
 
-  const dailySeries = useMemo(()=>buildDailySeries(logs, productionPlans),[logs, productionPlans]);
+  const chartAnchorDate = useMemo(
+    () => nextShipmentLog?.scheduledDate ? new Date(nextShipmentLog.scheduledDate) : new Date(),
+    [nextShipmentLog]
+  );
+  const dailySeries = useMemo(()=>buildDailySeries(logs, productionPlans, chartAnchorDate),[chartAnchorDate, logs, productionPlans]);
   const avgDaily = Math.max(Math.round(dailySeries.reduce((s,d)=>s+d.produced,0)/dailySeries.length), 200);
-  const todayPoint = useMemo(()=>dailySeries.find(d=>d.key===todayKey),[dailySeries, todayKey]);
-  const todayTarget = typeof todayPoint?.target === "number" ? todayPoint.target : 0;
-  const todayProgressPct = todayTarget > 0 ? Math.min(100, Math.round((todayProduced / todayTarget) * 100)) : 0;
 
   const productDist = useMemo(()=>PRODUCTS.map(p=>({
     name: p, value: Math.max(logs.filter(l=>l.productName===p).reduce((s,l)=>s+l.outputQuantity,0), 0.01),
@@ -763,11 +758,11 @@ export default function ProductionPage() {
           <div className="panel">
             <div className="panel-hdr" style={{paddingBottom:12}}>
               <div>
-                <div className="panel-title">Үйлдвэрлэлт, төлөвлөгөө ба ачилт (14 хоног)</div>
-                <div className="panel-sub">Өдрийн төлөвлөгөө, бодит гарц, ачигдах өдрийн харьцуулалт</div>
+                <div className="panel-title">Үйлдвэрлэлт ба ачилт (14 хоног)</div>
+                <div className="panel-sub">Бодит гарц болон төлөвлөсөн ачилтын огнооны харьцуулалт</div>
               </div>
               <div style={{display:"flex",gap:12,flexWrap:"wrap"}}>
-                {[["#10B981","Үйлдвэрлэл"],["#3B82F6","Ачилт"],["#64748B","Төлөвлөгөө"]].map(([c,l])=>(
+                {[["#10B981","Үйлдвэрлэл"],["#3B82F6","Ачилт"]].map(([c,l])=>(
                   <div key={l} style={{display:"flex",alignItems:"center",gap:5,fontSize:11,color:c}}>
                     <span style={{width:16,height:2,background:c,display:"inline-block",borderRadius:2}}/>
                     {l}
@@ -783,18 +778,6 @@ export default function ProductionPage() {
               <div>
                 <div style={{fontSize:22,fontWeight:700,color:"#3B82F6"}}>{fmtDisplay(shipmentReadyTotal)}</div>
                 <div style={{fontSize:11,color:"var(--muted)",marginTop:2}}>АЧИЛТАД БЭЛЭН</div>
-              </div>
-              <div style={{minWidth:180,flex:"1 1 220px"}}>
-                <div style={{display:"flex",justifyContent:"space-between",gap:12,fontSize:11,color:"var(--muted)",marginBottom:6}}>
-                  <span>ӨНӨӨДРИЙН ТӨЛӨВЛӨГӨӨ</span>
-                  <strong style={{color:todayTarget>0?"#10B981":"var(--muted)"}}>{todayTarget>0 ? `${todayProgressPct}%` : "—"}</strong>
-                </div>
-                <div style={{height:9,borderRadius:999,background:"var(--base3,#f1f5f9)",overflow:"hidden"}}>
-                  <div style={{width:`${todayProgressPct}%`,height:"100%",background:"#10B981",borderRadius:999,transition:"width .35s ease"}}/>
-                </div>
-                <div style={{fontSize:11,color:"var(--muted)",marginTop:5}}>
-                  {todayTarget>0 ? `${fmtDisplay(todayProduced)} / ${fmtDisplay(todayTarget)}` : "Төлөвлөгөө бүртгээгүй"}
-                </div>
               </div>
             </div>
             <div className="chart-wrap" style={{height:240}}>
@@ -817,11 +800,10 @@ export default function ProductionPage() {
                   <Tooltip content={<ProdTooltip/>}/>
                   <Area type="monotone" dataKey="produced" name="Үйлдвэрлэл" stroke="#10B981" strokeWidth={2.5} fill="url(#prodGrad)" dot={{r:3,fill:"#10B981"}} activeDot={{r:5}} isAnimationActive={false}/>
                   <Area type="monotone" dataKey="shipment" name="Ачилт" stroke="#3B82F6" strokeWidth={2} fill="url(#shipGrad)" dot={{r:3,fill:"#3B82F6"}} activeDot={{r:5}} isAnimationActive={false}/>
-                  <Area type="monotone" dataKey="target" name="Төлөвлөгөө" stroke="#64748B" strokeDasharray="5 4" strokeWidth={2} fillOpacity={0} dot={{r:3,fill:"#64748B"}} activeDot={{r:5}} isAnimationActive={false}/>
                 </AreaChart>
               </ResponsiveContainer>
             </div>
-            <ChartHint>Ногоон нь үйлдвэрлэсэн хэмжээ, цэнхэр нь ачилт, саарал тасархай шугам нь өдрийн төлөвлөгөө. Мэдээлэл 5 секунд тутам шинэчлэгдэнэ.</ChartHint>
+            <ChartHint>Ногоон нь үйлдвэрлэсэн хэмжээ, цэнхэр нь ачилт. Ачилтын popup дээр оруулсан огноо энэ графикийн хугацаанд багтаж харагдана.</ChartHint>
           </div>
 
           <div className="panel">
@@ -1363,14 +1345,6 @@ export default function ProductionPage() {
                 <div className="fg"><label>Үйлдвэрлэсэн өдөр</label>
                   <input type="date" value={productionDate} onChange={e=>setProductionDate(e.target.value)}/>
                 </div>
-                <div className="fg"><label>Өдөрт үйлдвэрлэх төлөвлөгөө</label>
-                  <input type="number" min="0" step="0.1" value={dailyTarget} onChange={e=>setDailyTarget(e.target.value)} placeholder="Жишээ: 2500"/>
-                </div>
-                <div className="fg"><label>Төлөвлөгөөний нэгж</label>
-                  <select value={dailyTargetUnit} onChange={e=>setDailyTargetUnit(e.target.value as "kg" | "ton")}>
-                    <option value="kg">Кг</option><option value="ton">Тонн</option>
-                  </select>
-                </div>
                 <div className="fg"><label>Үйлдвэрлэсэн хэмжээ</label>
                   <input type="number" min="0" step="0.1" value={amount} onChange={e=>setAmount(e.target.value)} placeholder="Жишээ: 1500"/>
                 </div>
@@ -1428,7 +1402,9 @@ export default function ProductionPage() {
             ) : (
               <>
                 <div className="fg"><label>Ямар бүтээгдэхүүн ачигдах вэ?</label>
-                  <input type="text" value={shipmentProductName} onChange={e=>setShipmentProductName(e.target.value)} placeholder="Жишээ: ANDO-EV 32MM"/>
+                  <select value={shipmentProductName} onChange={e=>setShipmentProductName(e.target.value)}>
+                    {PRODUCTS.map((product)=><option key={product} value={product}>{product}</option>)}
+                  </select>
                 </div>
                 <div className="fr2">
                   <div className="fg"><label>Хэзээ ачих вэ?</label>
