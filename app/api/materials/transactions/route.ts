@@ -152,5 +152,15 @@ export async function POST(request: Request) {
     }),
   ]);
 
-  return NextResponse.json({ data: txn }, { status: 201 });
+  return NextResponse.json({
+    data: {
+      id: txn.id,
+      type: txn.type,
+      quantity: txn.quantity,
+      note: txn.note,
+      transactionDate: txn.transactionDate,
+      material: { id: material.id, name: material.name, unit: material.unit },
+      createdBy: { fullName: user.fullName || user.email },
+    },
+  }, { status: 201 });
 }

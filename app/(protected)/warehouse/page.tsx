@@ -48,6 +48,8 @@ type MaterialTransaction = {
   createdBy: { fullName: string };
 };
 
+type MonthlyStat = { key: string; label: string; inbound: number; outbound: number };
+
 const WAREHOUSE_PRIORITY = [
   "АМИАКИЙН ШҮҮ",
   "ЦУУНЫ ХҮЧИЛ",
@@ -123,6 +125,29 @@ function buildFlowSeries(transactions: MaterialTransaction[]) {
     else b.outbound += t.quantity;
   }
   return buckets;
+}
+
+function monthKeyFromTransactionDate(value: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}`;
+}
+
+function addTransactionToStats(current: { data: MonthlyStat[] } | undefined, txn: MaterialTransaction) {
+  if (!current) return current;
+  const key = monthKeyFromTransactionDate(txn.transactionDate);
+  if (!key) return current;
+
+  let changed = false;
+  const data = current.data.map((row) => {
+    if (row.key !== key) return row;
+    changed = true;
+    return txn.type === "IN"
+      ? { ...row, inbound: row.inbound + txn.quantity }
+      : { ...row, outbound: row.outbound + txn.quantity };
+  });
+
+  return changed ? { ...current, data } : current;
 }
 
 // Accepts pre-filtered transactions for the specific material (O(1) lookup via Map)
@@ -428,6 +453,7 @@ export default function WarehousePage() {
       setSubmitting(false);
       return;
     }
+    const createdTxn = data.data as MaterialTransaction | undefined;
 
     // Close modal and reset form first so the user sees the table immediately
     setModal(false);
@@ -455,8 +481,25 @@ export default function WarehousePage() {
           : current,
       { revalidate: true }
     );
-    void mutateTxns();
-    void mutateStats();
+    if (createdTxn) {
+      void mutateTxns(
+        (current: { data: MaterialTransaction[] } | undefined) =>
+          current
+            ? {
+                ...current,
+                data: [createdTxn, ...current.data.filter((txn) => txn.id !== createdTxn.id)].slice(0, 200),
+              }
+            : { data: [createdTxn] },
+        { revalidate: true }
+      );
+      void mutateStats(
+        (current: { data: MonthlyStat[] } | undefined) => addTransactionToStats(current, createdTxn),
+        { revalidate: true }
+      );
+    } else {
+      void mutateTxns();
+      void mutateStats();
+    }
   }
 
   const flowSeries = useMemo(() => buildFlowSeries(transactions), [transactions]);
@@ -518,7 +561,7 @@ export default function WarehousePage() {
     { name: "Критик", value: criticalCount || 0.1, color: "#EF4444" },
   ], [normalCount, lowCount, criticalCount]);
 
-  const monthlyStats = useMemo(() => (statsData?.data ?? []) as { key: string; label: string; inbound: number; outbound: number }[], [statsData]);
+  const monthlyStats = useMemo(() => (statsData?.data ?? []) as MonthlyStat[], [statsData]);
 
   const monthlyData = useMemo(() =>
     monthlyStats.map(d => ({ month: d.label, inbound: Math.round(d.inbound), outbound: Math.round(d.outbound) })),
