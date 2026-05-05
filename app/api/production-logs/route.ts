@@ -20,7 +20,7 @@ const productionLogSchema = z.object({
   scheduledDate: nullableDateInput,
   destinationMine: z.string().trim().max(160).nullable().optional(),
   status: z.string().trim().max(40).optional(),
-  materialId: z.string().min(1).max(128),
+  materialId: z.string().min(1).max(128).nullable().optional(),
   quantityUsed: z.coerce.number().min(0).max(1_000_000_000).optional(),
   downtimeMinutes: z.coerce.number().int().min(0).max(1440).optional(),
   workerInfo: z.string().trim().max(4000).nullable().optional(),
@@ -136,6 +136,26 @@ export async function POST(request: Request) {
   const productionDate = new Date(body.productionDate);
 
   const log = await prisma.$transaction(async (tx) => {
+    let materialId = body.materialId ?? "";
+    if (!materialId) {
+      const fallbackMaterial = await tx.material.findFirst({
+        where: { name: "Үйлдвэрлэлийн ерөнхий материал" },
+        select: { id: true },
+      });
+      materialId = fallbackMaterial?.id ?? (await tx.material.create({
+        data: {
+          name: "Үйлдвэрлэлийн ерөнхий материал",
+          category: "Үйлдвэрлэл",
+          unit: "КГ",
+          currentStock: 0,
+          minimumStock: 0,
+          maximumStock: 0,
+          location: "Үйлдвэрлэл",
+        },
+        select: { id: true },
+      })).id;
+    }
+
     const created = await tx.productionLog.create({
       data: {
         lotNumber: body.lotNumber || `LOT-${Date.now()}`,
@@ -146,7 +166,7 @@ export async function POST(request: Request) {
         scheduledDate: body.scheduledDate ? new Date(body.scheduledDate) : null,
         destinationMine: body.destinationMine || null,
         status: body.status ?? "ready",
-        materialId: body.materialId,
+        materialId,
         quantityUsed: body.quantityUsed ?? 0,
         downtimeMinutes: body.downtimeMinutes ?? 0,
         workerInfo: body.workerInfo || null,

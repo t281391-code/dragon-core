@@ -275,6 +275,7 @@ export default function ProductionPage() {
   const [note, setNote] = useState("");
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [selectedMaterialId, setSelectedMaterialId] = useState("");
 
   const { data: logsData, isLoading: logsLoading, mutate: mutateLogs } = useSWR(
     "/api/production-logs?limit=180",
@@ -291,7 +292,10 @@ export default function ProductionPage() {
   const productionPlans: ProductionPlan[] = useMemo(() => logsData?.plans ?? [], [logsData]);
   const materials: Material[] = useMemo(() => materialsData?.data ?? [], [materialsData]);
   const loading = logsLoading || materialsLoading;
-  const selectedMaterialId = materials[0]?.id || "";
+
+  useEffect(() => {
+    if (!selectedMaterialId && materials[0]) setSelectedMaterialId(materials[0].id);
+  }, [materials, selectedMaterialId]);
 
   useEffect(() => {
     if (!modal && !shipmentModal && !selectedLog && !reportModal) return;
@@ -343,6 +347,7 @@ export default function ProductionPage() {
     setWorkerInfo("");
     setDensity("");
     setNote("");
+    setSelectedMaterialId((current) => current || materials[0]?.id || "");
     setError("");
     setModal(true);
   }
@@ -360,11 +365,10 @@ export default function ProductionPage() {
     if (!qty) { setError("Үйлдвэрлэсэн хэмжээг зөв оруулна уу"); return; }
     if (dailyTarget.trim() && !dailyTargetQty) { setError("Өдрийн үйлдвэрлэлийн төлөвлөгөөг зөв оруулна уу"); return; }
     if (densityValue === null || !Number.isFinite(densityValue) || densityValue <= 0) { setError("Нягтын утгыг заавал зөв оруулна уу"); return; }
-    if (!selectedMaterialId) { setError("Материал сонгогдоогүй байна"); return; }
     setSubmitting(true); setError("");
     const res = await fetch("/api/production-logs", {
       method:"POST", headers:{"Content-Type":"application/json"},
-      body: JSON.stringify({ lotNumber:makeLotNumber(), productionDate, productName, outputQuantity:qty, dailyTargetQuantity:dailyTargetQty, destinationMine, materialId:selectedMaterialId, workerInfo:workerInfo.trim()||null, density:densityValue, note:note||null }),
+      body: JSON.stringify({ lotNumber:makeLotNumber(), productionDate, productName, outputQuantity:qty, dailyTargetQuantity:dailyTargetQty, destinationMine, materialId:selectedMaterialId || null, workerInfo:workerInfo.trim()||null, density:densityValue, note:note||null }),
     });
     const data = await res.json();
     if (!res.ok) { setError(data.error??"Алдаа гарлаа"); setSubmitting(false); return; }
@@ -1354,6 +1358,15 @@ export default function ProductionPage() {
                   <select value={productName} onChange={e=>setProductName(e.target.value as (typeof PRODUCTS)[number])}>
                     {PRODUCTS.map(p=><option key={p} value={p}>{p}</option>)}
                   </select>
+                </div>
+                <div className="fg"><label>Материал</label>
+                  {materials.length > 0 ? (
+                    <select value={selectedMaterialId || materials[0]?.id || ""} onChange={e=>setSelectedMaterialId(e.target.value)}>
+                      {materials.map((material)=><option key={material.id} value={material.id}>{material.name} ({material.unit})</option>)}
+                    </select>
+                  ) : (
+                    <input type="text" value="Автоматаар үүсгэнэ" readOnly/>
+                  )}
                 </div>
                 <div className="fg"><label>Үйлдвэрлэсэн өдөр</label>
                   <input type="date" value={productionDate} onChange={e=>setProductionDate(e.target.value)}/>
