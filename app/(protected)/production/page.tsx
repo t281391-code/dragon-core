@@ -57,6 +57,7 @@ const PRODUCT_COLORS: Record<string, string> = {
 };
 const MINE_OPTIONS = ["Оюутолгой","Эрдэнэт","Тавантолгой","Нарийнсухайт","Цагаан суварга"];
 const PAGE_SIZE = 20;
+const REPORT_DAYS = 14;
 
 const fetcher = (url: string) => fetch(url).then(r => r.json());
 
@@ -74,6 +75,30 @@ function fmtDisplay(v: number) {
     return `${t % 1 === 0 ? t.toLocaleString("mn-MN") : t.toFixed(1)} тн`;
   }
   return `${v.toLocaleString("mn-MN")} кг`;
+}
+
+function formatDateTime(value: Date | null) {
+  if (!value) return "--:--:--";
+  return value.toLocaleString("mn-MN", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  });
+}
+
+function formatShortDate(value: Date) {
+  return value.toLocaleDateString("mn-MN", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  });
+}
+
+function formatDateKey(value: Date) {
+  return `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, "0")}-${String(value.getDate()).padStart(2, "0")}`;
 }
 
 function fmtDensity(v: number | null) {
@@ -118,6 +143,44 @@ function buildDailySeries(logs: ProductionLog[], plans: ProductionPlan[]) {
     if (b) b.target = plan.targetQuantity;
   }
   return pts;
+}
+
+function buildProductionReportDailyRows(logs: ProductionLog[], plans: ProductionPlan[], now: Date) {
+  const start = new Date(now);
+  start.setHours(0, 0, 0, 0);
+  start.setDate(start.getDate() - (REPORT_DAYS - 1));
+  const rows = Array.from({ length: REPORT_DAYS }, (_, index) => {
+    const date = new Date(start);
+    date.setDate(start.getDate() + index);
+    return {
+      key: formatDateKey(date),
+      label: formatShortDate(date),
+      produced: 0,
+      shipment: 0,
+      target: 0,
+      count: 0,
+    };
+  });
+  const map = new Map(rows.map((row) => [row.key, row]));
+
+  for (const log of logs) {
+    const productionRow = map.get(log.productionDate.slice(0, 10));
+    if (productionRow) {
+      productionRow.produced += log.outputQuantity;
+      productionRow.count += 1;
+    }
+    if (log.scheduledDate) {
+      const shipmentRow = map.get(log.scheduledDate.slice(0, 10));
+      if (shipmentRow) shipmentRow.shipment += log.outputQuantity;
+    }
+  }
+
+  for (const plan of plans) {
+    const row = map.get(plan.planDate.slice(0, 10));
+    if (row) row.target += plan.targetQuantity;
+  }
+
+  return rows;
 }
 
 type ChartPayload = {
@@ -180,6 +243,8 @@ function ProductionSkeleton() {
 export default function ProductionPage() {
   const { user } = useAuth();
   const [modal, setModal] = useState(false);
+  const [reportModal, setReportModal] = useState(false);
+  const [reportClock, setReportClock] = useState<Date | null>(null);
   const [selectedLog, setSelectedLog] = useState<ProductionLog | null>(null);
   const [shipmentLog, setShipmentLog] = useState<ProductionLog | null>(null);
   const [shipmentProductName, setShipmentProductName] = useState("");
@@ -226,7 +291,7 @@ export default function ProductionPage() {
   const selectedMaterialId = materials[0]?.id || "";
 
   useEffect(() => {
-    if (!modal && !shipmentLog && !selectedLog) return;
+    if (!modal && !shipmentLog && !selectedLog && !reportModal) return;
 
     function handleEscape(event: KeyboardEvent) {
       if (event.key !== "Escape") return;
@@ -240,12 +305,30 @@ export default function ProductionPage() {
         setSelectedLog(null);
         return;
       }
+      if (reportModal) {
+        setReportModal(false);
+        return;
+      }
       setModal(false);
     }
 
     window.addEventListener("keydown", handleEscape);
     return () => window.removeEventListener("keydown", handleEscape);
-  }, [modal, shipmentLog, selectedLog]);
+  }, [modal, reportModal, shipmentLog, selectedLog]);
+
+  useEffect(() => {
+    if (!reportModal) return;
+
+    const refreshReport = () => {
+      setReportClock(new Date());
+      void mutateLogs();
+      void mutateMaterials();
+    };
+
+    refreshReport();
+    const intervalId = window.setInterval(refreshReport, REALTIME_REFRESH_MS);
+    return () => window.clearInterval(intervalId);
+  }, [mutateLogs, mutateMaterials, reportModal]);
 
   function openCreateModal(product: (typeof PRODUCTS)[number] = "ANDO-V 90MM") {
     setProductName(product);
@@ -260,6 +343,11 @@ export default function ProductionPage() {
     setNote("");
     setError("");
     setModal(true);
+  }
+
+  function openReportModal() {
+    setReportClock(new Date());
+    setReportModal(true);
   }
 
   async function submitLog(e: { preventDefault(): void }) {
@@ -461,6 +549,85 @@ export default function ProductionPage() {
   );
   const selectedDayTarget = typeof selectedDayPoint?.target === "number" ? selectedDayPoint.target : 0;
   const selectedDayProgressPct = selectedDayTarget > 0 ? Math.min(100, Math.round(((selectedDayPoint?.produced ?? 0) / selectedDayTarget) * 100)) : 0;
+
+  const reportNow = useMemo(() => reportClock ?? lastUpdated ?? new Date(), [lastUpdated, reportClock]);
+  const reportStart = useMemo(() => {
+    const start = new Date(reportNow);
+    start.setHours(0, 0, 0, 0);
+    start.setDate(start.getDate() - (REPORT_DAYS - 1));
+    return start;
+  }, [reportNow]);
+  const reportNowTime = reportNow.getTime();
+  const reportStartTime = reportStart.getTime();
+  const reportLogs = useMemo(
+    () => logs.filter((log) => {
+      const time = new Date(log.productionDate).getTime();
+      return time >= reportStartTime && time <= reportNowTime;
+    }),
+    [logs, reportNowTime, reportStartTime]
+  );
+  const reportShipments = useMemo(
+    () => logs.filter((log) => {
+      if (!log.scheduledDate) return false;
+      const time = new Date(log.scheduledDate).getTime();
+      return time >= reportStartTime && time <= reportNowTime;
+    }),
+    [logs, reportNowTime, reportStartTime]
+  );
+  const reportPlans = useMemo(
+    () => productionPlans.filter((plan) => {
+      const time = new Date(plan.planDate).getTime();
+      return time >= reportStartTime && time <= reportNowTime;
+    }),
+    [productionPlans, reportNowTime, reportStartTime]
+  );
+  const reportDailyRows = useMemo(
+    () => buildProductionReportDailyRows(logs, productionPlans, reportNow),
+    [logs, productionPlans, reportNow]
+  );
+  const reportTotalProduced = reportLogs.reduce((sum, log) => sum + log.outputQuantity, 0);
+  const reportTotalTarget = reportPlans.reduce((sum, plan) => sum + plan.targetQuantity, 0);
+  const reportShipmentTotal = reportShipments.reduce((sum, log) => sum + log.outputQuantity, 0);
+  const reportEfficiencyPct = reportTotalTarget > 0 ? Math.round((reportTotalProduced / reportTotalTarget) * 100) : 0;
+  const reportAverageDaily = Math.round(reportTotalProduced / REPORT_DAYS);
+  const reportProductRows = useMemo(
+    () => PRODUCTS.map((product) => {
+      const productLogs = reportLogs.filter((log) => log.productName === product);
+      const productShipments = reportShipments.filter((log) => log.productName === product);
+      const densityValues = productLogs
+        .map((log) => log.density)
+        .filter((value): value is number => typeof value === "number" && Number.isFinite(value));
+      const produced = productLogs.reduce((sum, log) => sum + log.outputQuantity, 0);
+      const shipped = productShipments.reduce((sum, log) => sum + log.outputQuantity, 0);
+      const averageDensity = densityValues.length
+        ? densityValues.reduce((sum, value) => sum + value, 0) / densityValues.length
+        : null;
+      return {
+        product,
+        produced,
+        shipped,
+        count: productLogs.length,
+        averageDensity,
+        color: PRODUCT_COLORS[product],
+      };
+    }).sort((a, b) => b.produced - a.produced),
+    [reportLogs, reportShipments]
+  );
+  const reportTopProduct = reportProductRows.find((row) => row.produced > 0) ?? null;
+  const reportActiveProductCount = reportProductRows.filter((row) => row.produced > 0).length;
+  const reportLatestLogs = useMemo(
+    () => [...reportLogs]
+      .sort((a, b) => new Date(b.productionDate).getTime() - new Date(a.productionDate).getTime())
+      .slice(0, 20),
+    [reportLogs]
+  );
+  const reportHealth = reportTotalTarget === 0
+    ? { label: "Төлөвлөгөө бүртгэгдээгүй", color: "#64748B" }
+    : reportEfficiencyPct >= 100
+      ? { label: "Төлөвлөгөөнөөс давсан", color: "#10B981" }
+      : reportEfficiencyPct >= 80
+        ? { label: "Хэвийн явцтай", color: "#F59E0B" }
+        : { label: "Анхаарах шаардлагатай", color: "#EF4444" };
 
   if (loading) return <ProductionSkeleton />;
 
@@ -861,7 +1028,7 @@ export default function ProductionPage() {
               )}
               <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6}}>
                 {[
-                  {icon:"📄",label:"Тайлан",color:"#3B82F6"},
+                  {icon:"📄",label:"Тайлан",color:"#3B82F6",onClick:openReportModal},
                   {icon:"📊",label:"Excel",color:"#10B981"},
                   {icon:"📋",label:"PDF",color:"#EF4444"},
                   {icon:"🔄",label:"Шинэчлэх",color:"#F59E0B",onClick:()=>{ void mutateLogs(); void mutateMaterials(); }},
@@ -920,6 +1087,208 @@ export default function ProductionPage() {
           </div>
         </div>
       </div>
+
+      {/* Live Report Modal */}
+      {reportModal ? (
+        <div
+          className="mo open"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="production-report-title"
+          onClick={(e) => e.target === e.currentTarget && setReportModal(false)}
+        >
+          <div className="mc" style={{ maxWidth: 1080, width: "100%", padding: 0 }} onClick={(e) => e.stopPropagation()}>
+            <div className="mh" style={{ marginBottom: 0, padding: "22px 24px 0", flexWrap: "wrap" }}>
+              <div>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+                  <span style={{ width: 8, height: 8, borderRadius: "50%", background: "#10B981", boxShadow: "0 0 0 4px rgba(16,185,129,0.12)" }} />
+                  <span style={{ color: "#10B981", fontSize: 11, fontWeight: 800, letterSpacing: 0 }}>
+                    14 хоногийн тайлан шинэчлэгдэж байна
+                  </span>
+                </div>
+                <h3 id="production-report-title" style={{ marginBottom: 6 }}>Үйлдвэрлэлийн 14 хоногийн тайлан</h3>
+                <div style={{ color: "var(--muted)", fontSize: 12 }}>
+                  Хугацаа: <strong style={{ color: "var(--text)" }}>{formatShortDate(reportStart)} - {formatShortDate(reportNow)}</strong>
+                  <span style={{ margin: "0 8px", opacity: 0.45 }}>|</span>
+                  Бэлтгэсэн: {formatDateTime(reportNow)}
+                  <span style={{ margin: "0 8px", opacity: 0.45 }}>|</span>
+                  Сүүлийн sync: {formatDateTime(lastUpdated)}
+                </div>
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <button
+                  className="btn bo2"
+                  type="button"
+                  onClick={() => {
+                    setReportClock(new Date());
+                    void mutateLogs();
+                    void mutateMaterials();
+                  }}
+                >
+                  Шинэчлэх
+                </button>
+                <button className="mx" type="button" aria-label="Тайлан хаах" onClick={() => setReportModal(false)}>×</button>
+              </div>
+            </div>
+
+            <div style={{ padding: "20px 24px 24px", display: "flex", flexDirection: "column", gap: 16 }}>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 160px), 1fr))", gap: 10 }}>
+                {[
+                  { label: "Тайлангийн хугацаа", value: `${REPORT_DAYS} хоног`, sub: `${formatShortDate(reportStart)} - ${formatShortDate(reportNow)}`, color: "#3B82F6" },
+                  { label: "Нийт үйлдвэрлэл", value: fmtDisplay(reportTotalProduced), sub: `${reportLogs.length} бүртгэл`, color: "#10B981" },
+                  { label: "Өдрийн дундаж", value: fmtDisplay(reportAverageDaily), sub: "14 хоногийн дундаж", color: "#14B8A6" },
+                  { label: "Ачилтын хэмжээ", value: fmtDisplay(reportShipmentTotal), sub: `${reportShipments.length} төлөвлөгөөт ачилт`, color: "#F59E0B" },
+                  { label: "Гүйцэтгэл", value: reportTotalTarget > 0 ? `${reportEfficiencyPct}%` : "N/A", sub: reportTotalTarget > 0 ? `Төлөвлөгөө ${fmtDisplay(reportTotalTarget)}` : "Төлөвлөгөө бүртгэгдээгүй", color: reportHealth.color },
+                  { label: "Бүтээгдэхүүн", value: `${reportActiveProductCount}/${PRODUCTS.length}`, sub: "Хөдөлгөөнтэй төрөл", color: "#A78BFA" },
+                ].map((card) => (
+                  <div key={card.label} style={{ padding: "14px 16px", borderRadius: 14, border: "1px solid var(--border)", background: `${card.color}0d` }}>
+                    <div style={{ color: "var(--muted)", fontSize: 11, fontWeight: 700, marginBottom: 8 }}>{card.label}</div>
+                    <div style={{ color: card.color, fontSize: 20, fontWeight: 850, lineHeight: 1.15 }}>{card.value}</div>
+                    <div style={{ color: "var(--muted)", fontSize: 11, marginTop: 6 }}>{card.sub}</div>
+                  </div>
+                ))}
+              </div>
+
+              <div className="panel" style={{ padding: 18, margin: 0 }}>
+                <div className="panel-title" style={{ marginBottom: 10 }}>Тайлангийн дүгнэлт</div>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 180px), 1fr))", gap: 10 }}>
+                  {[
+                    { label: "Нийт бүртгэл", value: `${reportLogs.length}`, sub: "Сүүлийн 14 хоног" },
+                    { label: "Топ бүтээгдэхүүн", value: reportTopProduct ? reportTopProduct.product : "Байхгүй", sub: reportTopProduct ? fmtDisplay(reportTopProduct.produced) : "Үйлдвэрлэл бүртгэгдээгүй" },
+                    { label: "Тайлангийн төлөв", value: reportHealth.label, sub: reportTotalTarget > 0 ? `${reportEfficiencyPct}% гүйцэтгэл` : "Төлөвлөгөө оруулаагүй" },
+                    { label: "Идэвхтэй өдөр", value: `${reportDailyRows.filter((row) => row.count > 0).length}`, sub: `${REPORT_DAYS} өдрөөс үйлдвэрлэлтэй өдөр` },
+                  ].map((item) => (
+                    <div key={item.label} style={{ border: "1px solid var(--border)", borderRadius: 12, padding: "12px 14px", background: "rgba(255,255,255,0.025)" }}>
+                      <div style={{ color: "var(--muted)", fontSize: 11, fontWeight: 700, marginBottom: 6 }}>{item.label}</div>
+                      <div style={{ color: "var(--text)", fontSize: 15, fontWeight: 850, lineHeight: 1.25, overflowWrap: "anywhere" }}>{item.value}</div>
+                      <div style={{ color: "var(--muted)", fontSize: 11, marginTop: 5 }}>{item.sub}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="panel" style={{ padding: 18, margin: 0 }}>
+                <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12, marginBottom: 12, flexWrap: "wrap" }}>
+                  <div>
+                    <div className="panel-title">Өдрийн үйлдвэрлэл ба төлөвлөгөө</div>
+                    <div className="panel-sub" style={{ marginTop: 4 }}>14 хоногийн өдөр тус бүрийн үйлдвэрлэл, ачилт, төлөвлөгөө.</div>
+                  </div>
+                  <span style={{ color: "var(--muted)", fontSize: 11, fontFamily: "var(--font-mono), monospace" }}>
+                    {formatShortDate(reportStart)} - {formatShortDate(reportNow)}
+                  </span>
+                </div>
+                <div style={{ maxHeight: 320, overflow: "auto" }}>
+                  <table className="safety-table wh-table">
+                    <thead>
+                      <tr>
+                        <th>Огноо</th>
+                        <th>Үйлдвэрлэл</th>
+                        <th>Төлөвлөгөө</th>
+                        <th>Гүйцэтгэл</th>
+                        <th>Ачилт</th>
+                        <th>Бүртгэл</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {reportDailyRows.map((row) => {
+                        const pct = row.target > 0 ? Math.round((row.produced / row.target) * 100) : null;
+                        return (
+                          <tr key={row.key}>
+                            <td style={{ whiteSpace: "nowrap", color: "var(--muted)", fontSize: 11 }}>{row.label}</td>
+                            <td style={{ color: row.produced > 0 ? "#10B981" : "var(--muted)", fontWeight: 800 }}>{fmtDisplay(row.produced)}</td>
+                            <td>{row.target > 0 ? fmtDisplay(row.target) : "-"}</td>
+                            <td style={{ color: pct === null ? "var(--muted)" : pct >= 100 ? "#10B981" : pct >= 80 ? "#F59E0B" : "#EF4444", fontWeight: 800 }}>
+                              {pct === null ? "N/A" : `${pct}%`}
+                            </td>
+                            <td style={{ color: row.shipment > 0 ? "#3B82F6" : "var(--muted)", fontWeight: 800 }}>{fmtDisplay(row.shipment)}</td>
+                            <td>{row.count}</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              <div className="panel" style={{ padding: 18, margin: 0 }}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, marginBottom: 12, flexWrap: "wrap" }}>
+                  <div>
+                    <div className="panel-title">Бүтээгдэхүүн тус бүрийн 14 хоногийн үйлдвэрлэл</div>
+                    <div className="panel-sub" style={{ marginTop: 4 }}>Үйлдвэрлэсэн хэмжээ, бүртгэлийн тоо, нягтын дундаж.</div>
+                  </div>
+                  <span style={{ color: "var(--muted)", fontSize: 11 }}>{reportActiveProductCount} идэвхтэй бүтээгдэхүүн</span>
+                </div>
+                <div style={{ maxHeight: 320, overflow: "auto" }}>
+                  <table className="safety-table wh-table">
+                    <thead>
+                      <tr>
+                        <th>Бүтээгдэхүүн</th>
+                        <th>Үйлдвэрлэл</th>
+                        <th>Бүртгэл</th>
+                        <th>Дундаж нягт</th>
+                        <th>Ачилтын хэмжээ</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {reportProductRows.map((row) => (
+                        <tr key={row.product}>
+                          <td><strong style={{ color: row.color }}>{row.product}</strong></td>
+                          <td style={{ color: row.produced > 0 ? "#10B981" : "var(--muted)", fontWeight: 800 }}>{fmtDisplay(row.produced)}</td>
+                          <td>{row.count}</td>
+                          <td>{row.averageDensity === null ? "-" : fmtDensity(row.averageDensity)}</td>
+                          <td style={{ color: row.shipped > 0 ? "#3B82F6" : "var(--muted)", fontWeight: 800 }}>{fmtDisplay(row.shipped)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              <div className="panel" style={{ padding: 18, margin: 0 }}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, marginBottom: 12, flexWrap: "wrap" }}>
+                  <div>
+                    <div className="panel-title">14 хоногийн үйлдвэрлэлийн бүртгэл</div>
+                    <div className="panel-sub" style={{ marginTop: 4 }}>Сүүлийн 20 бүртгэлийг огноогоор бууруулж харуулна.</div>
+                  </div>
+                  <span style={{ color: "var(--muted)", fontSize: 11 }}>{reportLogs.length} нийт бүртгэл</span>
+                </div>
+                <div style={{ maxHeight: 320, overflow: "auto" }}>
+                  <table className="safety-table wh-table">
+                    <thead>
+                      <tr>
+                        <th>Огноо</th>
+                        <th>Lot</th>
+                        <th>Бүтээгдэхүүн</th>
+                        <th>Хэмжээ</th>
+                        <th>Нягт</th>
+                        <th>Бүртгэсэн</th>
+                        <th>Ачилт</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {reportLatestLogs.length === 0 ? (
+                        <tr><td colSpan={7} style={{ padding: 18, color: "var(--muted)", textAlign: "center" }}>Энэ хугацаанд үйлдвэрлэлийн бүртгэл байхгүй байна</td></tr>
+                      ) : reportLatestLogs.map((log) => (
+                        <tr key={log.id}>
+                          <td style={{ whiteSpace: "nowrap", color: "var(--muted)", fontSize: 11 }}>{formatDateTime(new Date(log.productionDate))}</td>
+                          <td style={{ fontFamily: "var(--font-mono), monospace", fontSize: 11 }}>{log.lotNumber}</td>
+                          <td><strong>{log.productName}</strong></td>
+                          <td style={{ color: "#10B981", fontWeight: 800 }}>{fmtDisplay(log.outputQuantity)}</td>
+                          <td>{fmtDensity(log.density)}</td>
+                          <td style={{ color: "var(--muted)", whiteSpace: "nowrap" }}>{log.createdBy.fullName}</td>
+                          <td style={{ color: log.scheduledDate ? "#3B82F6" : "var(--muted)", whiteSpace: "nowrap" }}>
+                            {log.scheduledDate ? log.scheduledDate.slice(0, 10) : "-"}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       {/* Modal */}
       {modal && (

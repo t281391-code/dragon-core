@@ -49,6 +49,7 @@ type ReporterUser = {
 const ACCENT = "#EF4444";
 const MONTH_SEEDS = [3, 5, 2, 7, 4, 6];
 const PAGE_SIZE = 20;
+const REPORT_DAYS = 14;
 
 const fetcher = (url: string) => fetch(url).then(r => r.json());
 
@@ -71,6 +72,26 @@ const SEVERITY_LABELS: Record<string, string> = {
   medium: "Дунд",
   low: "Бага",
 };
+
+function formatDateTime(value: Date | null) {
+  if (!value) return "--:--:--";
+  return value.toLocaleString("mn-MN", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  });
+}
+
+function formatShortDate(value: Date) {
+  return value.toLocaleDateString("mn-MN", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  });
+}
 
 function categorizeIncident(incident: SafetyIncident) {
   const source = `${incident.title} ${incident.description}`.toLowerCase();
@@ -160,6 +181,8 @@ export default function SafetyPage() {
   const [tableSearch, setTableSearch] = useState("");
   const [tablePage, setTablePage] = useState(0);
   const [modal, setModal] = useState(false);
+  const [reportModal, setReportModal] = useState(false);
+  const [reportClock, setReportClock] = useState<Date | null>(null);
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [severity, setSeverity] = useState("medium");
@@ -182,7 +205,31 @@ export default function SafetyPage() {
 
   const incidents: SafetyIncident[] = useMemo(() => incidentsData?.data ?? [], [incidentsData]);
 
-  useEscapeClose(modal, () => setModal(false));
+  useEscapeClose(Boolean(modal || reportModal), () => {
+    if (reportModal) {
+      setReportModal(false);
+      return;
+    }
+    if (modal) setModal(false);
+  });
+
+  useEffect(() => {
+    if (!reportModal) return;
+
+    const refreshReport = () => {
+      setReportClock(new Date());
+      void mutate();
+    };
+
+    refreshReport();
+    const intervalId = window.setInterval(refreshReport, REALTIME_REFRESH_MS);
+    return () => window.clearInterval(intervalId);
+  }, [mutate, reportModal]);
+
+  function openReportModal() {
+    setReportClock(new Date());
+    setReportModal(true);
+  }
 
   function updateTableFilter(nextFilter: string) {
     setTableFilter(nextFilter);
@@ -350,6 +397,70 @@ export default function SafetyPage() {
       .map((i) => ({ msg: `Өндөр эрсдэл: ${i.title} · ${i.location}` })),
     [incidents]
   );
+
+  const reportNow = useMemo(() => reportClock ?? lastUpdated ?? new Date(), [lastUpdated, reportClock]);
+  const reportStart = useMemo(() => {
+    const start = new Date(reportNow);
+    start.setHours(0, 0, 0, 0);
+    start.setDate(start.getDate() - (REPORT_DAYS - 1));
+    return start;
+  }, [reportNow]);
+  const reportNowTime = reportNow.getTime();
+  const reportStartTime = reportStart.getTime();
+  const reportIncidents = useMemo(
+    () => incidents.filter((incident) => {
+      const time = new Date(incident.incidentDate).getTime();
+      return time >= reportStartTime && time <= reportNowTime;
+    }),
+    [incidents, reportNowTime, reportStartTime]
+  );
+  const reportOpenIncidents = reportIncidents.filter((incident) => incident.status === "open" || incident.status === "investigating").length;
+  const reportHighSeverity = reportIncidents.filter((incident) => incident.severity === "high").length;
+  const reportClosedIncidents = reportIncidents.filter((incident) => incident.status === "closed" || incident.status === "resolved").length;
+  const reportClosurePct = reportIncidents.length > 0 ? Math.round((reportClosedIncidents / reportIncidents.length) * 100) : 0;
+  const reportCategoryRows = useMemo(
+    () => [
+      { label: "Хамгаалах хэрэгсэл", key: "ppe", count: reportIncidents.filter((incident) => categorizeIncident(incident) === "ppe").length, color: "#EF4444" },
+      { label: "Өндрийн дүрэм", key: "height", count: reportIncidents.filter((incident) => categorizeIncident(incident) === "height").length, color: "#F59E0B" },
+      { label: "Галын аюулгүй байдал", key: "fire", count: reportIncidents.filter((incident) => categorizeIncident(incident) === "fire").length, color: "#3B82F6" },
+      { label: "Бусад эрсдэл", key: "risk", count: reportIncidents.filter((incident) => categorizeIncident(incident) === "risk").length, color: "#10B981" },
+    ].sort((a, b) => b.count - a.count),
+    [reportIncidents]
+  );
+  const reportSeverityRows = useMemo(
+    () => [
+      { label: "Өндөр", count: reportHighSeverity, color: "#EF4444" },
+      { label: "Дунд", count: reportIncidents.filter((incident) => incident.severity === "medium").length, color: "#F59E0B" },
+      { label: "Бага", count: reportIncidents.filter((incident) => incident.severity === "low").length, color: "#3B82F6" },
+    ],
+    [reportHighSeverity, reportIncidents]
+  );
+  const reportStatusRows = useMemo(
+    () => [
+      { label: "Нээлттэй", count: reportIncidents.filter((incident) => incident.status === "open").length, color: "#EF4444" },
+      { label: "Шалгаж байна", count: reportIncidents.filter((incident) => incident.status === "investigating").length, color: "#F59E0B" },
+      { label: "Шийдвэрлэгдсэн", count: reportIncidents.filter((incident) => incident.status === "resolved").length, color: "#10B981" },
+      { label: "Хаагдсан", count: reportIncidents.filter((incident) => incident.status === "closed").length, color: "#64748B" },
+    ],
+    [reportIncidents]
+  );
+  const reportLatestIncidents = useMemo(
+    () => [...reportIncidents]
+      .sort((a, b) => new Date(b.incidentDate).getTime() - new Date(a.incidentDate).getTime())
+      .slice(0, 20),
+    [reportIncidents]
+  );
+  const reportTopCategory = reportCategoryRows.find((row) => row.count > 0) ?? null;
+  const reportTopLocation = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const incident of reportIncidents) counts.set(incident.location, (counts.get(incident.location) ?? 0) + 1);
+    return [...counts.entries()].sort((a, b) => b[1] - a[1])[0] ?? null;
+  }, [reportIncidents]);
+  const reportHealth = reportHighSeverity > 0
+    ? { label: "Өндөр эрсдэлтэй", color: "#EF4444" }
+    : reportOpenIncidents > 0
+      ? { label: "Хяналт шаардлагатай", color: "#F59E0B" }
+      : { label: "Тогтвортой", color: "#10B981" };
 
   if (isLoading) return <SafetySkeleton />;
 
@@ -649,7 +760,7 @@ export default function SafetyPage() {
               <div style={{ padding: "4px 20px 16px", display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
                 {[
                   { icon: "🛡️", label: "Incident нэмэх", onClick: () => setModal(true) },
-                  { icon: "📋", label: "Тайлан гаргах" },
+                  { icon: "📋", label: "Тайлан гаргах", onClick: openReportModal },
                   { icon: "⚠️", label: "Эрсдэл үнэлэх" },
                   { icon: "🔄", label: "Шинэчлэх", onClick: () => void mutate() },
                 ].map((a) => (
@@ -680,6 +791,207 @@ export default function SafetyPage() {
           </div>
         </div>
       </div>
+
+      {/* Live Report Modal */}
+      {reportModal ? (
+        <div
+          className="mo open"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="safety-report-title"
+          onClick={(event) => event.target === event.currentTarget && setReportModal(false)}
+        >
+          <div className="mc" style={{ maxWidth: 1080, width: "100%", padding: 0 }} onClick={(event) => event.stopPropagation()}>
+            <div className="mh" style={{ marginBottom: 0, padding: "22px 24px 0", flexWrap: "wrap" }}>
+              <div>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+                  <span style={{ width: 8, height: 8, borderRadius: "50%", background: ACCENT, boxShadow: "0 0 0 4px rgba(239,68,68,0.12)" }} />
+                  <span style={{ color: ACCENT, fontSize: 11, fontWeight: 800, letterSpacing: 0 }}>
+                    14 хоногийн тайлан шинэчлэгдэж байна
+                  </span>
+                </div>
+                <h3 id="safety-report-title" style={{ marginBottom: 6 }}>ХЭАБО 14 хоногийн тайлан</h3>
+                <div style={{ color: "var(--muted)", fontSize: 12 }}>
+                  Хугацаа: <strong style={{ color: "var(--text)" }}>{formatShortDate(reportStart)} - {formatShortDate(reportNow)}</strong>
+                  <span style={{ margin: "0 8px", opacity: 0.45 }}>|</span>
+                  Бэлтгэсэн: {formatDateTime(reportNow)}
+                  <span style={{ margin: "0 8px", opacity: 0.45 }}>|</span>
+                  Сүүлийн sync: {formatDateTime(lastUpdated)}
+                </div>
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <button
+                  className="btn bo2"
+                  type="button"
+                  onClick={() => {
+                    setReportClock(new Date());
+                    void mutate();
+                  }}
+                >
+                  Шинэчлэх
+                </button>
+                <button className="mx" type="button" aria-label="Тайлан хаах" onClick={() => setReportModal(false)}>×</button>
+              </div>
+            </div>
+
+            <div style={{ padding: "20px 24px 24px", display: "flex", flexDirection: "column", gap: 16 }}>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 160px), 1fr))", gap: 10 }}>
+                {[
+                  { label: "Тайлангийн хугацаа", value: `${REPORT_DAYS} хоног`, sub: `${formatShortDate(reportStart)} - ${formatShortDate(reportNow)}`, color: "#3B82F6" },
+                  { label: "Нийт incident", value: `${reportIncidents.length}`, sub: "Энэ хугацаанд", color: ACCENT },
+                  { label: "Нээлттэй", value: `${reportOpenIncidents}`, sub: "Шалгах шаардлагатай", color: "#F59E0B" },
+                  { label: "Өндөр эрсдэл", value: `${reportHighSeverity}`, sub: "Priority incident", color: "#EF4444" },
+                  { label: "Шийдвэрлэгдсэн", value: `${reportClosedIncidents}`, sub: `${reportClosurePct}% хаалтын хувь`, color: "#10B981" },
+                  { label: "Төлөв", value: reportHealth.label, sub: "Тайлангийн үнэлгээ", color: reportHealth.color },
+                ].map((card) => (
+                  <div key={card.label} style={{ padding: "14px 16px", borderRadius: 14, border: "1px solid var(--border)", background: `${card.color}0d` }}>
+                    <div style={{ color: "var(--muted)", fontSize: 11, fontWeight: 700, marginBottom: 8 }}>{card.label}</div>
+                    <div style={{ color: card.color, fontSize: 20, fontWeight: 850, lineHeight: 1.15, overflowWrap: "anywhere" }}>{card.value}</div>
+                    <div style={{ color: "var(--muted)", fontSize: 11, marginTop: 6 }}>{card.sub}</div>
+                  </div>
+                ))}
+              </div>
+
+              <div className="panel" style={{ padding: 18, margin: 0 }}>
+                <div className="panel-title" style={{ marginBottom: 10 }}>Тайлангийн дүгнэлт</div>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 180px), 1fr))", gap: 10 }}>
+                  {[
+                    { label: "Хаалтын хувь", value: `${reportClosurePct}%`, sub: `${reportClosedIncidents}/${reportIncidents.length} incident хаагдсан` },
+                    { label: "Топ ангилал", value: reportTopCategory ? reportTopCategory.label : "Байхгүй", sub: reportTopCategory ? `${reportTopCategory.count} incident` : "Incident бүртгэгдээгүй" },
+                    { label: "Анхаарах байршил", value: reportTopLocation ? reportTopLocation[0] : "Байхгүй", sub: reportTopLocation ? `${reportTopLocation[1]} incident` : "Давтамж илрээгүй" },
+                    { label: "Нээлттэй эрсдэл", value: `${reportOpenIncidents}`, sub: reportOpenIncidents > 0 ? "Шийдвэрлэх шаардлагатай" : "Идэвхтэй эрсдэл байхгүй" },
+                  ].map((item) => (
+                    <div key={item.label} style={{ border: "1px solid var(--border)", borderRadius: 12, padding: "12px 14px", background: "rgba(255,255,255,0.025)" }}>
+                      <div style={{ color: "var(--muted)", fontSize: 11, fontWeight: 700, marginBottom: 6 }}>{item.label}</div>
+                      <div style={{ color: "var(--text)", fontSize: 15, fontWeight: 850, lineHeight: 1.25, overflowWrap: "anywhere" }}>{item.value}</div>
+                      <div style={{ color: "var(--muted)", fontSize: 11, marginTop: 5 }}>{item.sub}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 320px), 1fr))", gap: 16 }}>
+                <div className="panel" style={{ padding: 18, margin: 0 }}>
+                  <div className="panel-title" style={{ marginBottom: 12 }}>Ангиллын задаргаа</div>
+                  <div style={{ maxHeight: 280, overflow: "auto" }}>
+                    <table className="safety-table wh-table">
+                      <thead>
+                        <tr>
+                          <th>Ангилал</th>
+                          <th>Incident</th>
+                          <th>Хувь</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {reportCategoryRows.map((row) => {
+                          const share = reportIncidents.length > 0 ? Math.round((row.count / reportIncidents.length) * 100) : 0;
+                          return (
+                            <tr key={row.key}>
+                              <td><strong style={{ color: row.color }}>{row.label}</strong></td>
+                              <td style={{ color: row.count > 0 ? row.color : "var(--muted)", fontWeight: 800 }}>{row.count}</td>
+                              <td>{share}%</td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+
+                <div className="panel" style={{ padding: 18, margin: 0 }}>
+                  <div className="panel-title" style={{ marginBottom: 12 }}>Severity ба status</div>
+                  <div style={{ display: "grid", gap: 14 }}>
+                    <div style={{ maxHeight: 160, overflow: "auto" }}>
+                      <table className="safety-table wh-table">
+                        <thead>
+                          <tr>
+                            <th>Severity</th>
+                            <th>Incident</th>
+                            <th>Хувь</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {reportSeverityRows.map((row) => {
+                            const share = reportIncidents.length > 0 ? Math.round((row.count / reportIncidents.length) * 100) : 0;
+                            return (
+                              <tr key={row.label}>
+                                <td><strong style={{ color: row.color }}>{row.label}</strong></td>
+                                <td style={{ color: row.color, fontWeight: 800 }}>{row.count}</td>
+                                <td>{share}%</td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                    <div style={{ maxHeight: 180, overflow: "auto" }}>
+                      <table className="safety-table wh-table">
+                        <thead>
+                          <tr>
+                            <th>Status</th>
+                            <th>Incident</th>
+                            <th>Хувь</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {reportStatusRows.map((row) => {
+                            const share = reportIncidents.length > 0 ? Math.round((row.count / reportIncidents.length) * 100) : 0;
+                            return (
+                              <tr key={row.label}>
+                                <td><strong style={{ color: row.color }}>{row.label}</strong></td>
+                                <td style={{ color: row.color, fontWeight: 800 }}>{row.count}</td>
+                                <td>{share}%</td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="panel" style={{ padding: 18, margin: 0 }}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, marginBottom: 12, flexWrap: "wrap" }}>
+                  <div>
+                    <div className="panel-title">14 хоногийн incident бүртгэл</div>
+                    <div className="panel-sub" style={{ marginTop: 4 }}>Сүүлийн 20 incident-ийг огноогоор бууруулж харуулна.</div>
+                  </div>
+                  <span style={{ color: "var(--muted)", fontSize: 11 }}>{reportIncidents.length} нийт incident</span>
+                </div>
+                <div style={{ maxHeight: 340, overflow: "auto" }}>
+                  <table className="safety-table wh-table">
+                    <thead>
+                      <tr>
+                        <th>Огноо</th>
+                        <th>Гарчиг</th>
+                        <th>Байршил</th>
+                        <th>Severity</th>
+                        <th>Status</th>
+                        <th>Мэдэгдсэн</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {reportLatestIncidents.length === 0 ? (
+                        <tr><td colSpan={6} style={{ padding: 18, color: "var(--muted)", textAlign: "center" }}>Энэ хугацаанд incident бүртгэгдээгүй байна</td></tr>
+                      ) : reportLatestIncidents.map((incident) => (
+                        <tr key={incident.id}>
+                          <td style={{ whiteSpace: "nowrap", color: "var(--muted)", fontSize: 11 }}>{formatDateTime(new Date(incident.incidentDate))}</td>
+                          <td><strong>{incident.title}</strong></td>
+                          <td>{incident.location}</td>
+                          <td><span className={`bg ${incident.severity === "high" ? "bg-r" : incident.severity === "medium" ? "bg-a" : "bg-g"}`}>{SEVERITY_LABELS[incident.severity] ?? incident.severity}</span></td>
+                          <td><span className={`bg ${STATUS_BADGES[incident.status] ?? "bg-gr"}`}>{STATUS_LABELS[incident.status] ?? incident.status}</span></td>
+                          <td style={{ color: "var(--muted)", whiteSpace: "nowrap" }}>{incident.reportedBy.fullName}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       {modal ? (
         <div className="mo open" onClick={(event) => event.target === event.currentTarget && setModal(false)}>
