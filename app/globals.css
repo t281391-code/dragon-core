@@ -21,6 +21,7 @@
   --accent: var(--amber);
   --accent-glow: rgba(245, 158, 11, 0.18);
   --accent-dim: rgba(245, 158, 11, 0.08);
+  --font-numeric: var(--font-mono), "JetBrains Mono", "Roboto Mono", monospace;
 }
 
 * {
@@ -36,6 +37,7 @@ body {
 
 body {
   font-family: var(--font-syne), sans-serif;
+  font-variant-numeric: tabular-nums;
   background: var(--base);
   color: var(--text);
 }
@@ -67,6 +69,14 @@ input,
 select,
 textarea {
   font: inherit;
+}
+
+input[type="number"],
+input[type="date"] {
+  font-family: var(--font-numeric);
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1, "zero" 1;
+  font-weight: 500;
 }
 
 .sidebar {
@@ -358,8 +368,11 @@ textarea {
 }
 
 .tb-date {
-  font-family: var(--font-mono), monospace;
+  font-family: var(--font-numeric);
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1, "zero" 1;
   font-size: 11px;
+  font-weight: 600;
   color: #8ea0be;
   background: rgba(255, 255, 255, 0.08);
   border: 1px solid var(--border);
@@ -369,8 +382,11 @@ textarea {
 }
 
 .topbar-date {
-  font-family: var(--font-mono), monospace;
+  font-family: var(--font-numeric);
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1, "zero" 1;
   font-size: 11px;
+  font-weight: 600;
   color: #8ea0be;
 }
 
@@ -734,9 +750,12 @@ textarea {
 
 .kpi-val,
 .kv {
-  font-family: var(--font-mono), monospace;
+  font-family: var(--font-numeric);
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1, "zero" 1;
   font-size: 34px;
-  font-weight: 600;
+  font-weight: 700;
+  letter-spacing: -0.03em;
   line-height: 1;
   color: var(--accent);
   margin-bottom: 8px;
@@ -851,8 +870,11 @@ textarea {
 
 .realtime-badge strong {
   color: var(--text);
-  font-family: var(--font-mono), monospace;
+  font-family: var(--font-numeric);
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1, "zero" 1;
   font-size: 11px;
+  font-weight: 700;
   letter-spacing: 0;
 }
 
@@ -899,15 +921,39 @@ textarea {
 }
 
 .panel-val {
-  font-family: var(--font-mono), monospace;
+  font-family: var(--font-numeric);
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1, "zero" 1;
   font-size: 26px;
-  font-weight: 600;
+  font-weight: 700;
+  letter-spacing: -0.02em;
   color: #fff;
   padding: 10px 20px 0;
   line-height: 1;
 }
 
+.chart-wrap .recharts-cartesian-axis-tick-value,
+.chart-wrap .recharts-polar-angle-axis-tick-value,
+.chart-wrap .recharts-label,
+.chart-wrap .recharts-tooltip-wrapper,
+.chart-wrap .recharts-tooltip-wrapper strong,
+.chart-wrap .recharts-default-tooltip,
+.chart-wrap .recharts-default-tooltip * {
+  font-family: var(--font-numeric) !important;
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1, "zero" 1;
+}
+
+.chart-wrap .recharts-cartesian-axis-tick-value,
+.chart-wrap .recharts-polar-angle-axis-tick-value,
+.chart-wrap .recharts-label {
+  font-weight: 500;
+}
+
 .trend {
+  font-family: var(--font-numeric);
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1, "zero" 1;
   display: inline-flex;
   align-items: center;
   gap: 4px;
@@ -1055,7 +1101,9 @@ textarea {
 }
 
 .mf-val {
-  font-family: var(--font-mono), monospace;
+  font-family: var(--font-numeric);
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1, "zero" 1;
   font-size: 16px;
   font-weight: 600;
   color: #fff;
@@ -1100,9 +1148,12 @@ textarea {
 }
 
 .prod-item-val {
-  font-family: var(--font-mono), monospace;
+  font-family: var(--font-numeric);
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1, "zero" 1;
   font-size: 38px;
-  font-weight: 600;
+  font-weight: 700;
+  letter-spacing: -0.03em;
   margin-bottom: 6px;
 }
 
@@ -1125,6 +1176,10 @@ textarea {
 }
 
 .prod-max span {
+  font-family: var(--font-numeric);
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1, "zero" 1;
+  font-weight: 600;
   color: #fff;
 }
 
@@ -1155,9 +1210,19 @@ textarea {
 .tw td {
   padding: 12px 14px;
   font-size: 12px;
+  font-variant-numeric: tabular-nums;
   color: rgba(255, 255, 255, 0.78);
   border-bottom: 1px solid rgba(255, 255, 255, 0.04);
   vertical-align: middle;
+}
+
+.safety-table td strong,
+.tw td strong,
+.safety-table td[style*="font-family"],
+.tw td[style*="font-family"] {
+  font-family: var(--font-numeric) !important;
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1, "zero" 1;
 }
 
 .safety-table tr:last-child td,
@@ -1264,11 +1329,17 @@ textarea {
 
 .pgi {
   flex: 1;
+  font-family: var(--font-numeric);
   font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1, "zero" 1;
   color: #7f91b4;
 }
 
 .pgb {
+  font-family: var(--font-numeric);
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1, "zero" 1;
   width: 30px;
   height: 30px;
   border-radius: 8px;
