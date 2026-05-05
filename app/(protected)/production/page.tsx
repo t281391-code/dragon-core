@@ -449,10 +449,6 @@ export default function ProductionPage() {
       setShipmentError("Ачилт хадгалах эрхгүй байна");
       return;
     }
-    if (!shipmentLog) {
-      setShipmentError("Ачилт холбох үйлдвэрлэлийн бүртгэл сонгоно уу");
-      return;
-    }
     if (!shipmentDate) {
       setShipmentError("Ачилтын огноо сонгоно уу");
       return;
@@ -477,7 +473,7 @@ export default function ProductionPage() {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        id: shipmentLog.id,
+        id: shipmentLog?.id,
         productName: shipmentProductName.trim(),
         shipmentQuantity,
         scheduledDate: shipmentDate,
@@ -1423,46 +1419,38 @@ export default function ProductionPage() {
               </div>
               <button className="mx" type="button" onClick={closeShipmentModal}>×</button>
             </div>
-            {logs.length === 0 ? (
-              <div style={{padding:"16px",borderRadius:12,border:"1px solid rgba(245,158,11,0.28)",background:"rgba(245,158,11,0.08)",color:"var(--text)",fontSize:13,lineHeight:1.5}}>
-                Ачилт төлөвлөхийн тулд эхлээд үйлдвэрлэлийн бүртгэл нэмнэ үү.
+            <div className="fg"><label>Ямар бүтээгдэхүүн ачигдах вэ?</label>
+              <select value={shipmentProductName} onChange={e=>setShipmentProductName(e.target.value)}>
+                {PRODUCTS.map((product)=><option key={product} value={product}>{product}</option>)}
+              </select>
+            </div>
+            <div className="fr2">
+              <div className="fg"><label>Хэдэн хэмжээ ачих вэ?</label>
+                <input type="number" min="0" step="0.1" value={shipmentAmount} onChange={e=>setShipmentAmount(e.target.value)} placeholder="Жишээ: 7"/>
               </div>
-            ) : (
-              <>
-                <div className="fg"><label>Ямар бүтээгдэхүүн ачигдах вэ?</label>
-                  <select value={shipmentProductName} onChange={e=>setShipmentProductName(e.target.value)}>
-                    {PRODUCTS.map((product)=><option key={product} value={product}>{product}</option>)}
-                  </select>
-                </div>
-                <div className="fr2">
-                  <div className="fg"><label>Хэдэн хэмжээ ачих вэ?</label>
-                    <input type="number" min="0" step="0.1" value={shipmentAmount} onChange={e=>setShipmentAmount(e.target.value)} placeholder="Жишээ: 7"/>
-                  </div>
-                  <div className="fg"><label>Нэгж</label>
-                    <select value={shipmentAmountUnit} onChange={e=>setShipmentAmountUnit(e.target.value as "kg" | "ton")}>
-                      <option value="kg">Кг</option><option value="ton">Тонн</option>
-                    </select>
-                  </div>
-                </div>
-                <div className="fr2">
-                  <div className="fg"><label>Хэзээ ачих вэ?</label>
-                    <input type="date" value={shipmentDate} onChange={e=>setShipmentDate(e.target.value)}/>
-                  </div>
-                  <div className="fg"><label>Хаашаа ачих вэ?</label>
-                    <input
-                      type="text"
-                      value={shipmentDestinationMine}
-                      onChange={e=>setShipmentDestinationMine(e.target.value)}
-                      placeholder="Жишээ: Оюутолгой, Эрдэнэт, Бор-Өндөр"
-                    />
-                  </div>
-                </div>
-              </>
-            )}
+              <div className="fg"><label>Нэгж</label>
+                <select value={shipmentAmountUnit} onChange={e=>setShipmentAmountUnit(e.target.value as "kg" | "ton")}>
+                  <option value="kg">Кг</option><option value="ton">Тонн</option>
+                </select>
+              </div>
+            </div>
+            <div className="fr2">
+              <div className="fg"><label>Хэзээ ачих вэ?</label>
+                <input type="date" value={shipmentDate} onChange={e=>setShipmentDate(e.target.value)}/>
+              </div>
+              <div className="fg"><label>Хаашаа ачих вэ?</label>
+                <input
+                  type="text"
+                  value={shipmentDestinationMine}
+                  onChange={e=>setShipmentDestinationMine(e.target.value)}
+                  placeholder="Жишээ: Оюутолгой, Эрдэнэт, Бор-Өндөр"
+                />
+              </div>
+            </div>
             {shipmentError && <div style={{color:"#f87171",fontSize:12,marginTop:10,marginBottom:8}}>{shipmentError}</div>}
             <div className="mf">
               <button className="btn bo2" type="button" onClick={closeShipmentModal}>Цуцлах</button>
-              <button className="btn bp" type="button" onClick={saveShipmentDate} disabled={savingShipmentDate || logs.length === 0}>
+              <button className="btn bp" type="button" onClick={saveShipmentDate} disabled={savingShipmentDate}>
                 {savingShipmentDate ? "Хадгалж байна..." : "Хадгалах"}
               </button>
             </div>

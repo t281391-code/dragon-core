@@ -29,7 +29,7 @@ const productionLogSchema = z.object({
 });
 
 const shipmentPatchSchema = z.object({
-  id: z.string().min(1).max(128),
+  id: z.string().min(1).max(128).optional(),
   scheduledDate: dateInput,
   destinationMine: z.string().trim().min(1).max(160),
   productName: z.string().trim().min(1).max(160),
@@ -250,14 +250,58 @@ export async function PATCH(request: Request) {
   }
   const body = parsed.data;
 
-  const log = await prisma.$transaction((tx) =>
-    tx.productionLog.update({
-      where: { id: body.id },
+  const log = await prisma.$transaction(async (tx) => {
+    if (body.id) {
+      return tx.productionLog.update({
+        where: { id: body.id },
+        data: {
+          scheduledDate: new Date(body.scheduledDate),
+          destinationMine: body.destinationMine,
+          productName: body.productName,
+          quantityUsed: body.shipmentQuantity,
+        },
+        select: {
+          id: true,
+          productName: true,
+          outputQuantity: true,
+          quantityUsed: true,
+          scheduledDate: true,
+          destinationMine: true,
+        },
+      });
+    }
+
+    const fallbackMaterial = await tx.material.findFirst({
+      where: { name: "Үйлдвэрлэлийн ерөнхий материал" },
+      select: { id: true },
+    });
+    const materialId = fallbackMaterial?.id ?? (await tx.material.create({
       data: {
+        name: "Үйлдвэрлэлийн ерөнхий материал",
+        category: "Үйлдвэрлэл",
+        unit: "КГ",
+        currentStock: 0,
+        minimumStock: 0,
+        maximumStock: 0,
+        location: "Үйлдвэрлэл",
+      },
+      select: { id: true },
+    })).id;
+
+    return tx.productionLog.create({
+      data: {
+        lotNumber: `SHIP-${Date.now()}`,
+        productionDate: new Date(body.scheduledDate),
+        shift: "shipment",
+        productName: body.productName,
+        outputQuantity: 0,
         scheduledDate: new Date(body.scheduledDate),
         destinationMine: body.destinationMine,
-        productName: body.productName,
+        status: "scheduled",
+        materialId,
         quantityUsed: body.shipmentQuantity,
+        downtimeMinutes: 0,
+        createdById: user.id,
       },
       select: {
         id: true,
@@ -267,8 +311,8 @@ export async function PATCH(request: Request) {
         scheduledDate: true,
         destinationMine: true,
       },
-    })
-  );
+    });
+  });
 
   return NextResponse.json({ data: log });
 }
