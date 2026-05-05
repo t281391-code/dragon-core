@@ -248,10 +248,7 @@ export default function ProductionPage() {
   const [shipmentModal, setShipmentModal] = useState(false);
   const [selectedLog, setSelectedLog] = useState<ProductionLog | null>(null);
   const [shipmentLog, setShipmentLog] = useState<ProductionLog | null>(null);
-  const [shipmentTargetLogId, setShipmentTargetLogId] = useState("");
   const [shipmentProductName, setShipmentProductName] = useState("");
-  const [shipmentAmount, setShipmentAmount] = useState("");
-  const [shipmentAmountUnit, setShipmentAmountUnit] = useState<"kg" | "ton">("ton");
   const [shipmentDate, setShipmentDate] = useState("");
   const [shipmentDestinationMine, setShipmentDestinationMine] = useState(MINE_OPTIONS[0]);
   const [shipmentError, setShipmentError] = useState("");
@@ -409,19 +406,7 @@ export default function ProductionPage() {
 
   function applyShipmentForm(log: ProductionLog | null) {
     setShipmentLog(log);
-    setShipmentTargetLogId(log?.id ?? "");
     setShipmentProductName(log?.productName ?? PRODUCTS[0]);
-    if (log && log.outputQuantity >= 1000) {
-      const tons = log.outputQuantity / 1000;
-      setShipmentAmount(tons % 1 === 0 ? String(tons) : String(Number(tons.toFixed(1))));
-      setShipmentAmountUnit("ton");
-    } else if (log) {
-      setShipmentAmount(String(log.outputQuantity));
-      setShipmentAmountUnit("kg");
-    } else {
-      setShipmentAmount("");
-      setShipmentAmountUnit("ton");
-    }
     const scheduledKey = log?.scheduledDate?.slice(0,10);
     setShipmentDate(scheduledKey && scheduledKey >= todayKey ? scheduledKey : todayKey);
     setShipmentDestinationMine(log?.destinationMine ?? MINE_OPTIONS[0]);
@@ -436,18 +421,10 @@ export default function ProductionPage() {
   function closeShipmentModal() {
     setShipmentModal(false);
     setShipmentLog(null);
-    setShipmentTargetLogId("");
     setShipmentProductName("");
-    setShipmentAmount("");
-    setShipmentAmountUnit("ton");
     setShipmentDate("");
     setShipmentDestinationMine(MINE_OPTIONS[0]);
     setShipmentError("");
-  }
-
-  function changeShipmentTarget(logId: string) {
-    const log = logs.find((item) => item.id === logId) ?? null;
-    applyShipmentForm(log);
   }
 
   async function saveShipmentDate() {
@@ -471,11 +448,6 @@ export default function ProductionPage() {
       setShipmentError("Очих газар оруулна уу");
       return;
     }
-    const shipmentQuantity = toKg(shipmentAmount, shipmentAmountUnit);
-    if (!shipmentQuantity) {
-      setShipmentError("Ачилтын хэмжээг зөв оруулна уу");
-      return;
-    }
 
     setSavingShipmentDate(true);
     setShipmentError("");
@@ -485,7 +457,7 @@ export default function ProductionPage() {
       body: JSON.stringify({
         id: shipmentLog.id,
         productName: shipmentProductName.trim(),
-        outputQuantity: shipmentQuantity,
+        outputQuantity: shipmentLog.outputQuantity,
         scheduledDate: shipmentDate,
         destinationMine: shipmentDestinationMine.trim(),
       }),
@@ -1424,7 +1396,7 @@ export default function ProductionPage() {
               <div>
                 <h3>Дараагийн ачилт төлөвлөх</h3>
                 <div style={{fontSize:12,color:"var(--muted)",marginTop:4}}>
-                  Хэзээ, хаашаа, ямар бүтээгдэхүүн ачигдахыг гараар бүртгэнэ
+                  Ямар бүтээгдэхүүн, хэзээ, хаашаа ачигдахыг бүртгэнэ
                 </div>
               </div>
               <button className="mx" type="button" onClick={closeShipmentModal}>×</button>
@@ -1435,27 +1407,8 @@ export default function ProductionPage() {
               </div>
             ) : (
               <>
-                <div className="fg"><label>Холбох үйлдвэрлэлийн бүртгэл</label>
-                  <select value={shipmentTargetLogId} onChange={e=>changeShipmentTarget(e.target.value)}>
-                    {logs.map((log) => (
-                      <option key={log.id} value={log.id}>
-                        {log.productionDate.slice(0,10)} · {log.productName} · {fmtDisplay(log.outputQuantity)} · {log.destinationMine ?? "очих газаргүй"}
-                      </option>
-                    ))}
-                  </select>
-                </div>
                 <div className="fg"><label>Ямар бүтээгдэхүүн ачигдах вэ?</label>
                   <input type="text" value={shipmentProductName} onChange={e=>setShipmentProductName(e.target.value)} placeholder="Жишээ: ANDO-EV 32MM"/>
-                </div>
-                <div className="fr2">
-                  <div className="fg"><label>Ачилтын хэмжээ</label>
-                    <input type="number" min="0" step="0.1" value={shipmentAmount} onChange={e=>setShipmentAmount(e.target.value)} placeholder="Жишээ: 25"/>
-                  </div>
-                  <div className="fg"><label>Нэгж</label>
-                    <select value={shipmentAmountUnit} onChange={e=>setShipmentAmountUnit(e.target.value as "kg" | "ton")}>
-                      <option value="kg">Кг</option><option value="ton">Тонн</option>
-                    </select>
-                  </div>
                 </div>
                 <div className="fr2">
                   <div className="fg"><label>Хэзээ ачих вэ?</label>
@@ -1473,9 +1426,6 @@ export default function ProductionPage() {
                       {MINE_OPTIONS.map((mine) => <option key={mine} value={mine} />)}
                     </datalist>
                   </div>
-                </div>
-                <div style={{padding:"10px 12px",borderRadius:10,border:"1px solid rgba(59,130,246,0.2)",background:"rgba(59,130,246,0.06)",fontSize:11,color:"var(--muted)",lineHeight:1.45}}>
-                  Энэ мэдээлэл сонгосон үйлдвэрлэлийн бүртгэл дээр хадгалагдаж, “Дараагийн ачилт” карт болон хүснэгтэд харагдана.
                 </div>
               </>
             )}
