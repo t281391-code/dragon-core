@@ -813,7 +813,8 @@ export async function POST(request: Request) {
         });
       }
 
-      input = [...input, ...(response.output ?? []), ...outputs];
+      // Keep stateless retries free of reasoning item ids; those are not retrievable with store:false.
+      input = [...input, ...calls, ...outputs];
     }
 
     return NextResponse.json({
