@@ -250,7 +250,7 @@ export default function ProductionPage() {
   const [shipmentLog, setShipmentLog] = useState<ProductionLog | null>(null);
   const [shipmentProductName, setShipmentProductName] = useState("");
   const [shipmentDate, setShipmentDate] = useState("");
-  const [shipmentDestinationMine, setShipmentDestinationMine] = useState(MINE_OPTIONS[0]);
+  const [shipmentDestinationMine, setShipmentDestinationMine] = useState("");
   const [shipmentError, setShipmentError] = useState("");
   const [savingShipmentDate, setSavingShipmentDate] = useState(false);
   const [deletingLog, setDeletingLog] = useState(false);
@@ -409,7 +409,7 @@ export default function ProductionPage() {
     setShipmentProductName(log?.productName ?? PRODUCTS[0]);
     const scheduledKey = log?.scheduledDate?.slice(0,10);
     setShipmentDate(scheduledKey && scheduledKey >= todayKey ? scheduledKey : todayKey);
-    setShipmentDestinationMine(log?.destinationMine ?? MINE_OPTIONS[0]);
+    setShipmentDestinationMine(log?.destinationMine ?? "");
     setShipmentError("");
   }
 
@@ -423,7 +423,7 @@ export default function ProductionPage() {
     setShipmentLog(null);
     setShipmentProductName("");
     setShipmentDate("");
-    setShipmentDestinationMine(MINE_OPTIONS[0]);
+    setShipmentDestinationMine("");
     setShipmentError("");
   }
 
@@ -1436,15 +1436,11 @@ export default function ProductionPage() {
                   </div>
                   <div className="fg"><label>Хаашаа ачих вэ?</label>
                     <input
-                      list="shipment-destination-options"
                       type="text"
                       value={shipmentDestinationMine}
                       onChange={e=>setShipmentDestinationMine(e.target.value)}
-                      placeholder="Жишээ: Оюутолгой"
+                      placeholder="Жишээ: Оюутолгой, Эрдэнэт, Бор-Өндөр"
                     />
-                    <datalist id="shipment-destination-options">
-                      {MINE_OPTIONS.map((mine) => <option key={mine} value={mine} />)}
-                    </datalist>
                   </div>
                 </div>
               </>
