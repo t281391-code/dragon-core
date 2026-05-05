@@ -1229,12 +1229,11 @@ export default function WarehousePage() {
                         <th>Цэвэр</th>
                         <th>Одоогийн үлдэгдэл</th>
                         <th>Дүүргэлт</th>
-                        <th>Төлөв</th>
                       </tr>
                     </thead>
                     <tbody>
                       {reportTxnsLoading ? (
-                        <tr><td colSpan={8} style={{ padding: 18, color: "var(--muted)", textAlign: "center" }}>Материалын хөдөлгөөний тайланг татаж байна...</td></tr>
+                        <tr><td colSpan={7} style={{ padding: 18, color: "var(--muted)", textAlign: "center" }}>Материалын хөдөлгөөний тайланг татаж байна...</td></tr>
                       ) : reportMovementRows.map(({ material, tone, openingStock, inbound, outbound, net, fillPct }) => (
                         <tr key={material.id}>
                           <td><strong>{material.name}</strong></td>
@@ -1244,7 +1243,6 @@ export default function WarehousePage() {
                           <td style={{ color: net >= 0 ? "#10B981" : "#EF4444", fontWeight: 800 }}>{formatSignedValue(net, material.unit)}</td>
                           <td>{formatValue(material.currentStock, material.unit)}</td>
                           <td style={{ color: tone.color, fontWeight: 800 }}>{fillPct}%</td>
-                          <td><span className={`bg ${tone.className === "ok" ? "bg-g" : tone.className === "low" ? "bg-a" : "bg-r"}`}>{tone.label}</span></td>
                         </tr>
                       ))}
                     </tbody>
