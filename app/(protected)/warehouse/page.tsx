@@ -1414,7 +1414,7 @@ export default function WarehousePage() {
               <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10, padding: "16px 24px 0" }}>
                 {[
                   { label: "Одоогийн нөөц", value: formatValue(detailMaterial.currentStock, detailMaterial.unit), color: tone.color },
-                  { label: "Доод хязгаар", value: formatValue(detailMaterial.minimumStock, detailMaterial.unit), color: "var(--muted)" },
+                  { label: "Лимит", value: formatValue(detailMaterial.maximumStock, detailMaterial.unit), color: "var(--text)" },
                   { label: "Дүүргэлт", value: `${fillPct}%`, color: tone.color },
                 ].map(s => (
                   <div key={s.label} style={{ padding: "10px 14px", borderRadius: 10, background: "var(--base3)", textAlign: "center" }}>
