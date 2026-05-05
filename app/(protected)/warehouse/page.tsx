@@ -599,23 +599,6 @@ export default function WarehousePage() {
   const todayFlow = flowSeries[flowSeries.length - 1] ?? { inbound: 0, outbound: 0 };
   const netFlow = totalInbound - totalOutbound;
 
-  const totalLimit = useMemo(() => displayMaterials.reduce((sum, material) => sum + material.maximumStock, 0), [displayMaterials]);
-  const overallFillPct = totalLimit > 0 ? Math.round((totalStock / totalLimit) * 100) : 0;
-
-  const materialFillData = useMemo(() =>
-    displayMaterials.map((material) => {
-      const pct = fillPercent(material);
-      const tone = toneMap.get(material.id) ?? stockTone(material);
-      return {
-        material,
-        pct,
-        tone,
-        remaining: Math.max(0, material.maximumStock - material.currentStock),
-      };
-    }),
-    [displayMaterials, toneMap]
-  );
-
   const stockDistribution = useMemo(() => [
     { name: "Хэвийн", value: normalCount, color: "#10B981" },
     { name: "Бага", value: lowCount, color: "#F59E0B" },
@@ -809,7 +792,7 @@ export default function WarehousePage() {
 
         {/* Main Charts Row */}
         <div className="wh-main-grid">
-          <div className="panel">
+          <div className="panel" style={{ gridColumn: "1 / -1" }}>
             <div className="panel-hdr" style={{ paddingBottom: 12 }}>
               <div>
                 <div className="panel-title">Сүүлийн 10 хоногийн орлого / зарлага (КГ)</div>
@@ -877,49 +860,6 @@ export default function WarehousePage() {
             ) : null}
           </div>
 
-          {/* Material fill chart */}
-          <div className="panel">
-            <div className="panel-hdr" style={{ paddingBottom: 16 }}>
-              <div>
-                <div className="panel-title">Материал тус бүрийн дүүргэлт</div>
-                <div className="panel-sub">Одоо байгаа нөөц / лимит</div>
-              </div>
-              <div style={{ textAlign: "right" }}>
-                <div style={{ fontSize: 22, lineHeight: 1, fontWeight: 900, color: overallFillPct > 100 ? "#F59E0B" : "#10B981" }}>{overallFillPct}%</div>
-                <div style={{ fontSize: 10, color: "var(--muted)", marginTop: 4 }}>НИЙТ ДҮҮРГЭЛТ</div>
-              </div>
-            </div>
-            <div style={{ padding: "0 20px 18px", display: "flex", flexDirection: "column", gap: 10 }}>
-              {materialFillData.map(({ material, pct, tone, remaining }) => (
-                <button
-                  key={material.id}
-                  type="button"
-                  onClick={() => { setDetailError(""); setDetailMaterial(material); }}
-                  style={{
-                    width: "100%",
-                    border: "1px solid var(--border)",
-                    borderRadius: 10,
-                    background: "rgba(15,23,42,0.18)",
-                    padding: "9px 10px",
-                    textAlign: "left",
-                    cursor: "pointer",
-                  }}
-                >
-                  <div style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "baseline", marginBottom: 7 }}>
-                    <strong style={{ color: "var(--text)", fontSize: 12, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{material.name}</strong>
-                    <span style={{ color: tone.color, fontSize: 13, fontWeight: 900, flexShrink: 0 }}>{pct}%</span>
-                  </div>
-                  <div style={{ height: 9, borderRadius: 999, background: "var(--base3)", overflow: "hidden", marginBottom: 7 }}>
-                    <div style={{ width: fillBarWidth(pct), height: "100%", borderRadius: 999, background: tone.color, transition: "width 0.25s" }} />
-                  </div>
-                  <div style={{ display: "flex", justifyContent: "space-between", gap: 10, color: "var(--muted)", fontSize: 10 }}>
-                    <span>{formatValue(material.currentStock, material.unit)} / {formatValue(material.maximumStock, material.unit)}</span>
-                    <span style={{ color: remaining === 0 ? "#F59E0B" : "var(--muted)", flexShrink: 0 }}>Үлдэх {formatValue(remaining, material.unit)}</span>
-                  </div>
-                </button>
-              ))}
-            </div>
-          </div>
         </div>
 
         {/* 3 Small Charts */}
