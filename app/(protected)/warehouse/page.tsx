@@ -142,7 +142,7 @@ function monthKeyFromTransactionDate(value: string) {
   return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}`;
 }
 
-function addTransactionToStats(current: { data: MonthlyStat[] } | undefined, txn: MaterialTransaction) {
+function applyTransactionToStats(current: { data: MonthlyStat[] } | undefined, txn: MaterialTransaction, direction: 1 | -1) {
   if (!current) return current;
   const key = monthKeyFromTransactionDate(txn.transactionDate);
   if (!key) return current;
@@ -152,8 +152,8 @@ function addTransactionToStats(current: { data: MonthlyStat[] } | undefined, txn
     if (row.key !== key) return row;
     changed = true;
     return txn.type === "IN"
-      ? { ...row, inbound: row.inbound + txn.quantity }
-      : { ...row, outbound: row.outbound + txn.quantity };
+      ? { ...row, inbound: Math.max(0, row.inbound + txn.quantity * direction) }
+      : { ...row, outbound: Math.max(0, row.outbound + txn.quantity * direction) };
   });
 
   return changed ? { ...current, data } : current;
@@ -354,6 +354,8 @@ export default function WarehousePage() {
   const [note, setNote] = useState("");
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [detailError, setDetailError] = useState("");
+  const [deletingTxnId, setDeletingTxnId] = useState<string | null>(null);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const [tableFilter, setTableFilter] = useState<"all" | "crit" | "low" | "ok">("all");
   const [tableSearch, setTableSearch] = useState("");
@@ -502,13 +504,77 @@ export default function WarehousePage() {
         { revalidate: true }
       );
       void mutateStats(
-        (current: { data: MonthlyStat[] } | undefined) => addTransactionToStats(current, createdTxn),
+        (current: { data: MonthlyStat[] } | undefined) => applyTransactionToStats(current, createdTxn, 1),
         { revalidate: true }
       );
     } else {
       void mutateTxns();
       void mutateStats();
     }
+  }
+
+  async function deleteTransaction(txn: MaterialTransaction) {
+    if (!window.confirm("Энэ тэмдэглэл / гүйлгээг устгах уу?")) return;
+
+    setDetailError("");
+    setDeletingTxnId(txn.id);
+    const response = await fetch(`/api/materials/transactions?id=${encodeURIComponent(txn.id)}`, {
+      method: "DELETE",
+    });
+    const data = await response.json();
+
+    if (!response.ok) {
+      setDetailError(data.error ?? "Устгах үед алдаа гарлаа");
+      setDeletingTxnId(null);
+      return;
+    }
+
+    const deletedTxn = (data.data?.transaction as MaterialTransaction | undefined) ?? txn;
+    const updatedMaterial = data.data?.material as { id: string; currentStock: number } | undefined;
+    const fallbackStockDelta = deletedTxn.type === "IN" ? -deletedTxn.quantity : deletedTxn.quantity;
+    const nextStock = typeof updatedMaterial?.currentStock === "number"
+      ? updatedMaterial.currentStock
+      : Math.max(0, (detailMaterial?.currentStock ?? 0) + fallbackStockDelta);
+
+    void mutateTxns(
+      (current: { data: MaterialTransaction[] } | undefined) =>
+        current
+          ? { ...current, data: current.data.filter((item) => item.id !== deletedTxn.id) }
+          : current,
+      { revalidate: true }
+    );
+    void mutateReportTxns(
+      (current: { data: MaterialTransaction[] } | undefined) =>
+        current
+          ? { ...current, data: current.data.filter((item) => item.id !== deletedTxn.id) }
+          : current,
+      { revalidate: true }
+    );
+    void mutateStats(
+      (current: { data: MonthlyStat[] } | undefined) => applyTransactionToStats(current, deletedTxn, -1),
+      { revalidate: true }
+    );
+    void mutateMaterials(
+      (current: { data: Material[] } | undefined) =>
+        current
+          ? {
+              ...current,
+              data: current.data.map((material) =>
+                material.id === deletedTxn.material.id || material.name === deletedTxn.material.name
+                  ? { ...material, currentStock: nextStock }
+                  : material
+              ),
+            }
+          : current,
+      { revalidate: true }
+    );
+    setDetailMaterial((current) =>
+      current && (current.id === deletedTxn.material.id || current.name === deletedTxn.material.name)
+        ? { ...current, currentStock: nextStock }
+        : current
+    );
+    setLastUpdated(new Date());
+    setDeletingTxnId(null);
   }
 
   const flowSeries = useMemo(() => buildFlowSeries(transactions), [transactions]);
@@ -1004,7 +1070,7 @@ export default function WarehousePage() {
                             {lastUpdated ? lastUpdated.toLocaleTimeString("mn-MN", { hour: "2-digit", minute: "2-digit" }) : "--:--"}
                           </td>
                           <td style={{ position: "sticky", right: 0, background: "var(--panel)", boxShadow: "-3px 0 8px rgba(0,0,0,0.07)" }}>
-                            <button type="button" onClick={tone.className !== "ok" ? () => setModal(true) : () => setDetailMaterial(m)} style={{
+                            <button type="button" onClick={tone.className !== "ok" ? () => setModal(true) : () => { setDetailError(""); setDetailMaterial(m); }} style={{
                               padding: "4px 10px", borderRadius: 7,
                               border: `1px solid ${tone.className !== "ok" ? `${tone.color}50` : "var(--border)"}`,
                               background: tone.className !== "ok" ? `${tone.color}0f` : "transparent",
@@ -1339,7 +1405,7 @@ export default function WarehousePage() {
           .slice(0, 15);
         return (
           <div className="mo open" onClick={(e) => e.target === e.currentTarget && setDetailMaterial(null)}>
-            <div className="mc" style={{ maxWidth: 620, width: "100%" }}>
+            <div className="mc" style={{ maxWidth: 720, width: "100%" }}>
               <div className="mh">
                 <h3>{detailMaterial.name}</h3>
                 <button className="mx" type="button" onClick={() => setDetailMaterial(null)}>×</button>
@@ -1367,6 +1433,9 @@ export default function WarehousePage() {
               <div style={{ padding: "16px 24px 0", fontWeight: 700, fontSize: 12, color: "var(--text)" }}>
                 Сүүлийн гүйлгээ ба тэмдэглэл
               </div>
+              {detailError ? (
+                <div style={{ margin: "8px 24px 0", color: "#f87171", fontSize: 12, fontWeight: 700 }}>{detailError}</div>
+              ) : null}
               <div style={{ padding: "8px 24px 24px", maxHeight: 320, overflowY: "auto" }}>
                 {matTxns.length === 0 ? (
                   <div style={{ color: "var(--muted)", fontSize: 12, padding: "20px 0", textAlign: "center" }}>Гүйлгээ байхгүй байна</div>
@@ -1374,7 +1443,7 @@ export default function WarehousePage() {
                   <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
                     <thead>
                       <tr style={{ borderBottom: "1px solid var(--border)" }}>
-                        {["Огноо", "Төрөл", "Хэмжээ", "Нэмэлт тайлбар", "Хэн"].map(h => (
+                        {["Огноо", "Төрөл", "Хэмжээ", "Нэмэлт тайлбар", "Хэн", ...(canEdit ? [""] : [])].map(h => (
                           <th key={h} style={{ padding: "6px 8px", textAlign: "left", color: "var(--muted)", fontWeight: 600, fontSize: 11 }}>{h}</th>
                         ))}
                       </tr>
@@ -1403,6 +1472,28 @@ export default function WarehousePage() {
                           <td style={{ padding: "8px 8px", color: "var(--muted)", whiteSpace: "nowrap" }}>
                             {t.createdBy.fullName}
                           </td>
+                          {canEdit ? (
+                            <td style={{ padding: "8px 8px", textAlign: "right", whiteSpace: "nowrap" }}>
+                              <button
+                                type="button"
+                                onClick={() => void deleteTransaction(t)}
+                                disabled={deletingTxnId === t.id}
+                                style={{
+                                  padding: "4px 10px",
+                                  borderRadius: 7,
+                                  border: "1px solid rgba(239,68,68,0.42)",
+                                  background: "rgba(239,68,68,0.1)",
+                                  color: "#f87171",
+                                  fontSize: 10,
+                                  fontWeight: 800,
+                                  cursor: deletingTxnId === t.id ? "wait" : "pointer",
+                                  opacity: deletingTxnId === t.id ? 0.65 : 1,
+                                }}
+                              >
+                                {deletingTxnId === t.id ? "Устгаж..." : "Устгах"}
+                              </button>
+                            </td>
+                          ) : null}
                         </tr>
                       ))}
                     </tbody>

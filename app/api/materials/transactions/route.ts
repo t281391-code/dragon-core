@@ -164,3 +164,57 @@ export async function POST(request: Request) {
     },
   }, { status: 201 });
 }
+
+export async function DELETE(request: Request) {
+  const rateLimited = await checkRateLimit(request, "materials-transactions:delete", 60, 60_000);
+  if (rateLimited) return rateLimited;
+
+  const user = await getRequestUser();
+  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!requireDepartmentWrite(user, "WAREHOUSE")) return forbidden("Зөвхөн агуулахын эрхтэй хэрэглэгч устгах боломжтой");
+
+  const { searchParams } = new URL(request.url);
+  const id = searchParams.get("id");
+  if (!id) return NextResponse.json({ error: "Гүйлгээний ID дутуу байна" }, { status: 400 });
+
+  const transaction = await prisma.materialTransaction.findUnique({
+    where: { id },
+    include: {
+      material: true,
+      createdBy: { select: { fullName: true } },
+    },
+  });
+
+  if (!transaction) return NextResponse.json({ error: "Гүйлгээ олдсонгүй" }, { status: 404 });
+  if (transaction.type === "IN" && transaction.material.currentStock < transaction.quantity) {
+    return NextResponse.json({ error: "Энэ орлогыг устгавал нөөц сөрөг болох тул устгах боломжгүй" }, { status: 422 });
+  }
+
+  const stockDelta = transaction.type === "IN" ? -transaction.quantity : transaction.quantity;
+  const [, updatedMaterial] = await prisma.$transaction([
+    prisma.materialTransaction.delete({ where: { id } }),
+    prisma.material.update({
+      where: { id: transaction.materialId },
+      data: { currentStock: { increment: stockDelta } },
+    }),
+  ]);
+
+  return NextResponse.json({
+    data: {
+      transaction: {
+        id: transaction.id,
+        type: transaction.type,
+        quantity: transaction.quantity,
+        note: transaction.note,
+        transactionDate: transaction.transactionDate,
+        material: { id: transaction.material.id, name: transaction.material.name, unit: transaction.material.unit },
+        createdBy: { fullName: transaction.createdBy.fullName },
+      },
+      material: {
+        id: updatedMaterial.id,
+        name: updatedMaterial.name,
+        currentStock: updatedMaterial.currentStock,
+      },
+    },
+  });
+}
