@@ -8,9 +8,22 @@ import { checkRateLimit, forbidden, normalizePageLimit, requireDepartmentWrite }
 export const preferredRegion = "sin1";
 
 const dateInput = z.string().trim().min(1).max(64).refine((value) => !Number.isNaN(Date.parse(value)), "Invalid date");
+const WAREHOUSE_MATERIAL_NAMES = new Set([
+  "АМИАКИЙН ШҮҮ",
+  "ЦУУНЫ ХҮЧИЛ",
+  "ХҮХРИЙН ХҮЧИЛ",
+  "ШИЛЭН БӨМБӨЛӨГ",
+  "ТҮЛШ",
+  "НИТРИТ НАТРИ",
+  "ЭМУЛЬГАТОР",
+  "ХАТУУРУУЛАГЧ",
+  "ГИДРОКСИД",
+  "ЦАГААН ТОС",
+]);
 
 const transactionSchema = z.object({
-  materialId: z.string().min(1).max(128),
+  materialId: z.string().min(1).max(128).optional(),
+  materialName: z.string().trim().min(1).max(160).optional(),
   type: z.enum(["IN", "OUT"]),
   quantity: z.coerce.number().positive().max(1_000_000_000),
   note: z.string().trim().max(2000).optional().nullable(),
@@ -87,11 +100,35 @@ export async function POST(request: Request) {
 
   const parsed = transactionSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) {
-    return NextResponse.json({ error: "materialId, type, quantity утгуудыг зөв оруулна уу" }, { status: 400 });
+    return NextResponse.json({ error: "material, type, quantity утгуудыг зөв оруулна уу" }, { status: 400 });
   }
   const body = parsed.data;
 
-  const material = await prisma.material.findUnique({ where: { id: body.materialId } });
+  const materialName = body.materialName?.trim();
+  if (!body.materialId && !materialName) {
+    return NextResponse.json({ error: "Материал сонгоно уу" }, { status: 400 });
+  }
+  if (materialName && !WAREHOUSE_MATERIAL_NAMES.has(materialName)) {
+    return NextResponse.json({ error: "Зөвшөөрөгдсөн агуулахын материал сонгоно уу" }, { status: 400 });
+  }
+
+  let material = body.materialId
+    ? await prisma.material.findUnique({ where: { id: body.materialId } })
+    : await prisma.material.findFirst({ where: { name: materialName } });
+
+  if (!material && materialName && body.type === "IN") {
+    material = await prisma.material.create({
+      data: {
+        name: materialName,
+        category: "Агуулах",
+        unit: "КГ",
+        currentStock: 0,
+        minimumStock: 0,
+        maximumStock: 0,
+        location: "Агуулах",
+      },
+    });
+  }
   if (!material) return NextResponse.json({ error: "Материал олдсонгүй" }, { status: 404 });
 
   if (body.type === "OUT" && material.currentStock < body.quantity) {
@@ -101,7 +138,7 @@ export async function POST(request: Request) {
   const [txn] = await prisma.$transaction([
     prisma.materialTransaction.create({
       data: {
-        materialId: body.materialId,
+        materialId: material.id,
         type: body.type,
         quantity: body.quantity,
         note: body.note || null,
@@ -110,7 +147,7 @@ export async function POST(request: Request) {
       },
     }),
     prisma.material.update({
-      where: { id: body.materialId },
+      where: { id: material.id },
       data: { currentStock: { increment: body.type === "IN" ? body.quantity : -body.quantity } },
     }),
   ]);

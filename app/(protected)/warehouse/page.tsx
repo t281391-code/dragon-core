@@ -313,7 +313,7 @@ export default function WarehousePage() {
   const [modal, setModal] = useState(false);
   const [reportModal, setReportModal] = useState(false);
   const [reportClock, setReportClock] = useState<Date | null>(null);
-  const [materialId, setMaterialId] = useState("");
+  const [materialName, setMaterialName] = useState(WAREHOUSE_PRIORITY[0]);
   const [transactionType, setTransactionType] = useState<"IN" | "OUT">("IN");
   const [quantity, setQuantity] = useState("");
   const [transactionDate, setTransactionDate] = useState(new Date().toISOString().split("T")[0]);
@@ -394,9 +394,10 @@ export default function WarehousePage() {
   }, [mutateMaterials, mutateReportTxns, mutateStats, mutateTxns, reportModal]);
   async function submitTransaction(event: { preventDefault(): void }) {
     event.preventDefault();
-    const selectedMaterialId = materialId || materials[0]?.id || "";
+    const selectedMaterialName = materialName || WAREHOUSE_PRIORITY[0];
+    const selectedMaterial = materials.find((material) => material.name === selectedMaterialName);
     const numericQuantity = Number(quantity);
-    if (!selectedMaterialId || !numericQuantity || numericQuantity <= 0) {
+    if (!selectedMaterialName || !numericQuantity || numericQuantity <= 0) {
       setError("Материал болон хэмжээг зөв оруулна уу");
       return;
     }
@@ -405,7 +406,14 @@ export default function WarehousePage() {
     const response = await fetch("/api/materials/transactions", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ materialId: selectedMaterialId, type: transactionType, quantity: numericQuantity, note: note || null, transactionDate }),
+      body: JSON.stringify({
+        materialId: selectedMaterial?.id,
+        materialName: selectedMaterialName,
+        type: transactionType,
+        quantity: numericQuantity,
+        note: note || null,
+        transactionDate,
+      }),
     });
     const data = await response.json();
     if (!response.ok) {
@@ -417,7 +425,7 @@ export default function WarehousePage() {
     // Close modal and reset form first so the user sees the table immediately
     setModal(false);
     setSubmitting(false);
-    const capturedMaterialId = selectedMaterialId;
+    const capturedMaterialName = selectedMaterialName;
     const capturedQty = numericQuantity;
     const capturedType = transactionType;
     setQuantity("");
@@ -432,7 +440,7 @@ export default function WarehousePage() {
           ? {
               ...current,
               data: current.data.map(m =>
-                m.id === capturedMaterialId
+                m.name === capturedMaterialName
                   ? { ...m, currentStock: Math.max(0, m.currentStock + delta) }
                   : m
               ),
@@ -1227,8 +1235,11 @@ export default function WarehousePage() {
               <div className="fr2">
                 <div className="fg">
                   <label>Материал</label>
-                  <select value={materialId || materials[0]?.id || ""} onChange={(e) => setMaterialId(e.target.value)}>
-                    {materials.map((m) => <option key={m.id} value={m.id}>{m.name} ({m.unit})</option>)}
+                  <select value={materialName} onChange={(e) => setMaterialName(e.target.value)}>
+                    {WAREHOUSE_PRIORITY.map((name) => {
+                      const material = materials.find((item) => item.name === name);
+                      return <option key={name} value={name}>{name} ({material?.unit ?? "КГ"})</option>;
+                    })}
                   </select>
                 </div>
                 <div className="fg">
@@ -1348,7 +1359,7 @@ export default function WarehousePage() {
               {canEdit ? (
                 <div style={{ padding: "0 24px 20px", display: "flex", gap: 8, justifyContent: "flex-end" }}>
                   <button className="btn bo2" type="button" onClick={() => setDetailMaterial(null)}>Хаах</button>
-                  <button className="btn bp" type="button" onClick={() => { setDetailMaterial(null); setMaterialId(detailMaterial.id); setModal(true); }}>+ Орлого / Зарлага</button>
+                  <button className="btn bp" type="button" onClick={() => { setDetailMaterial(null); setMaterialName(detailMaterial.name); setModal(true); }}>+ Орлого / Зарлага</button>
                 </div>
               ) : (
                 <div style={{ padding: "0 24px 20px", display: "flex", justifyContent: "flex-end" }}>
