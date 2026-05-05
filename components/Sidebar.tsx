@@ -3,7 +3,7 @@
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/components/AuthProvider";
 import { useThemeMode } from "@/components/ThemeProvider";
 import { useDeptTheme } from "@/hooks/useDeptTheme";
@@ -68,6 +68,7 @@ export default function Sidebar() {
   const router = useRouter();
   const { accent, glow, dim } = useDeptTheme();
   const { mode, toggleMode } = useThemeMode();
+  const [mobileOpen, setMobileOpen] = useState(false);
 
   const items = useMemo(() => user ? getNavItems(user.role, user.department) : [], [user]);
   const sections = useMemo(() => [...new Set(items.map((item) => item.section))], [items]);
@@ -80,6 +81,21 @@ export default function Sidebar() {
     }
   }, [items, router, user]);
 
+  useEffect(() => {
+    setMobileOpen(false);
+  }, [pathname]);
+
+  useEffect(() => {
+    if (!mobileOpen) return;
+
+    function closeOnEscape(event: KeyboardEvent) {
+      if (event.key === "Escape") setMobileOpen(false);
+    }
+
+    window.addEventListener("keydown", closeOnEscape);
+    return () => window.removeEventListener("keydown", closeOnEscape);
+  }, [mobileOpen]);
+
   if (!user) return null;
 
   const userTitle = user.role === "ADMIN" ? "System Admin" : user.fullName;
@@ -91,9 +107,47 @@ export default function Sidebar() {
     router.replace("/login");
   }
 
+  function shouldRevealMobileSidebar() {
+    return typeof window !== "undefined" && window.matchMedia("(max-width: 900px)").matches && !mobileOpen;
+  }
+
+  function handleThemeClick() {
+    if (shouldRevealMobileSidebar()) {
+      setMobileOpen(true);
+      return;
+    }
+
+    toggleMode();
+  }
+
+  function handleLogoutClick() {
+    if (shouldRevealMobileSidebar()) {
+      setMobileOpen(true);
+      return;
+    }
+
+    void logout();
+  }
+
   return (
-    <aside className="sidebar">
+    <>
+    <button
+      className={`sidebar-mobile-backdrop${mobileOpen ? " show" : ""}`}
+      type="button"
+      aria-label="Close sidebar"
+      onClick={() => setMobileOpen(false)}
+    />
+    <aside className={`sidebar${mobileOpen ? " mobile-open" : ""}`}>
       <div className="sidebar-glow" style={{ background: glow }} />
+      <button
+        className="sidebar-mobile-toggle"
+        type="button"
+        aria-label={mobileOpen ? "Close sidebar" : "Open sidebar"}
+        aria-expanded={mobileOpen}
+        onClick={() => setMobileOpen((current) => !current)}
+      >
+        {mobileOpen ? "x" : "☰"}
+      </button>
 
       <div className="logo">
         <Image
@@ -109,7 +163,7 @@ export default function Sidebar() {
             filter: `drop-shadow(0 0 12px ${glow})`,
           }}
         />
-        <div>
+        <div className="logo-copy">
           <div className="logo-name">EXPLO-KPI</div>
           <div className="logo-sub" style={{ color: accent }}>
             MINING SYSTEM
@@ -117,7 +171,7 @@ export default function Sidebar() {
         </div>
       </div>
 
-      <div className="relative z-[1] border-b border-[var(--border)] px-4 py-4">
+      <div className="sidebar-profile relative z-[1] border-b border-[var(--border)] px-4 py-4">
         <div
           className="flex items-center gap-3 rounded-2xl border border-white/6 px-4 py-3 shadow-[0_10px_30px_rgba(15,23,42,0.18)] backdrop-blur-sm"
           style={{ background: dim }}
@@ -168,10 +222,21 @@ export default function Sidebar() {
                     className={`nav-item${isActive ? " active" : ""}`}
                     onMouseEnter={() => router.prefetch(item.href)}
                     onFocus={() => router.prefetch(item.href)}
+                    onClick={(event) => {
+                      if (shouldRevealMobileSidebar()) {
+                        event.preventDefault();
+                        setMobileOpen(true);
+                        return;
+                      }
+
+                      if (typeof window !== "undefined" && window.matchMedia("(max-width: 900px)").matches) {
+                        setMobileOpen(false);
+                      }
+                    }}
                     style={isActive ? { color: accent, background: dim } : undefined}
                   >
                     <span className="ni">{item.icon}</span>
-                    <span style={{ flex: 1 }}>{item.label}</span>
+                    <span className="nav-label" style={{ flex: 1 }}>{item.label}</span>
                     {deptColor ? (
                       <span
                         className="nav-dept-dot"
@@ -190,15 +255,16 @@ export default function Sidebar() {
       </div>
 
       <div className="sidebar-footer">
-        <button className="theme-toggle" type="button" onClick={toggleMode}>
+        <button className="theme-toggle" type="button" onClick={handleThemeClick}>
           <span>{mode === "dark" ? "☀" : "☾"}</span>
           <span>{mode === "dark" ? "Light mode" : "Dark mode"}</span>
         </button>
-        <button className="logout" type="button" onClick={logout}>
+        <button className="logout" type="button" onClick={handleLogoutClick}>
           <span>🚪</span>
           <span>Гарах</span>
         </button>
       </div>
     </aside>
+    </>
   );
 }

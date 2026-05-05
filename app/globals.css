@@ -174,6 +174,11 @@ input[type="date"] {
   filter: blur(40px);
 }
 
+.sidebar-mobile-toggle,
+.sidebar-mobile-backdrop {
+  display: none;
+}
+
 .logo {
   padding: 22px 18px;
   display: flex;
@@ -1880,14 +1885,119 @@ body.theme-light .empty-row td {
 }
 
 @media (max-width: 900px) {
+  .sidebar-mobile-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 50;
+    display: block;
+    border: 0;
+    background: rgba(2, 6, 23, 0.5);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.2s ease;
+  }
+
+  .sidebar-mobile-backdrop.show {
+    opacity: 1;
+    pointer-events: auto;
+  }
+
   .sidebar {
-    position: static;
-    width: 100%;
-    height: auto;
+    position: fixed;
+    inset: 0 auto 0 0;
+    width: 64px;
+    height: 100dvh;
+    z-index: 60;
+    overflow: hidden;
+    transition: width 0.22s ease, box-shadow 0.22s ease;
+  }
+
+  .sidebar.mobile-open {
+    width: min(318px, calc(100vw - 20px));
+    box-shadow: 18px 0 40px rgba(2, 6, 23, 0.42);
   }
 
   .main {
-    margin-left: 0;
+    margin-left: 64px;
+  }
+
+  .sidebar-mobile-toggle {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    z-index: 3;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.04);
+    color: var(--text);
+    font-size: 18px;
+    font-weight: 800;
+    line-height: 1;
+  }
+
+  .sidebar:not(.mobile-open) .sidebar-mobile-toggle {
+    position: relative;
+    top: auto;
+    right: auto;
+    margin: 10px auto 4px;
+  }
+
+  .sidebar:not(.mobile-open) .logo {
+    justify-content: center;
+    padding: 8px 8px 12px;
+  }
+
+  .sidebar:not(.mobile-open) .logo img {
+    width: 36px !important;
+    height: 36px !important;
+  }
+
+  .sidebar:not(.mobile-open) .logo-copy,
+  .sidebar:not(.mobile-open) .sidebar-profile,
+  .sidebar:not(.mobile-open) .nav-group-label,
+  .sidebar:not(.mobile-open) .nav-label,
+  .sidebar:not(.mobile-open) .nav-dept-dot,
+  .sidebar:not(.mobile-open) .sidebar-footer span + span {
+    display: none;
+  }
+
+  .sidebar:not(.mobile-open) .nav {
+    padding: 8px;
+  }
+
+  .sidebar:not(.mobile-open) .nav-item {
+    width: 48px;
+    height: 48px;
+    justify-content: center;
+    gap: 0;
+    padding: 0;
+    margin: 4px 0;
+    border-radius: 14px;
+  }
+
+  .sidebar:not(.mobile-open) .nav-item.active::before {
+    height: 28px;
+  }
+
+  .sidebar:not(.mobile-open) .ni {
+    font-size: 18px;
+  }
+
+  .sidebar:not(.mobile-open) .sidebar-footer {
+    padding: 8px;
+  }
+
+  .sidebar:not(.mobile-open) .theme-toggle,
+  .sidebar:not(.mobile-open) .logout {
+    width: 48px;
+    height: 48px;
+    justify-content: center;
+    padding: 0;
   }
 
   .topbar,
