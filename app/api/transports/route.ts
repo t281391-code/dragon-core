@@ -226,3 +226,33 @@ export async function PATCH(request: Request) {
 
   return NextResponse.json({ data: transport });
 }
+
+export async function DELETE(request: Request) {
+  const rateLimited = await checkRateLimit(request, "transports:delete", 30, 60_000);
+  if (rateLimited) return rateLimited;
+
+  const user = await getRequestUser();
+  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!requireDepartmentWrite(user, "LOGISTICS")) return forbidden("Logistics delete permission required");
+
+  const { searchParams } = new URL(request.url);
+  const id = z.string().trim().min(1).max(128).safeParse(searchParams.get("id"));
+  if (!id.success) {
+    return NextResponse.json({ error: "Invalid transport id" }, { status: 400 });
+  }
+
+  const transport = await prisma.transport.findUnique({
+    where: { id: id.data },
+    select: { id: true },
+  });
+  if (!transport) {
+    return NextResponse.json({ error: "Transport not found" }, { status: 404 });
+  }
+
+  await prisma.transport.delete({
+    where: { id: transport.id },
+    select: { id: true },
+  });
+
+  return NextResponse.json({ ok: true, id: transport.id });
+}

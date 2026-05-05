@@ -205,7 +205,9 @@ export default function LogisticsPage() {
   const [calendarPopupDate, setCalendarPopupDate] = useState<string | null>(null);
   const [transportDrafts, setTransportDrafts] = useState<Record<string, TransportDraft>>({});
   const [savingTransportId, setSavingTransportId] = useState<string | null>(null);
+  const [deletingTransportId, setDeletingTransportId] = useState<string | null>(null);
   const [calendarError, setCalendarError] = useState("");
+  const [tableError, setTableError] = useState("");
   const [calendarMonth, setCalendarMonth] = useState(() => monthStart(toDateKey(new Date())));
   const [modal, setModal] = useState(false);
   const [materialName, setMaterialName] = useState("");
@@ -330,6 +332,33 @@ export default function LogisticsPage() {
       return nextDrafts;
     });
     setSavingTransportId(null);
+    await mutateTransports();
+  }
+
+  async function deleteTransport(transport: Transport) {
+    if (!canEdit || deletingTransportId) return;
+    const confirmed = window.confirm(`${transport.material.name} transport бүртгэл устгах уу?`);
+    if (!confirmed) return;
+
+    setDeletingTransportId(transport.id);
+    setTableError("");
+    const response = await fetch(`/api/transports?id=${encodeURIComponent(transport.id)}`, {
+      method: "DELETE",
+    });
+    const data = await response.json().catch(() => null) as { error?: string } | null;
+
+    if (!response.ok) {
+      setTableError(data?.error ?? "Transport устгахад алдаа гарлаа");
+      setDeletingTransportId(null);
+      return;
+    }
+
+    setTransportDrafts((currentDrafts) => {
+      const nextDrafts = { ...currentDrafts };
+      delete nextDrafts[transport.id];
+      return nextDrafts;
+    });
+    setDeletingTransportId(null);
     await mutateTransports();
   }
 
@@ -644,6 +673,12 @@ export default function LogisticsPage() {
                 style={{ marginLeft: "auto", padding: "4px 12px", borderRadius: 999, fontSize: 11, border: "1.5px solid var(--border)", background: "transparent", color: "var(--text)", outline: "none", width: 140 }} />
             </div>
 
+            {tableError ? (
+              <div style={{ margin: "0 20px 10px", color: "#f87171", fontSize: 12, fontWeight: 700 }}>
+                {tableError}
+              </div>
+            ) : null}
+
             <div style={{ borderTop: "1px solid var(--border)" }}>
               <table className="safety-table">
                 <thead>
@@ -691,14 +726,37 @@ export default function LogisticsPage() {
                           <td style={{ color: isDelayed ? "#EF4444" : undefined }}>{transport.deliveryDate ? transport.deliveryDate.slice(0, 10) : "—"}{isDelayed ? " ⚠" : ""}</td>
                           <td>{transportDriverName(transport)}</td>
                           <td>
-                            <button type="button" style={{
-                              padding: "4px 10px", borderRadius: 7, whiteSpace: "nowrap", fontSize: 10, fontWeight: 700, cursor: "pointer",
-                              border: `1px solid ${isDelayed ? "rgba(239,68,68,0.4)" : isActive ? "rgba(59,130,246,0.3)" : "var(--border)"}`,
-                              background: isDelayed ? "rgba(239,68,68,0.08)" : isActive ? "rgba(59,130,246,0.08)" : "transparent",
-                              color: isDelayed ? "#EF4444" : isActive ? "#3B82F6" : "var(--muted)",
-                            }}>
-                              {isDelayed ? "Яаралтай" : isActive ? "Хянах" : "Дэлгэрэнгүй"}
-                            </button>
+                            <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+                              <button type="button" style={{
+                                padding: "4px 10px", borderRadius: 7, whiteSpace: "nowrap", fontSize: 10, fontWeight: 700, cursor: "pointer",
+                                border: `1px solid ${isDelayed ? "rgba(239,68,68,0.4)" : isActive ? "rgba(59,130,246,0.3)" : "var(--border)"}`,
+                                background: isDelayed ? "rgba(239,68,68,0.08)" : isActive ? "rgba(59,130,246,0.08)" : "transparent",
+                                color: isDelayed ? "#EF4444" : isActive ? "#3B82F6" : "var(--muted)",
+                              }}>
+                                {isDelayed ? "Яаралтай" : isActive ? "Хянах" : "Дэлгэрэнгүй"}
+                              </button>
+                              {canEdit ? (
+                                <button
+                                  type="button"
+                                  onClick={() => void deleteTransport(transport)}
+                                  disabled={deletingTransportId === transport.id}
+                                  style={{
+                                    padding: "4px 10px",
+                                    borderRadius: 7,
+                                    border: "1px solid rgba(239,68,68,0.42)",
+                                    background: "rgba(239,68,68,0.1)",
+                                    color: "#f87171",
+                                    fontSize: 10,
+                                    fontWeight: 800,
+                                    cursor: deletingTransportId === transport.id ? "wait" : "pointer",
+                                    whiteSpace: "nowrap",
+                                    opacity: deletingTransportId === transport.id ? 0.65 : 1,
+                                  }}
+                                >
+                                  {deletingTransportId === transport.id ? "Устгаж..." : "Устгах"}
+                                </button>
+                              ) : null}
+                            </div>
                           </td>
                         </tr>
                       );
