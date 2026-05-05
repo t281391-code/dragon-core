@@ -34,7 +34,11 @@ type SafetyIncident = {
   status: string;
   incidentDate: string;
   location: string;
-  reportedBy: { fullName: string };
+  reportedBy: {
+    fullName: string;
+    mrCode: string | null;
+    department: { name: string };
+  };
 };
 
 type ReporterUser = {
@@ -71,6 +75,13 @@ const SEVERITY_LABELS: Record<string, string> = {
   high: "Өндөр",
   medium: "Дунд",
   low: "Бага",
+};
+
+const DEPT_MN: Record<string, string> = {
+  WAREHOUSE: "Агуулах",
+  PRODUCTION: "Үйлдвэрлэл",
+  SAFETY: "ХЭАБО",
+  LOGISTICS: "Тээвэр",
 };
 
 function formatDateTime(value: Date | null) {
@@ -182,6 +193,7 @@ export default function SafetyPage() {
   const [tablePage, setTablePage] = useState(0);
   const [modal, setModal] = useState(false);
   const [reportModal, setReportModal] = useState(false);
+  const [selectedIncident, setSelectedIncident] = useState<SafetyIncident | null>(null);
   const [reportClock, setReportClock] = useState<Date | null>(null);
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
@@ -196,6 +208,8 @@ export default function SafetyPage() {
   const [reporterSearchError, setReporterSearchError] = useState("");
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [deletingIncidentId, setDeletingIncidentId] = useState<string | null>(null);
+  const [detailError, setDetailError] = useState("");
 
   const { data: incidentsData, isLoading, mutate } = useSWR(
     "/api/safety-incidents?limit=100",
@@ -205,7 +219,11 @@ export default function SafetyPage() {
 
   const incidents: SafetyIncident[] = useMemo(() => incidentsData?.data ?? [], [incidentsData]);
 
-  useEscapeClose(Boolean(modal || reportModal), () => {
+  useEscapeClose(Boolean(modal || reportModal || selectedIncident), () => {
+    if (selectedIncident) {
+      setSelectedIncident(null);
+      return;
+    }
     if (reportModal) {
       setReportModal(false);
       return;
@@ -330,6 +348,34 @@ export default function SafetyPage() {
   }
 
   const canEdit = user?.role === "ADMIN" || (user?.role === "MODERATOR" && user.department === "SAFETY");
+
+  function openIncidentDetails(incident: SafetyIncident) {
+    setSelectedIncident(incident);
+    setDetailError("");
+  }
+
+  async function deleteIncident(incident: SafetyIncident) {
+    if (!canEdit || deletingIncidentId) return;
+    const confirmed = window.confirm(`${incident.title} incident устгах уу?`);
+    if (!confirmed) return;
+
+    setDeletingIncidentId(incident.id);
+    setDetailError("");
+    const response = await fetch(`/api/safety-incidents?id=${encodeURIComponent(incident.id)}`, {
+      method: "DELETE",
+    });
+    const data = await response.json().catch(() => null) as { error?: string } | null;
+
+    if (!response.ok) {
+      setDetailError(data?.error ?? "Incident устгахад алдаа гарлаа");
+      setDeletingIncidentId(null);
+      return;
+    }
+
+    setSelectedIncident(null);
+    setDeletingIncidentId(null);
+    await mutate();
+  }
 
   const totalIncidents = incidents.length;
   const openIncidents = useMemo(
@@ -729,7 +775,7 @@ export default function SafetyPage() {
                         </td>
                         <td>{incident.reportedBy.fullName}</td>
                         <td>
-                          <button type="button" style={{
+                          <button type="button" onClick={() => openIncidentDetails(incident)} style={{
                             padding: "4px 10px", borderRadius: 7, whiteSpace: "nowrap", fontSize: 10, fontWeight: 700, cursor: "pointer",
                             border: `1px solid ${incident.status === "open" || incident.severity === "high" ? "rgba(239,68,68,0.4)" : "var(--border)"}`,
                             background: incident.status === "open" || incident.severity === "high" ? "rgba(239,68,68,0.08)" : "transparent",
@@ -988,6 +1034,72 @@ export default function SafetyPage() {
                   </table>
                 </div>
               </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {selectedIncident ? (
+        <div
+          className="mo open"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="safety-incident-detail-title"
+          onClick={(event) => event.target === event.currentTarget && setSelectedIncident(null)}
+        >
+          <div className="mc" style={{ width: "min(620px, 100%)" }}>
+            <div className="mh">
+              <div>
+                <h3 id="safety-incident-detail-title">Incident дэлгэрэнгүй</h3>
+                <div style={{ color: "var(--muted)", fontSize: 12, marginTop: 4 }}>
+                  {selectedIncident.incidentDate.slice(0, 10)} · {selectedIncident.location}
+                </div>
+              </div>
+              <button className="mx" type="button" onClick={() => setSelectedIncident(null)}>×</button>
+            </div>
+
+            <div style={{ display: "grid", gap: 12 }}>
+              <div style={{ padding: 14, borderRadius: 12, border: "1px solid var(--border)", background: "rgba(255,255,255,0.03)" }}>
+                <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", marginBottom: 10 }}>
+                  <span className={`bg ${selectedIncident.severity === "high" ? "bg-r" : selectedIncident.severity === "medium" ? "bg-a" : "bg-b"}`}>
+                    {SEVERITY_LABELS[selectedIncident.severity] ?? selectedIncident.severity}
+                  </span>
+                  <span className={`bg ${STATUS_BADGES[selectedIncident.status] ?? "bg-gr"}`}>
+                    {STATUS_LABELS[selectedIncident.status] ?? selectedIncident.status}
+                  </span>
+                </div>
+                <div style={{ color: "var(--text)", fontSize: 15, fontWeight: 800, marginBottom: 8 }}>{selectedIncident.title}</div>
+                <div style={{ color: "var(--muted)", fontSize: 12, lineHeight: 1.55, whiteSpace: "pre-wrap" }}>{selectedIncident.description}</div>
+              </div>
+
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 10 }}>
+                {[
+                  { label: "Ажилтан", value: selectedIncident.reportedBy.fullName },
+                  { label: "Хэлтэс", value: DEPT_MN[selectedIncident.reportedBy.department.name] ?? selectedIncident.reportedBy.department.name },
+                  { label: "MR код", value: selectedIncident.reportedBy.mrCode ?? "Бүртгээгүй" },
+                ].map((item) => (
+                  <div key={item.label} style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--border)", background: "rgba(255,255,255,0.025)", minWidth: 0 }}>
+                    <div style={{ color: "var(--muted)", fontSize: 10, fontWeight: 800, letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 5 }}>{item.label}</div>
+                    <div style={{ color: "var(--text)", fontSize: 13, fontWeight: 800, overflowWrap: "anywhere" }}>{item.value}</div>
+                  </div>
+                ))}
+              </div>
+
+              {detailError ? <div style={{ color: "#f87171", fontSize: 12 }}>{detailError}</div> : null}
+            </div>
+
+            <div className="mf" style={{ marginTop: 18 }}>
+              <button className="btn bo2" type="button" onClick={() => setSelectedIncident(null)}>Хаах</button>
+              {canEdit ? (
+                <button
+                  className="btn bd2"
+                  type="button"
+                  onClick={() => void deleteIncident(selectedIncident)}
+                  disabled={deletingIncidentId === selectedIncident.id}
+                >
+                  {deletingIncidentId === selectedIncident.id ? "Устгаж байна..." : "Устгах"}
+                </button>
+              ) : null}
             </div>
           </div>
         </div>

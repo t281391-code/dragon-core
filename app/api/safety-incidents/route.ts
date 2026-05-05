@@ -42,6 +42,8 @@ export async function GET(request: Request) {
     incidentDate: Date;
     location: string;
     reportedByFullName: string;
+    reportedByMrCode: string | null;
+    reportedByDepartmentName: string;
   };
 
   const rows = await prisma.$queryRaw<SafetyIncidentRow[]>(Prisma.sql`
@@ -53,9 +55,12 @@ export async function GET(request: Request) {
       si.status,
       si.incidentDate,
       si.location,
-      u.fullName AS reportedByFullName
+      u.fullName AS reportedByFullName,
+      u.mrCode AS reportedByMrCode,
+      d.name AS reportedByDepartmentName
     FROM \`SafetyIncident\` si
     INNER JOIN \`User\` u ON u.id = si.reportedById
+    INNER JOIN \`Department\` d ON d.id = u.departmentId
     ${status?.success ? Prisma.sql`WHERE si.status = ${status.data}` : Prisma.empty}
     ORDER BY si.incidentDate DESC
     LIMIT ${limit}
@@ -69,7 +74,11 @@ export async function GET(request: Request) {
     status: row.status,
     incidentDate: row.incidentDate,
     location: row.location,
-    reportedBy: { fullName: row.reportedByFullName },
+    reportedBy: {
+      fullName: row.reportedByFullName,
+      mrCode: row.reportedByMrCode,
+      department: { name: row.reportedByDepartmentName },
+    },
   }));
 
   return NextResponse.json({ data: incidents });
@@ -111,4 +120,34 @@ export async function POST(request: Request) {
   });
 
   return NextResponse.json({ data: incident }, { status: 201 });
+}
+
+export async function DELETE(request: Request) {
+  const rateLimited = await checkRateLimit(request, "safety-incidents:delete", 30, 60_000);
+  if (rateLimited) return rateLimited;
+
+  const user = await getRequestUser();
+  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!requireDepartmentWrite(user, "SAFETY")) return forbidden("Safety write permission required");
+
+  const { searchParams } = new URL(request.url);
+  const id = z.string().trim().min(1).max(128).safeParse(searchParams.get("id"));
+  if (!id.success) {
+    return NextResponse.json({ error: "Invalid incident id" }, { status: 400 });
+  }
+
+  const incident = await prisma.safetyIncident.findUnique({
+    where: { id: id.data },
+    select: { id: true },
+  });
+  if (!incident) {
+    return NextResponse.json({ error: "Incident not found" }, { status: 404 });
+  }
+
+  await prisma.safetyIncident.delete({
+    where: { id: incident.id },
+    select: { id: true },
+  });
+
+  return NextResponse.json({ ok: true, id: incident.id });
 }
