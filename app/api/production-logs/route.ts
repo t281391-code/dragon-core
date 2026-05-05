@@ -31,6 +31,7 @@ const productionLogSchema = z.object({
 const shipmentPatchSchema = z.object({
   id: z.string().min(1).max(128),
   scheduledDate: dateInput,
+  destinationMine: z.string().trim().min(1).max(160),
   productName: z.string().trim().min(1).max(160),
   outputQuantity: z.coerce.number().positive().max(1_000_000_000),
 });
@@ -231,6 +232,7 @@ export async function PATCH(request: Request) {
       where: { id: body.id },
       data: {
         scheduledDate: new Date(body.scheduledDate),
+        destinationMine: body.destinationMine,
         productName: body.productName,
         outputQuantity: body.outputQuantity,
       },
@@ -239,6 +241,7 @@ export async function PATCH(request: Request) {
         productName: true,
         outputQuantity: true,
         scheduledDate: true,
+        destinationMine: true,
       },
     })
   );

@@ -245,12 +245,15 @@ export default function ProductionPage() {
   const [modal, setModal] = useState(false);
   const [reportModal, setReportModal] = useState(false);
   const [reportClock, setReportClock] = useState<Date | null>(null);
+  const [shipmentModal, setShipmentModal] = useState(false);
   const [selectedLog, setSelectedLog] = useState<ProductionLog | null>(null);
   const [shipmentLog, setShipmentLog] = useState<ProductionLog | null>(null);
+  const [shipmentTargetLogId, setShipmentTargetLogId] = useState("");
   const [shipmentProductName, setShipmentProductName] = useState("");
   const [shipmentAmount, setShipmentAmount] = useState("");
   const [shipmentAmountUnit, setShipmentAmountUnit] = useState<"kg" | "ton">("ton");
   const [shipmentDate, setShipmentDate] = useState("");
+  const [shipmentDestinationMine, setShipmentDestinationMine] = useState(MINE_OPTIONS[0]);
   const [shipmentError, setShipmentError] = useState("");
   const [savingShipmentDate, setSavingShipmentDate] = useState(false);
   const [deletingLog, setDeletingLog] = useState(false);
@@ -291,13 +294,12 @@ export default function ProductionPage() {
   const selectedMaterialId = materials[0]?.id || "";
 
   useEffect(() => {
-    if (!modal && !shipmentLog && !selectedLog && !reportModal) return;
+    if (!modal && !shipmentModal && !selectedLog && !reportModal) return;
 
     function handleEscape(event: KeyboardEvent) {
       if (event.key !== "Escape") return;
-      if (shipmentLog) {
-        setShipmentLog(null);
-        setShipmentError("");
+      if (shipmentModal) {
+        closeShipmentModal();
         return;
       }
       if (selectedLog) {
@@ -314,7 +316,7 @@ export default function ProductionPage() {
 
     window.addEventListener("keydown", handleEscape);
     return () => window.removeEventListener("keydown", handleEscape);
-  }, [modal, reportModal, shipmentLog, selectedLog]);
+  }, [modal, reportModal, selectedLog, shipmentModal]);
 
   useEffect(() => {
     if (!reportModal) return;
@@ -401,30 +403,65 @@ export default function ProductionPage() {
     setSelectedLog(log);
   }
 
-  function openShipmentDateModal(log: ProductionLog | null) {
-    if (!log || !canEdit) return;
+  function applyShipmentForm(log: ProductionLog | null) {
     setShipmentLog(log);
-    setShipmentProductName(log.productName);
-    if (log.outputQuantity >= 1000) {
+    setShipmentTargetLogId(log?.id ?? "");
+    setShipmentProductName(log?.productName ?? PRODUCTS[0]);
+    if (log && log.outputQuantity >= 1000) {
       const tons = log.outputQuantity / 1000;
       setShipmentAmount(tons % 1 === 0 ? String(tons) : String(Number(tons.toFixed(1))));
       setShipmentAmountUnit("ton");
-    } else {
+    } else if (log) {
       setShipmentAmount(String(log.outputQuantity));
       setShipmentAmountUnit("kg");
+    } else {
+      setShipmentAmount("");
+      setShipmentAmountUnit("ton");
     }
-    setShipmentDate(log.scheduledDate?.slice(0,10) ?? todayKey);
+    const scheduledKey = log?.scheduledDate?.slice(0,10);
+    setShipmentDate(scheduledKey && scheduledKey >= todayKey ? scheduledKey : todayKey);
+    setShipmentDestinationMine(log?.destinationMine ?? MINE_OPTIONS[0]);
     setShipmentError("");
   }
 
+  function openShipmentDateModal(log: ProductionLog | null) {
+    if (!canEdit) return;
+    applyShipmentForm(log);
+    setShipmentModal(true);
+  }
+
+  function closeShipmentModal() {
+    setShipmentModal(false);
+    setShipmentLog(null);
+    setShipmentTargetLogId("");
+    setShipmentProductName("");
+    setShipmentAmount("");
+    setShipmentAmountUnit("ton");
+    setShipmentDate("");
+    setShipmentDestinationMine(MINE_OPTIONS[0]);
+    setShipmentError("");
+  }
+
+  function changeShipmentTarget(logId: string) {
+    const log = logs.find((item) => item.id === logId) ?? null;
+    applyShipmentForm(log);
+  }
+
   async function saveShipmentDate() {
-    if (!shipmentLog) return;
+    if (!shipmentLog) {
+      setShipmentError("Ачилт холбох үйлдвэрлэлийн бүртгэл сонгоно уу");
+      return;
+    }
     if (!shipmentDate) {
       setShipmentError("Ачилтын огноо сонгоно уу");
       return;
     }
     if (!shipmentProductName.trim()) {
       setShipmentError("Бүтээгдэхүүний нэр оруулна уу");
+      return;
+    }
+    if (!shipmentDestinationMine.trim()) {
+      setShipmentError("Очих газар оруулна уу");
       return;
     }
     const shipmentQuantity = toKg(shipmentAmount, shipmentAmountUnit);
@@ -438,7 +475,13 @@ export default function ProductionPage() {
     const res = await fetch("/api/production-logs", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id: shipmentLog.id, productName: shipmentProductName, outputQuantity: shipmentQuantity, scheduledDate: shipmentDate }),
+      body: JSON.stringify({
+        id: shipmentLog.id,
+        productName: shipmentProductName.trim(),
+        outputQuantity: shipmentQuantity,
+        scheduledDate: shipmentDate,
+        destinationMine: shipmentDestinationMine.trim(),
+      }),
     });
     const data = await res.json().catch(() => null);
     if (!res.ok) {
@@ -448,7 +491,7 @@ export default function ProductionPage() {
     }
 
     setSavingShipmentDate(false);
-    setShipmentLog(null);
+    closeShipmentModal();
     await mutateLogs();
   }
 
@@ -470,8 +513,12 @@ export default function ProductionPage() {
     ? Math.max(0, Math.round((new Date(nextShipmentDate).getTime() - new Date(todayKey).getTime()) / 86400000))
     : null;
   const nextShipmentSummary = nextShipmentLog
-    ? `${nextShipmentLog.productName} · ${fmtDisplay(nextShipmentLog.outputQuantity)}`
-    : "Ачигдах өдөр бүртгээгүй";
+    ? `${nextShipmentLog.productName} · ${fmtDisplay(nextShipmentLog.outputQuantity)}${nextShipmentLog.destinationMine ? ` · ${nextShipmentLog.destinationMine}` : ""}`
+    : "Ачигдах бүртгэл алга";
+  const shipmentEditableLog = nextShipmentLog
+    ?? logs.find((log) => !log.scheduledDate || log.scheduledDate.slice(0,10) < todayKey)
+    ?? logs[0]
+    ?? null;
   const shipmentReadyTotal = useMemo(
     () => upcomingShipments.reduce((s,l)=>s+l.outputQuantity,0),
     [upcomingShipments]
@@ -663,16 +710,16 @@ export default function ProductionPage() {
             </div>
           </div>
           <div
-            role={nextShipmentLog && canEdit ? "button" : undefined}
-            tabIndex={nextShipmentLog && canEdit ? 0 : undefined}
-            onClick={()=>openShipmentDateModal(nextShipmentLog)}
-            onKeyDown={nextShipmentLog && canEdit ? (event)=>{
+            role={canEdit ? "button" : undefined}
+            tabIndex={canEdit ? 0 : undefined}
+            onClick={canEdit ? ()=>openShipmentDateModal(shipmentEditableLog) : undefined}
+            onKeyDown={canEdit ? (event)=>{
               if (event.key === "Enter" || event.key === " ") {
                 event.preventDefault();
-                openShipmentDateModal(nextShipmentLog);
+                openShipmentDateModal(shipmentEditableLog);
               }
             } : undefined}
-            style={{flex:"1 1 260px",padding:"12px 16px",borderRadius:12,border:"1px solid rgba(59,130,246,0.24)",background:"rgba(59,130,246,0.06)",display:"flex",alignItems:"center",gap:12,cursor:nextShipmentLog&&canEdit?"pointer":"default"}}
+            style={{flex:"1 1 260px",padding:"12px 16px",borderRadius:12,border:"1px solid rgba(59,130,246,0.24)",background:"rgba(59,130,246,0.06)",display:"flex",alignItems:"center",gap:12,cursor:canEdit?"pointer":"default"}}
           >
             <span style={{fontSize:16}}>🚚</span>
             <div style={{minWidth:0}}>
@@ -704,7 +751,7 @@ export default function ProductionPage() {
           <KpiCard label="Дараагийн ачилт" value={nextShipmentDate}
             valueClass="white" change={nextShipmentSummary}
             icon={<span style={{fontSize:20}}>🚚</span>} sparkline={shipSparkline} sparklineColor="#3B82F6"
-            onClick={nextShipmentLog && canEdit ? ()=>openShipmentDateModal(nextShipmentLog) : undefined} />
+            onClick={canEdit ? ()=>openShipmentDateModal(shipmentEditableLog) : undefined} />
           <KpiCard label="Хүлээгдэж буй" value={pendingCount}
             valueStyle={{color:"#F59E0B"}} change={`${fmtDisplay(shipmentReadyTotal)} ачигдахаар байна`}
             icon={<span style={{fontSize:20}}>⏳</span>}
@@ -1354,38 +1401,72 @@ export default function ProductionPage() {
         </div>
       )}
 
-      {shipmentLog && (
-        <div className="mo open" onClick={e=>{if(e.target===e.currentTarget){setShipmentLog(null);setShipmentError("");}}}>
-          <div className="mc" style={{width:"min(460px, 100%)"}}>
+      {shipmentModal && (
+        <div className="mo open" onClick={e=>{if(e.target===e.currentTarget) closeShipmentModal();}}>
+          <div className="mc" style={{width:"min(540px, 100%)"}}>
             <div className="mh">
               <div>
-                <h3>Дараагийн ачилтын огноо</h3>
+                <h3>Дараагийн ачилт төлөвлөх</h3>
                 <div style={{fontSize:12,color:"var(--muted)",marginTop:4}}>
-                  {shipmentLog.productName} · {fmtDisplay(shipmentLog.outputQuantity)}
+                  Хэзээ, хаашаа, ямар бүтээгдэхүүн ачигдахыг гараар бүртгэнэ
                 </div>
               </div>
-              <button className="mx" type="button" onClick={()=>{setShipmentLog(null);setShipmentError("");}}>×</button>
+              <button className="mx" type="button" onClick={closeShipmentModal}>×</button>
             </div>
-            <div className="fg"><label>Тэсрэх бодис</label>
-              <input type="text" value={shipmentProductName} onChange={e=>setShipmentProductName(e.target.value)} placeholder="Жишээ: ANDO-EV 32MM"/>
-            </div>
-            <div className="fr2">
-              <div className="fg"><label>Ачилтын хэмжээ</label>
-                <input type="number" min="0" step="0.1" value={shipmentAmount} onChange={e=>setShipmentAmount(e.target.value)} placeholder="Жишээ: 25"/>
+            {logs.length === 0 ? (
+              <div style={{padding:"16px",borderRadius:12,border:"1px solid rgba(245,158,11,0.28)",background:"rgba(245,158,11,0.08)",color:"var(--text)",fontSize:13,lineHeight:1.5}}>
+                Ачилт төлөвлөхийн тулд эхлээд үйлдвэрлэлийн бүртгэл нэмнэ үү.
               </div>
-              <div className="fg"><label>Нэгж</label>
-                <select value={shipmentAmountUnit} onChange={e=>setShipmentAmountUnit(e.target.value as "kg" | "ton")}>
-                  <option value="kg">Кг</option><option value="ton">Тонн</option>
-                </select>
-              </div>
-            </div>
-            <div className="fg"><label>Ачилт хийх өдөр</label>
-              <input type="date" value={shipmentDate} onChange={e=>setShipmentDate(e.target.value)}/>
-            </div>
-            {shipmentError && <div style={{color:"#f87171",fontSize:12,marginBottom:8}}>{shipmentError}</div>}
+            ) : (
+              <>
+                <div className="fg"><label>Холбох үйлдвэрлэлийн бүртгэл</label>
+                  <select value={shipmentTargetLogId} onChange={e=>changeShipmentTarget(e.target.value)}>
+                    {logs.map((log) => (
+                      <option key={log.id} value={log.id}>
+                        {log.productionDate.slice(0,10)} · {log.productName} · {fmtDisplay(log.outputQuantity)} · {log.destinationMine ?? "очих газаргүй"}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="fg"><label>Ямар бүтээгдэхүүн ачигдах вэ?</label>
+                  <input type="text" value={shipmentProductName} onChange={e=>setShipmentProductName(e.target.value)} placeholder="Жишээ: ANDO-EV 32MM"/>
+                </div>
+                <div className="fr2">
+                  <div className="fg"><label>Ачилтын хэмжээ</label>
+                    <input type="number" min="0" step="0.1" value={shipmentAmount} onChange={e=>setShipmentAmount(e.target.value)} placeholder="Жишээ: 25"/>
+                  </div>
+                  <div className="fg"><label>Нэгж</label>
+                    <select value={shipmentAmountUnit} onChange={e=>setShipmentAmountUnit(e.target.value as "kg" | "ton")}>
+                      <option value="kg">Кг</option><option value="ton">Тонн</option>
+                    </select>
+                  </div>
+                </div>
+                <div className="fr2">
+                  <div className="fg"><label>Хэзээ ачих вэ?</label>
+                    <input type="date" value={shipmentDate} onChange={e=>setShipmentDate(e.target.value)}/>
+                  </div>
+                  <div className="fg"><label>Хаашаа ачих вэ?</label>
+                    <input
+                      list="shipment-destination-options"
+                      type="text"
+                      value={shipmentDestinationMine}
+                      onChange={e=>setShipmentDestinationMine(e.target.value)}
+                      placeholder="Жишээ: Оюутолгой"
+                    />
+                    <datalist id="shipment-destination-options">
+                      {MINE_OPTIONS.map((mine) => <option key={mine} value={mine} />)}
+                    </datalist>
+                  </div>
+                </div>
+                <div style={{padding:"10px 12px",borderRadius:10,border:"1px solid rgba(59,130,246,0.2)",background:"rgba(59,130,246,0.06)",fontSize:11,color:"var(--muted)",lineHeight:1.45}}>
+                  Энэ мэдээлэл сонгосон үйлдвэрлэлийн бүртгэл дээр хадгалагдаж, “Дараагийн ачилт” карт болон хүснэгтэд харагдана.
+                </div>
+              </>
+            )}
+            {shipmentError && <div style={{color:"#f87171",fontSize:12,marginTop:10,marginBottom:8}}>{shipmentError}</div>}
             <div className="mf">
-              <button className="btn bo2" type="button" onClick={()=>{setShipmentLog(null);setShipmentError("");}}>Цуцлах</button>
-              <button className="btn bp" type="button" onClick={saveShipmentDate} disabled={savingShipmentDate}>
+              <button className="btn bo2" type="button" onClick={closeShipmentModal}>Цуцлах</button>
+              <button className="btn bp" type="button" onClick={saveShipmentDate} disabled={savingShipmentDate || logs.length === 0}>
                 {savingShipmentDate ? "Хадгалж байна..." : "Хадгалах"}
               </button>
             </div>
