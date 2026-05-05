@@ -199,27 +199,6 @@ function FlowTooltip({ active, payload, label }: { active?: boolean; payload?: F
   );
 }
 
-function FunnelBar({ pct, value, color }: { name: string; pct: number; value: number; color: string }) {
-  return (
-    <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
-      <div style={{ width: 44, textAlign: "right", fontSize: 12, fontWeight: 700, color, flexShrink: 0 }}>
-        {pct}%
-      </div>
-      <div style={{ flex: 1, position: "relative" }}>
-        <div style={{ height: 28, borderRadius: 4, background: "var(--base3, #f1f5f9)", overflow: "hidden" }}>
-          <div style={{ width: `${pct}%`, height: "100%", background: color, borderRadius: 4, opacity: 0.88 }} />
-        </div>
-        <div style={{
-          position: "absolute", right: 8, top: "50%", transform: "translateY(-50%)",
-          fontSize: 11, fontWeight: 700, color: "var(--text)",
-        }}>
-          {value.toLocaleString("mn-MN")}
-        </div>
-      </div>
-    </div>
-  );
-}
-
 function SystemStatusBanner({ materials, txnsByMaterial, onOrder }: {
   materials: Material[];
   txnsByMaterial: Map<string, MaterialTransaction[]>;
@@ -617,24 +596,37 @@ export default function WarehousePage() {
 
   const totalInbound = useMemo(() => flowSeries.reduce((s, d) => s + d.inbound, 0), [flowSeries]);
   const totalOutbound = useMemo(() => flowSeries.reduce((s, d) => s + d.outbound, 0), [flowSeries]);
+  const todayFlow = flowSeries[flowSeries.length - 1] ?? { inbound: 0, outbound: 0 };
+  const netFlow = totalInbound - totalOutbound;
 
-  const funnelData = useMemo(() => {
-    const total = totalStock || 1;
-    return [
-      { name: "Нийт материал", pct: 100, value: totalStock, color: "#10B981" },
-      { name: "Хэвийн нөөц", pct: Math.round((normalStockTotal / total) * 100), value: normalStockTotal, color: "#3DD598" },
-      { name: "Бага нөөц", pct: Math.round(((normalStockTotal + lowStockTotal) / total) * 100) || 64, value: normalStockTotal + lowStockTotal, color: "#F59E0B" },
-      { name: "Анхаарал шаардлагатай", pct: Math.max(Math.round((lowStockTotal / total) * 100), 6), value: lowStockTotal, color: "#FB923C" },
-      { name: "Критик нөөц", pct: Math.max(Math.round((criticalStockTotal / total) * 100), 4), value: criticalStockTotal, color: "#EF4444" },
-      { name: "Шуурхай нөхөх", pct: Math.max(criticalCount * 2, 2), value: criticalCount, color: "#A855F7" },
-    ];
-  }, [totalStock, normalStockTotal, lowStockTotal, criticalStockTotal, criticalCount]);
+  const totalLimit = useMemo(() => displayMaterials.reduce((sum, material) => sum + material.maximumStock, 0), [displayMaterials]);
+  const overallFillPct = totalLimit > 0 ? Math.round((totalStock / totalLimit) * 100) : 0;
+
+  const materialFillData = useMemo(() =>
+    displayMaterials.map((material) => {
+      const pct = fillPercent(material);
+      const tone = toneMap.get(material.id) ?? stockTone(material);
+      return {
+        material,
+        pct,
+        tone,
+        remaining: Math.max(0, material.maximumStock - material.currentStock),
+      };
+    }),
+    [displayMaterials, toneMap]
+  );
 
   const stockDistribution = useMemo(() => [
-    { name: "Хэвийн", value: normalCount || 0.1, color: "#10B981" },
-    { name: "Бага", value: lowCount || 0.1, color: "#F59E0B" },
-    { name: "Критик", value: criticalCount || 0.1, color: "#EF4444" },
+    { name: "Хэвийн", value: normalCount, color: "#10B981" },
+    { name: "Бага", value: lowCount, color: "#F59E0B" },
+    { name: "Критик", value: criticalCount, color: "#EF4444" },
   ], [normalCount, lowCount, criticalCount]);
+  const stockPieData = useMemo(
+    () => stockDistribution.some((item) => item.value > 0)
+      ? stockDistribution
+      : [{ name: "Бүртгэл алга", value: 1, color: "var(--base3)" }],
+    [stockDistribution]
+  );
 
   const monthlyStats = useMemo(() => (statsData?.data ?? []) as MonthlyStat[], [statsData]);
 
@@ -832,14 +824,22 @@ export default function WarehousePage() {
                 ))}
               </div>
             </div>
-            <div style={{ padding: "0 20px 4px", display: "flex", gap: 24 }}>
+            <div style={{ padding: "0 20px 4px", display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))", gap: 12 }}>
               <div>
                 <div style={{ fontSize: 22, fontWeight: 700, color: "#10B981" }}>{totalInbound.toLocaleString("mn-MN")} КГ</div>
-                <div style={{ fontSize: 11, color: "var(--muted)", marginTop: 2 }}>НИЙТ ОРЛОГО</div>
+                <div style={{ fontSize: 11, color: "var(--muted)", marginTop: 2 }}>10 ХОНОГИЙН ОРЛОГО</div>
               </div>
               <div>
                 <div style={{ fontSize: 22, fontWeight: 700, color: "#EF4444" }}>{totalOutbound.toLocaleString("mn-MN")} КГ</div>
-                <div style={{ fontSize: 11, color: "var(--muted)", marginTop: 2 }}>НИЙТ ЗАРЛАГА</div>
+                <div style={{ fontSize: 11, color: "var(--muted)", marginTop: 2 }}>10 ХОНОГИЙН ЗАРЛАГА</div>
+              </div>
+              <div>
+                <div style={{ fontSize: 22, fontWeight: 700, color: "#3B82F6" }}>{todayFlow.inbound.toLocaleString("mn-MN")} КГ</div>
+                <div style={{ fontSize: 11, color: "var(--muted)", marginTop: 2 }}>ӨНӨӨДРИЙН ОРЛОГО</div>
+              </div>
+              <div>
+                <div style={{ fontSize: 22, fontWeight: 700, color: netFlow >= 0 ? "#10B981" : "#EF4444" }}>{netFlow.toLocaleString("mn-MN")} КГ</div>
+                <div style={{ fontSize: 11, color: "var(--muted)", marginTop: 2 }}>ЦЭВЭР ӨӨРЧЛӨЛТ</div>
               </div>
             </div>
             <div className="chart-wrap" style={{ height: 240 }}>
@@ -877,29 +877,47 @@ export default function WarehousePage() {
             ) : null}
           </div>
 
-          {/* Funnel Chart */}
+          {/* Material fill chart */}
           <div className="panel">
             <div className="panel-hdr" style={{ paddingBottom: 16 }}>
               <div>
-                <div className="panel-title">Нөөцийн ангилал (Funnel)</div>
-                <div className="panel-sub">Нөөцийн тархалт</div>
+                <div className="panel-title">Материал тус бүрийн дүүргэлт</div>
+                <div className="panel-sub">Одоо байгаа нөөц / лимит</div>
+              </div>
+              <div style={{ textAlign: "right" }}>
+                <div style={{ fontSize: 22, lineHeight: 1, fontWeight: 900, color: overallFillPct > 100 ? "#F59E0B" : "#10B981" }}>{overallFillPct}%</div>
+                <div style={{ fontSize: 10, color: "var(--muted)", marginTop: 4 }}>НИЙТ ДҮҮРГЭЛТ</div>
               </div>
             </div>
-            <div style={{ padding: "0 20px 20px" }}>
-              {funnelData.map((item) => (
-                <FunnelBar key={item.name} name={item.name} pct={item.pct} value={item.value} color={item.color} />
-              ))}
-              <div style={{ marginTop: 12, display: "flex", flexDirection: "column", gap: 4 }}>
-                {funnelData.map((item) => (
-                  <div key={item.name} style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: "var(--muted)" }}>
-                    <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                      <span style={{ width: 8, height: 8, borderRadius: "50%", background: item.color, display: "inline-block" }} />
-                      {item.name}
-                    </span>
-                    <span style={{ color: item.color, fontWeight: 700 }}>{item.pct}%</span>
+            <div style={{ padding: "0 20px 18px", display: "flex", flexDirection: "column", gap: 10 }}>
+              {materialFillData.map(({ material, pct, tone, remaining }) => (
+                <button
+                  key={material.id}
+                  type="button"
+                  onClick={() => { setDetailError(""); setDetailMaterial(material); }}
+                  style={{
+                    width: "100%",
+                    border: "1px solid var(--border)",
+                    borderRadius: 10,
+                    background: "rgba(15,23,42,0.18)",
+                    padding: "9px 10px",
+                    textAlign: "left",
+                    cursor: "pointer",
+                  }}
+                >
+                  <div style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "baseline", marginBottom: 7 }}>
+                    <strong style={{ color: "var(--text)", fontSize: 12, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{material.name}</strong>
+                    <span style={{ color: tone.color, fontSize: 13, fontWeight: 900, flexShrink: 0 }}>{pct}%</span>
                   </div>
-                ))}
-              </div>
+                  <div style={{ height: 9, borderRadius: 999, background: "var(--base3)", overflow: "hidden", marginBottom: 7 }}>
+                    <div style={{ width: fillBarWidth(pct), height: "100%", borderRadius: 999, background: tone.color, transition: "width 0.25s" }} />
+                  </div>
+                  <div style={{ display: "flex", justifyContent: "space-between", gap: 10, color: "var(--muted)", fontSize: 10 }}>
+                    <span>{formatValue(material.currentStock, material.unit)} / {formatValue(material.maximumStock, material.unit)}</span>
+                    <span style={{ color: remaining === 0 ? "#F59E0B" : "var(--muted)", flexShrink: 0 }}>Үлдэх {formatValue(remaining, material.unit)}</span>
+                  </div>
+                </button>
+              ))}
             </div>
           </div>
         </div>
@@ -915,8 +933,8 @@ export default function WarehousePage() {
               <div style={{ width: 120, height: 120, flexShrink: 0 }}>
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
-                    <Pie data={stockDistribution} cx="50%" cy="50%" innerRadius={32} outerRadius={52} dataKey="value" stroke="none" isAnimationActive={false}>
-                      {stockDistribution.map((entry, i) => <Cell key={i} fill={entry.color} />)}
+                    <Pie data={stockPieData} cx="50%" cy="50%" innerRadius={32} outerRadius={52} dataKey="value" stroke="none" isAnimationActive={false}>
+                      {stockPieData.map((entry, i) => <Cell key={i} fill={entry.color} />)}
                     </Pie>
                     <Tooltip formatter={(v) => [`${v} материал`]} contentStyle={{ background: "var(--panel)", border: "1px solid var(--border)", borderRadius: 8, fontSize: 11 }} />
                   </PieChart>
