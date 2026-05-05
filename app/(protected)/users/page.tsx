@@ -32,6 +32,7 @@ export default function UsersPage() {
   // Role modal
   const [selected, setSelected] = useState<User | null>(null);
   const [newRole, setNewRole] = useState("USER");
+  const [newMrCode, setNewMrCode] = useState("");
   const [changing, setChanging] = useState(false);
   const [changeErr, setChangeErr] = useState("");
   const [kickingId, setKickingId] = useState<string | null>(null);
@@ -57,7 +58,19 @@ export default function UsersPage() {
   function openModal(u: User) {
     setSelected(u);
     setNewRole(u.role.name);
+    setNewMrCode(u.mrCode ?? "");
     setChangeErr("");
+  }
+
+  function normalizeMrCode(value: string) {
+    const trimmed = value.trim().toUpperCase();
+    if (!trimmed) return null;
+    const digits = trimmed.replace(/^MR-?/, "");
+    if (!/^\d{1,4}$/.test(digits)) return undefined;
+    const padded = digits.padStart(4, "0");
+    const codeNumber = Number.parseInt(padded, 10);
+    if (codeNumber < 1 || codeNumber > 2215) return undefined;
+    return `MR-${padded}`;
   }
 
   function canKick(u: User) {
@@ -88,12 +101,17 @@ export default function UsersPage() {
   async function submitRoleChange(e: React.FormEvent) {
     e.preventDefault();
     if (!selected) return;
+    const mrCode = normalizeMrCode(newMrCode);
+    if (mrCode === undefined) {
+      setChangeErr("MR код 0001-2215 хооронд байх ёстой.");
+      return;
+    }
     setChanging(true);
     setChangeErr("");
     const res = await fetch(`/api/users/${selected.id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ roleName: newRole })
+      body: JSON.stringify({ roleName: newRole, mrCode })
     });
     const data = await res.json();
     if (!res.ok) {
@@ -224,11 +242,11 @@ export default function UsersPage() {
                         <div className="av" style={{ width: 26, height: 26, fontSize: 10 }}>{u.fullName[0]}</div>
                         <div>
                           <strong
-                            style={{ cursor: me?.role === "ADMIN" && u.role.name !== "ADMIN" ? "pointer" : "default",
-                                     textDecoration: me?.role === "ADMIN" && u.role.name !== "ADMIN" ? "underline dotted" : "none",
-                                     color: me?.role === "ADMIN" && u.role.name !== "ADMIN" ? "var(--acc)" : "inherit" }}
-                            onClick={() => me?.role === "ADMIN" && u.role.name !== "ADMIN" && openModal(u)}
-                            title={me?.role === "ADMIN" && u.role.name !== "ADMIN" ? "Дүр өөрчлөх" : ""}
+                            style={{ cursor: me?.role === "ADMIN" ? "pointer" : "default",
+                                      textDecoration: me?.role === "ADMIN" ? "underline dotted" : "none",
+                                      color: me?.role === "ADMIN" ? "var(--acc)" : "inherit" }}
+                            onClick={() => me?.role === "ADMIN" && openModal(u)}
+                            title={me?.role === "ADMIN" ? "Дүр / MR код өөрчлөх" : ""}
                           >
                             {u.fullName}
                           </strong>
@@ -249,15 +267,15 @@ export default function UsersPage() {
                     <td><span className={`bg ${u.isActive ? "bg-g" : "bg-r"}`}>{u.isActive ? "Идэвхтэй" : "Идэвхгүй"}</span></td>
                     {me?.role === "ADMIN" && (
                       <td>
-                        {u.role.name !== "ADMIN" && (
-                          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                            <button
-                              className="btn bp bs"
-                              style={{ fontSize: 10 }}
-                              onClick={() => openModal(u)}
-                            >
-                              Дүр өөрчлөх
-                            </button>
+                        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                          <button
+                            className="btn bp bs"
+                            style={{ fontSize: 10 }}
+                            onClick={() => openModal(u)}
+                          >
+                            {u.role.name === "ADMIN" ? "MR код" : "Дүр өөрчлөх"}
+                          </button>
+                          {u.role.name !== "ADMIN" && (
                             <button
                               className="btn bd2 bs"
                               style={{ fontSize: 10 }}
@@ -266,8 +284,8 @@ export default function UsersPage() {
                             >
                               {kickingId === u.id ? "Kick..." : "Kick"}
                             </button>
-                          </div>
-                        )}
+                          )}
+                        </div>
                       </td>
                     )}
                   </tr>
@@ -313,8 +331,19 @@ export default function UsersPage() {
 
             <form onSubmit={submitRoleChange}>
               <div className="fg">
+                <label>MR код</label>
+                <input
+                  type="text"
+                  value={newMrCode}
+                  onChange={(e) => setNewMrCode(e.target.value.toUpperCase())}
+                  placeholder="MR-0970"
+                  autoComplete="off"
+                />
+              </div>
+              <div className="fg">
                 <label>Шинэ дүр сонгох</label>
                 <select value={newRole} onChange={e => setNewRole(e.target.value)}>
+                  {selected.role.name === "ADMIN" && <option value="ADMIN">🔑 Admin</option>}
                   <option value="USER">👤 Ажилтан — зөвхөн өөрийн хэлтэс</option>
                   <option value="MODERATOR">⭐ Менежер — бүх хэлтсийг харах</option>
                 </select>
@@ -349,9 +378,9 @@ export default function UsersPage() {
                 <button
                   type="submit"
                   className="btn bp"
-                  disabled={changing || newRole === selected.role.name}
+                  disabled={changing || (newRole === selected.role.name && normalizeMrCode(newMrCode) === (selected.mrCode ?? null))}
                 >
-                  {changing ? "Хадгалж байна..." : newRole === selected.role.name ? "Өөрчлөлт байхгүй" : "✓ Хадгалах"}
+                  {changing ? "Хадгалж байна..." : (newRole === selected.role.name && normalizeMrCode(newMrCode) === (selected.mrCode ?? null)) ? "Өөрчлөлт байхгүй" : "✓ Хадгалах"}
                 </button>
               </div>
             </form>

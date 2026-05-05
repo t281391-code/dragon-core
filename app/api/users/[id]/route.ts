@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { Prisma } from "@prisma/client";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { getRequestUser } from "@/lib/auth";
@@ -8,6 +9,7 @@ export const preferredRegion = "sin1";
 
 const rolePatchSchema = z.object({
   roleName: z.enum(["USER", "MODERATOR", "ADMIN"]),
+  mrCode: z.union([z.string().trim().regex(/^MR-\d{4}$/), z.literal("")]).nullable().optional(),
 });
 
 export async function PATCH(
@@ -44,22 +46,34 @@ export async function PATCH(
   if (!role) return NextResponse.json({ error: "Role not found" }, { status: 404 });
   if (!target) return NextResponse.json({ error: "User not found" }, { status: 404 });
 
-  const updated = await prisma.user.update({
-    where: { id: id.data },
-    data: { roleId: role.id },
-    select: {
-      id: true,
-      fullName: true,
-      email: true,
-      isActive: true,
-      createdAt: true,
-      updatedAt: true,
-      role: true,
-      department: true,
-    },
-  });
+  try {
+    const updated = await prisma.user.update({
+      where: { id: id.data },
+      data: {
+        roleId: role.id,
+        ...(body.mrCode !== undefined ? { mrCode: body.mrCode || null } : {}),
+      },
+      select: {
+        id: true,
+        fullName: true,
+        email: true,
+        mrCode: true,
+        isActive: true,
+        createdAt: true,
+        updatedAt: true,
+        role: true,
+        department: true,
+      },
+    });
 
-  return NextResponse.json({ data: updated });
+    return NextResponse.json({ data: updated });
+  } catch (error) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+      return NextResponse.json({ error: "Энэ MR код өөр ажилтан дээр бүртгэлтэй байна." }, { status: 409 });
+    }
+
+    throw error;
+  }
 }
 
 export async function DELETE(
