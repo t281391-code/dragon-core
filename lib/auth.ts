@@ -68,7 +68,14 @@ export async function getCurrentUser(): Promise<AuthUser | null> {
   const { prisma } = await import("@/lib/prisma");
   const user = await prisma.user.findUnique({
     where: { id: userId },
-    include: { role: true, department: true }
+    select: {
+      id: true,
+      fullName: true,
+      email: true,
+      isActive: true,
+      role: { select: { name: true } },
+      department: { select: { name: true } },
+    }
   });
 
   if (!user || !user.isActive) return null;
