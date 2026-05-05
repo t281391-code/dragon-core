@@ -105,6 +105,15 @@ function stockTone(material: Material) {
   return { label: "Хэвийн", className: "ok", color: "#10B981" };
 }
 
+function fillPercent(material: Material) {
+  if (material.maximumStock <= 0) return 0;
+  return Math.round((material.currentStock / material.maximumStock) * 100);
+}
+
+function fillBarWidth(percent: number) {
+  return `${Math.min(100, Math.max(0, percent))}%`;
+}
+
 function buildFlowSeries(transactions: MaterialTransaction[]) {
   const now = new Date();
   const buckets = Array.from({ length: 10 }, (_, index) => {
@@ -220,7 +229,7 @@ function SystemStatusBanner({ materials, txnsByMaterial, onOrder }: {
     return materials
       .map(m => {
         const tone = stockTone(m);
-        const maxFillPct = m.maximumStock > 0 ? Math.min(100, Math.round((m.currentStock / m.maximumStock) * 100)) : 0;
+        const maxFillPct = fillPercent(m);
         const days = computeDaysRemaining(m, txnsByMaterial.get(m.name) ?? []);
         return { material: m, tone, maxFillPct, days };
       })
@@ -249,7 +258,7 @@ function SystemStatusBanner({ materials, txnsByMaterial, onOrder }: {
           <div style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
             <span style={{ fontSize: 16, flexShrink: 0 }}>{tone.className === "crit" ? "🔴" : "🟠"}</span>
             <div>
-              <div style={{ fontSize: 12, fontWeight: 800, color: tone.color }}>{material.name} — {maxFillPct}% үлдсэн</div>
+              <div style={{ fontSize: 12, fontWeight: 800, color: tone.color }}>{material.name} — {maxFillPct}% дүүрсэн</div>
               <div style={{ fontSize: 11, color: "var(--muted)", marginTop: 2 }}>
                 {days !== null
                   ? `${days} хоногийн дотор дуусах эрсдэлтэй`
@@ -657,9 +666,7 @@ export default function WarehousePage() {
       const outbound = materialTxns.reduce((sum, txn) => sum + (txn.type === "OUT" ? txn.quantity : 0), 0);
       const net = inbound - outbound;
       const openingStock = material.currentStock - net;
-      const fillPct = material.maximumStock > 0
-        ? Math.min(100, Math.round((material.currentStock / material.maximumStock) * 100))
-        : 0;
+      const fillPct = fillPercent(material);
       const shortage = Math.max(0, material.minimumStock - material.currentStock);
       return { material, tone, openingStock, inbound, outbound, net, fillPct, shortage, transactionCount: materialTxns.length };
     });
@@ -972,9 +979,7 @@ export default function WarehousePage() {
                   ) : (
                     filteredMaterials.map((m, idx) => {
                       const tone = toneMap.get(m.id)!;
-                      const fillPct = m.maximumStock > 0
-                        ? Math.min(100, Math.round((m.currentStock / m.maximumStock) * 100))
-                        : 0;
+                      const fillPct = fillPercent(m);
                       const bgClass = tone.className === "ok" ? "bg-g" : tone.className === "low" ? "bg-a" : "bg-r";
                       return (
                         <tr key={m.id} className="wh-tr-hover">
@@ -989,9 +994,9 @@ export default function WarehousePage() {
                           <td style={{ minWidth: 140 }}>
                             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                               <div style={{ flex: 1, height: 8, borderRadius: 999, background: "var(--base3)", overflow: "hidden" }}>
-                                <div style={{ width: `${fillPct}%`, height: "100%", borderRadius: 999, background: tone.color, transition: "width 0.4s" }} />
+                                <div style={{ width: fillBarWidth(fillPct), height: "100%", borderRadius: 999, background: tone.color, transition: "width 0.4s" }} />
                               </div>
-                              <span style={{ fontSize: 11, color: tone.color, fontWeight: 700, width: 32 }}>{fillPct}%</span>
+                              <span style={{ fontSize: 11, color: tone.color, fontWeight: 700, minWidth: 42, textAlign: "right" }}>{fillPct}%</span>
                             </div>
                           </td>
                           <td><span className={`bg ${bgClass}`}>{tone.label}</span></td>
@@ -1327,9 +1332,7 @@ export default function WarehousePage() {
       {/* Detail Modal */}
       {detailMaterial ? (() => {
         const tone = toneMap.get(detailMaterial.id) ?? stockTone(detailMaterial);
-        const fillPct = detailMaterial.maximumStock > 0
-          ? Math.min(100, Math.round((detailMaterial.currentStock / detailMaterial.maximumStock) * 100))
-          : 0;
+        const fillPct = fillPercent(detailMaterial);
         const matTxns = (txnsByMaterial.get(detailMaterial.name) ?? [])
           .slice()
           .sort((a, b) => new Date(b.transactionDate).getTime() - new Date(a.transactionDate).getTime())
@@ -1357,7 +1360,7 @@ export default function WarehousePage() {
               {/* Fill bar */}
               <div style={{ padding: "12px 24px 0" }}>
                 <div style={{ height: 8, borderRadius: 999, background: "var(--base3)", overflow: "hidden" }}>
-                  <div style={{ width: `${fillPct}%`, height: "100%", borderRadius: 999, background: tone.color, transition: "width 0.4s" }} />
+                  <div style={{ width: fillBarWidth(fillPct), height: "100%", borderRadius: 999, background: tone.color, transition: "width 0.4s" }} />
                 </div>
               </div>
               {/* Transactions with notes */}

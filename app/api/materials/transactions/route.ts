@@ -8,17 +8,17 @@ import { checkRateLimit, forbidden, normalizePageLimit, requireDepartmentWrite }
 export const preferredRegion = "sin1";
 
 const dateInput = z.string().trim().min(1).max(64).refine((value) => !Number.isNaN(Date.parse(value)), "Invalid date");
-const WAREHOUSE_MATERIAL_NAMES = new Set([
-  "АМИАКИЙН ШҮҮ",
-  "ЦУУНЫ ХҮЧИЛ",
-  "ХҮХРИЙН ХҮЧИЛ",
-  "ШИЛЭН БӨМБӨЛӨГ",
-  "ТҮЛШ",
-  "НИТРИТ НАТРИ",
-  "ЭМУЛЬГАТОР",
-  "ХАТУУРУУЛАГЧ",
-  "ГИДРОКСИД",
-  "ЦАГААН ТОС",
+const WAREHOUSE_MATERIAL_LIMITS = new Map([
+  ["АМИАКИЙН ШҮҮ", 500_000],
+  ["ЦУУНЫ ХҮЧИЛ", 2_000],
+  ["ХҮХРИЙН ХҮЧИЛ", 100],
+  ["ШИЛЭН БӨМБӨЛӨГ", 8_000],
+  ["ТҮЛШ", 800_000],
+  ["НИТРИТ НАТРИ", 7_000],
+  ["ЭМУЛЬГАТОР", 100_000],
+  ["ХАТУУРУУЛАГЧ", 300_000],
+  ["ГИДРОКСИД", 200],
+  ["ЦАГААН ТОС", 400_000],
 ]);
 
 const transactionSchema = z.object({
@@ -108,7 +108,7 @@ export async function POST(request: Request) {
   if (!body.materialId && !materialName) {
     return NextResponse.json({ error: "Материал сонгоно уу" }, { status: 400 });
   }
-  if (materialName && !WAREHOUSE_MATERIAL_NAMES.has(materialName)) {
+  if (materialName && !WAREHOUSE_MATERIAL_LIMITS.has(materialName)) {
     return NextResponse.json({ error: "Зөвшөөрөгдсөн агуулахын материал сонгоно уу" }, { status: 400 });
   }
 
@@ -124,7 +124,7 @@ export async function POST(request: Request) {
         unit: "КГ",
         currentStock: 0,
         minimumStock: 0,
-        maximumStock: 0,
+        maximumStock: WAREHOUSE_MATERIAL_LIMITS.get(materialName) ?? 0,
         location: "Агуулах",
       },
     });

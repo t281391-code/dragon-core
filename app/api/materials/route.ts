@@ -6,18 +6,19 @@ import { checkRateLimit, forbidden, requireDepartmentWrite } from "@/lib/securit
 
 export const preferredRegion = "sin1";
 
-const WAREHOUSE_MATERIALS = [
-  "АМИАКИЙН ШҮҮ",
-  "ЦУУНЫ ХҮЧИЛ",
-  "ХҮХРИЙН ХҮЧИЛ",
-  "ШИЛЭН БӨМБӨЛӨГ",
-  "ТҮЛШ",
-  "НИТРИТ НАТРИ",
-  "ЭМУЛЬГАТОР",
-  "ХАТУУРУУЛАГЧ",
-  "ГИДРОКСИД",
-  "ЦАГААН ТОС",
+const WAREHOUSE_MATERIAL_LIMITS = [
+  { name: "АМИАКИЙН ШҮҮ", maximumStock: 500_000 },
+  { name: "ЦУУНЫ ХҮЧИЛ", maximumStock: 2_000 },
+  { name: "ХҮХРИЙН ХҮЧИЛ", maximumStock: 100 },
+  { name: "ШИЛЭН БӨМБӨЛӨГ", maximumStock: 8_000 },
+  { name: "ТҮЛШ", maximumStock: 800_000 },
+  { name: "НИТРИТ НАТРИ", maximumStock: 7_000 },
+  { name: "ЭМУЛЬГАТОР", maximumStock: 100_000 },
+  { name: "ХАТУУРУУЛАГЧ", maximumStock: 300_000 },
+  { name: "ГИДРОКСИД", maximumStock: 200 },
+  { name: "ЦАГААН ТОС", maximumStock: 400_000 },
 ];
+const WAREHOUSE_MATERIALS = WAREHOUSE_MATERIAL_LIMITS.map((material) => material.name);
 
 const materialSchema = z.object({
   name: z.string().trim().min(1).max(160),
@@ -38,21 +39,43 @@ export async function GET() {
     select: { name: true },
   });
   const existingNames = new Set(existingWarehouseMaterials.map((material) => material.name));
-  const missingNames = WAREHOUSE_MATERIALS.filter((name) => !existingNames.has(name));
+  const missingMaterials = WAREHOUSE_MATERIAL_LIMITS.filter((material) => !existingNames.has(material.name));
 
-  if (missingNames.length > 0) {
+  if (missingMaterials.length > 0) {
     await prisma.material.createMany({
-      data: missingNames.map((name) => ({
-        name,
+      data: missingMaterials.map((material) => ({
+        name: material.name,
         category: "Агуулах",
         unit: "КГ",
         currentStock: 0,
         minimumStock: 0,
-        maximumStock: 0,
+        maximumStock: material.maximumStock,
         location: "Агуулах",
       })),
     });
   }
+
+  await Promise.all(
+    WAREHOUSE_MATERIAL_LIMITS.map((material) =>
+      prisma.material.updateMany({
+        where: {
+          name: material.name,
+          OR: [
+            { category: { not: "Агуулах" } },
+            { unit: { not: "КГ" } },
+            { maximumStock: { not: material.maximumStock } },
+            { location: { not: "Агуулах" } },
+          ],
+        },
+        data: {
+          category: "Агуулах",
+          unit: "КГ",
+          maximumStock: material.maximumStock,
+          location: "Агуулах",
+        },
+      })
+    )
+  );
 
   const materials = await prisma.material.findMany({
     select: {
