@@ -1919,6 +1919,10 @@ body.theme-light .empty-row td {
 
   .main {
     margin-left: 64px;
+    width: calc(100vw - 64px);
+    max-width: calc(100vw - 64px);
+    min-width: 0;
+    overflow-x: hidden;
   }
 
   .sidebar-mobile-toggle {
@@ -2003,8 +2007,112 @@ body.theme-light .empty-row td {
   .topbar,
   .dept-switcher,
   .content {
-    padding-left: 16px;
-    padding-right: 16px;
+    padding-left: 10px;
+    padding-right: 10px;
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  .content {
+    padding-top: 14px;
+    overflow-x: hidden;
+  }
+
+  .panel,
+  .pn,
+  .wh-bottom-grid,
+  .wh-main-grid,
+  .g2,
+  .g3,
+  .kg,
+  .kpi-grid {
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  .panel-hdr,
+  .ph {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+    padding: 14px 14px 0;
+  }
+
+  .panel-hdr > *,
+  .ph > * {
+    min-width: 0;
+  }
+
+  .panel-hdr > div:last-child,
+  .ph > div:last-child {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .panel-hdr input[type="text"],
+  .panel-hdr .add-btn,
+  .ph input[type="text"],
+  .ph .add-btn {
+    flex: 1 1 130px;
+    min-width: 0;
+  }
+
+  .panel > div:has(> table),
+  .panel > div:has(> .safety-table),
+  .tw {
+    max-width: 100%;
+    overflow-x: auto !important;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .safety-table,
+  .tw table {
+    min-width: 680px;
+  }
+
+  .department-warehouse .wh-table {
+    min-width: 760px;
+  }
+
+  .department-production .wh-table {
+    min-width: 820px;
+  }
+
+  .department-safety .safety-table,
+  .department-logistics .safety-table {
+    min-width: 720px;
+  }
+
+  .safety-table th,
+  .tw th {
+    padding: 10px 12px;
+    letter-spacing: 0.12em;
+  }
+
+  .safety-table td,
+  .tw td {
+    padding: 11px 12px;
+  }
+
+  .mc {
+    width: min(100%, calc(100vw - 84px)) !important;
+    max-width: calc(100vw - 84px) !important;
+    max-height: calc(100dvh - 24px);
+    padding: 16px;
+    overflow-x: hidden;
+  }
+
+  .mc [style*="grid-template-columns"] {
+    grid-template-columns: 1fr !important;
+  }
+
+  .mc table {
+    min-width: 640px;
+  }
+
+  .mc div:has(> table) {
+    overflow-x: auto !important;
+    -webkit-overflow-scrolling: touch;
   }
 
   .topbar {
