@@ -104,10 +104,6 @@ export default function LoginPage() {
                 />
               </label>
 
-              <div className="login-form__meta">
-                <Link href="/register">Бүртгэл үүсгэх</Link>
-              </div>
-
               {loginErr ? <p className="login-form__error">{loginErr}</p> : null}
 
               <button type="submit" className="login-form__submit" disabled={loginLoading}>

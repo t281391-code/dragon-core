@@ -3,7 +3,7 @@ import type { NextRequest } from "next/server";
 import { getJwtSecret } from "@/lib/env";
 import { blockedResponse, inspectRequest } from "@/lib/security/edge";
 
-const PUBLIC_PATHS = ["/", "/login", "/register"];
+const PUBLIC_PATHS = ["/", "/login"];
 const API_PUBLIC_PATHS = ["/api/auth/login", "/api/auth/register"];
 const STATIC_EXT = /\.(glb|gltf|fbx|obj|png|jpg|jpeg|webp|svg|ico|woff2?|ttf|otf|mp4|mp3|pdf)$/i;
 
@@ -104,6 +104,10 @@ export async function proxy(request: NextRequest) {
   if (blockReason) return blockedResponse(blockReason);
 
   const verifiedSession = await getVerifiedSession(request);
+
+  if (pathname === "/register") {
+    return NextResponse.redirect(new URL("/login", request.url));
+  }
 
   if (PUBLIC_PATHS.includes(pathname)) return nextWithSessionHeaders(request, verifiedSession);
   if (STATIC_EXT.test(pathname)) return nextWithSessionHeaders(request, verifiedSession);
