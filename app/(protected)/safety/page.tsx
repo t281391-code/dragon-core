@@ -25,6 +25,7 @@ import { DeptTopbar } from "@/components/DeptTopbar";
 import { KpiCard } from "@/components/KpiCard";
 import { ChartHint, RealtimeBadge, REALTIME_REFRESH_MS } from "@/components/RealtimeBadge";
 import { useEscapeClose } from "@/hooks/useEscapeClose";
+import { printReport } from "@/lib/reportPrint";
 
 type SafetyIncident = {
   id: string;
@@ -847,7 +848,7 @@ export default function SafetyPage() {
           aria-labelledby="safety-report-title"
           onClick={(event) => event.target === event.currentTarget && setReportModal(false)}
         >
-          <div className="mc" style={{ maxWidth: 1080, width: "100%", padding: 0 }} onClick={(event) => event.stopPropagation()}>
+          <div className="mc report-print-root" style={{ maxWidth: 1080, width: "100%", padding: 0 }} onClick={(event) => event.stopPropagation()}>
             <div className="mh" style={{ marginBottom: 0, padding: "22px 24px 0", flexWrap: "wrap" }}>
               <div>
                 <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
@@ -865,7 +866,10 @@ export default function SafetyPage() {
                   Сүүлийн sync: {formatDateTime(lastUpdated)}
                 </div>
               </div>
-              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <div className="report-print-actions" style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <button className="btn bp" type="button" onClick={printReport}>
+                  PDF татах
+                </button>
                 <button
                   className="btn bo2"
                   type="button"
@@ -876,7 +880,7 @@ export default function SafetyPage() {
                 >
                   Шинэчлэх
                 </button>
-                <button className="mx" type="button" aria-label="Тайлан хаах" onClick={() => setReportModal(false)}>×</button>
+                <button className="mx print-hidden" type="button" aria-label="Тайлан хаах" onClick={() => setReportModal(false)}>×</button>
               </div>
             </div>
 

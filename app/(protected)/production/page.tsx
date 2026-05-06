@@ -22,6 +22,7 @@ import { useAuth } from "@/components/AuthProvider";
 import { DeptTopbar } from "@/components/DeptTopbar";
 import { KpiCard } from "@/components/KpiCard";
 import { ChartHint, RealtimeBadge, REALTIME_REFRESH_MS } from "@/components/RealtimeBadge";
+import { printReport } from "@/lib/reportPrint";
 
 type ProductionLog = {
   id: string;
@@ -1082,7 +1083,7 @@ export default function ProductionPage() {
                 {[
                   {icon:"📄",label:"Тайлан",color:"#3B82F6",onClick:openReportModal},
                   {icon:"📊",label:"Excel",color:"#10B981"},
-                  {icon:"📋",label:"PDF",color:"#EF4444"},
+                  {icon:"📋",label:"PDF",color:"#EF4444",onClick:openReportModal},
                   {icon:"🔄",label:"Шинэчлэх",color:"#F59E0B",onClick:()=>{ void mutateLogs(); void mutateMaterials(); }},
                 ].map(a=>(
                   <button key={a.label} type="button" onClick={a.onClick}
@@ -1149,7 +1150,7 @@ export default function ProductionPage() {
           aria-labelledby="production-report-title"
           onClick={(e) => e.target === e.currentTarget && setReportModal(false)}
         >
-          <div className="mc" style={{ maxWidth: 1080, width: "100%", padding: 0 }} onClick={(e) => e.stopPropagation()}>
+          <div className="mc report-print-root" style={{ maxWidth: 1080, width: "100%", padding: 0 }} onClick={(e) => e.stopPropagation()}>
             <div className="mh" style={{ marginBottom: 0, padding: "22px 24px 0", flexWrap: "wrap" }}>
               <div>
                 <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
@@ -1167,7 +1168,10 @@ export default function ProductionPage() {
                   Сүүлийн sync: {formatDateTime(lastUpdated)}
                 </div>
               </div>
-              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <div className="report-print-actions" style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <button className="btn bp" type="button" onClick={printReport}>
+                  PDF татах
+                </button>
                 <button
                   className="btn bo2"
                   type="button"
@@ -1179,7 +1183,7 @@ export default function ProductionPage() {
                 >
                   Шинэчлэх
                 </button>
-                <button className="mx" type="button" aria-label="Тайлан хаах" onClick={() => setReportModal(false)}>×</button>
+                <button className="mx print-hidden" type="button" aria-label="Тайлан хаах" onClick={() => setReportModal(false)}>×</button>
               </div>
             </div>
 

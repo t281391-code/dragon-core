@@ -26,6 +26,7 @@ import { KpiCard } from "@/components/KpiCard";
 import { ChartHint, RealtimeBadge, REALTIME_REFRESH_MS } from "@/components/RealtimeBadge";
 import TransportMap from "@/components/TransportMap";
 import { useEscapeClose } from "@/hooks/useEscapeClose";
+import { printReport } from "@/lib/reportPrint";
 
 type Transport = {
   id: string;
@@ -49,6 +50,7 @@ type TransportDraft = {
 const ACCENT = "#3B82F6";
 const DEST_COLORS = ["#3B82F6", "#F59E0B", "#10B981", "#EF4444", "#8B5CF6"];
 const PAGE_SIZE = 20;
+const REPORT_DAYS = 14;
 
 const fetcher = (url: string) => fetch(url).then(r => r.json());
 
@@ -81,6 +83,21 @@ function formatMnDate(dateKey: string) {
     year: "numeric",
     month: "long",
     day: "numeric",
+  });
+}
+
+function formatShortDate(date: Date) {
+  return date.toLocaleDateString("mn-MN", { month: "short", day: "numeric" });
+}
+
+function formatDateTime(date: Date | null) {
+  if (!date) return "—";
+  return date.toLocaleString("mn-MN", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
   });
 }
 
@@ -209,6 +226,8 @@ export default function LogisticsPage() {
   const [calendarError, setCalendarError] = useState("");
   const [tableError, setTableError] = useState("");
   const [calendarMonth, setCalendarMonth] = useState(() => monthStart(toDateKey(new Date())));
+  const [reportModal, setReportModal] = useState(false);
+  const [reportClock, setReportClock] = useState<Date | null>(null);
   const [modal, setModal] = useState(false);
   const [materialName, setMaterialName] = useState("");
   const [materialUnit, setMaterialUnit] = useState("кг");
@@ -232,9 +251,14 @@ export default function LogisticsPage() {
   const transports: Transport[] = useMemo(() => transportsData?.data ?? [], [transportsData]);
   const loading = transportsLoading;
 
-  useEscapeClose(Boolean(calendarPopupDate || modal), () => {
+  useEscapeClose(Boolean(calendarPopupDate || reportModal || modal), () => {
     if (calendarPopupDate) {
       setCalendarPopupDate(null);
+      return;
+    }
+
+    if (reportModal) {
+      setReportModal(false);
       return;
     }
 
@@ -278,6 +302,11 @@ export default function LogisticsPage() {
   function updateTableSearch(nextSearch: string) {
     setTableSearch(nextSearch);
     setTablePage(0);
+  }
+
+  function openReportModal() {
+    setReportClock(new Date());
+    setReportModal(true);
   }
 
   function getTransportDraft(transport: Transport) {
@@ -431,6 +460,67 @@ export default function LogisticsPage() {
       .slice(0, 4)
       .map((t) => ({ msg: `Саатал: ${t.material.name} → ${t.destinationSite}` }));
   }, [transports]);
+
+  const reportNow = useMemo(() => reportClock ?? lastUpdated ?? new Date(), [lastUpdated, reportClock]);
+  const reportStart = useMemo(() => {
+    const start = new Date(reportNow);
+    start.setDate(start.getDate() - (REPORT_DAYS - 1));
+    start.setHours(0, 0, 0, 0);
+    return start;
+  }, [reportNow]);
+  const reportNowTime = reportNow.getTime();
+  const reportStartTime = reportStart.getTime();
+  const reportTransports = useMemo(
+    () => transports.filter((transport) => {
+      const time = new Date(transport.transportDate).getTime();
+      return time >= reportStartTime && time <= reportNowTime;
+    }),
+    [reportNowTime, reportStartTime, transports]
+  );
+  const reportDelivered = reportTransports.filter((transport) => transport.status === "delivered").length;
+  const reportInTransit = reportTransports.filter((transport) => transport.status === "in_transit").length;
+  const reportPending = reportTransports.filter((transport) => transport.status === "pending").length;
+  const reportCancelled = reportTransports.filter((transport) => transport.status === "cancelled").length;
+  const reportDeliveredPct = reportTransports.length > 0 ? Math.round((reportDelivered / reportTransports.length) * 100) : 0;
+  const reportDelayed = reportTransports.filter((transport) => (
+    (transport.status === "pending" || transport.status === "in_transit") &&
+    transport.deliveryDate &&
+    new Date(transport.deliveryDate) < reportNow
+  )).length;
+  const reportQuantitySummary = useMemo(() => {
+    const byUnit = new Map<string, number>();
+    for (const transport of reportTransports) {
+      byUnit.set(transport.material.unit, (byUnit.get(transport.material.unit) ?? 0) + transport.quantity);
+    }
+    return [...byUnit.entries()]
+      .map(([unit, total]) => `${total.toLocaleString("mn-MN")} ${unit}`)
+      .join(" · ") || "0";
+  }, [reportTransports]);
+  const reportDestinationRows = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const transport of reportTransports) map.set(transport.destinationSite, (map.get(transport.destinationSite) ?? 0) + 1);
+    return [...map.entries()].sort((a, b) => b[1] - a[1]).slice(0, 8);
+  }, [reportTransports]);
+  const reportMaterialRows = useMemo(() => {
+    const map = new Map<string, { quantity: number; count: number; unit: string }>();
+    for (const transport of reportTransports) {
+      const current = map.get(transport.material.name) ?? { quantity: 0, count: 0, unit: transport.material.unit };
+      current.quantity += transport.quantity;
+      current.count += 1;
+      map.set(transport.material.name, current);
+    }
+    return [...map.entries()].sort((a, b) => b[1].quantity - a[1].quantity).slice(0, 10);
+  }, [reportTransports]);
+  const reportLatestTransports = useMemo(
+    () => [...reportTransports].sort((a, b) => new Date(b.transportDate).getTime() - new Date(a.transportDate).getTime()).slice(0, 20),
+    [reportTransports]
+  );
+  const reportTopDestination = reportDestinationRows[0] ?? null;
+  const reportHealth = reportDelayed > 0
+    ? { label: "Анхаарах", color: "#EF4444" }
+    : reportInTransit > 0 || reportPending > 0
+      ? { label: "Идэвхтэй", color: "#F59E0B" }
+      : { label: "Тогтвортой", color: "#10B981" };
 
   const todayKey = toDateKey(new Date());
   const calendarCells = useMemo(() => buildCalendarCells(calendarMonth, transports), [calendarMonth, transports]);
@@ -876,7 +966,7 @@ export default function LogisticsPage() {
               <div style={{ padding: "4px 20px 16px", display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
                 {[
                   { icon: "🚛", label: "Transport нэмэх" },
-                  { icon: "📋", label: "Тайлан гаргах" },
+                  { icon: "📋", label: "Тайлан гаргах", onClick: openReportModal },
                   { icon: "🗺️", label: "Маршрут харах" },
                   { icon: "🔄", label: "Шинэчлэх", onClick: () => { void mutateTransports(); } },
                 ].map((a) => (
@@ -907,6 +997,185 @@ export default function LogisticsPage() {
           </div>
         </div>
       </div>
+
+      {reportModal ? (
+        <div
+          className="mo open"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="logistics-report-title"
+          onClick={(event) => event.target === event.currentTarget && setReportModal(false)}
+        >
+          <div className="mc report-print-root" style={{ maxWidth: 1080, width: "100%", padding: 0 }} onClick={(event) => event.stopPropagation()}>
+            <div className="mh" style={{ marginBottom: 0, padding: "22px 24px 0", flexWrap: "wrap" }}>
+              <div>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+                  <span style={{ width: 8, height: 8, borderRadius: "50%", background: ACCENT, boxShadow: "0 0 0 4px rgba(59,130,246,0.12)" }} />
+                  <span style={{ color: ACCENT, fontSize: 11, fontWeight: 800, letterSpacing: 0 }}>
+                    14 хоногийн тайлан шинэчлэгдэж байна
+                  </span>
+                </div>
+                <h3 id="logistics-report-title" style={{ marginBottom: 6 }}>Тээвэрлэлтийн 14 хоногийн тайлан</h3>
+                <div style={{ color: "var(--muted)", fontSize: 12 }}>
+                  Хугацаа: <strong style={{ color: "var(--text)" }}>{formatShortDate(reportStart)} - {formatShortDate(reportNow)}</strong>
+                  <span style={{ margin: "0 8px", opacity: 0.45 }}>|</span>
+                  Бэлтгэсэн: {formatDateTime(reportNow)}
+                  <span style={{ margin: "0 8px", opacity: 0.45 }}>|</span>
+                  Сүүлийн sync: {formatDateTime(lastUpdated)}
+                </div>
+              </div>
+              <div className="report-print-actions" style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <button className="btn bp" type="button" onClick={printReport}>
+                  PDF татах
+                </button>
+                <button
+                  className="btn bo2"
+                  type="button"
+                  onClick={() => {
+                    setReportClock(new Date());
+                    void mutateTransports();
+                  }}
+                >
+                  Шинэчлэх
+                </button>
+                <button className="mx print-hidden" type="button" aria-label="Тайлан хаах" onClick={() => setReportModal(false)}>×</button>
+              </div>
+            </div>
+
+            <div style={{ padding: "20px 24px 24px", display: "flex", flexDirection: "column", gap: 16 }}>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 160px), 1fr))", gap: 10 }}>
+                {[
+                  { label: "Тайлангийн хугацаа", value: `${REPORT_DAYS} хоног`, sub: `${formatShortDate(reportStart)} - ${formatShortDate(reportNow)}`, color: "#3B82F6" },
+                  { label: "Нийт тээвэр", value: `${reportTransports.length}`, sub: "Энэ хугацаанд", color: ACCENT },
+                  { label: "Нийт ачаа", value: reportQuantitySummary, sub: `${reportMaterialRows.length} материал`, color: "#10B981" },
+                  { label: "Хүргэлт дууссан", value: `${reportDelivered}`, sub: `${reportDeliveredPct}% дууссан`, color: "#10B981" },
+                  { label: "Идэвхтэй/хүлээгдэж", value: `${reportInTransit + reportPending}`, sub: `Явж буй ${reportInTransit} | Хүлээгдэж ${reportPending}`, color: "#F59E0B" },
+                  { label: "Төлөв", value: reportHealth.label, sub: `Саатал ${reportDelayed} | Цуцлагдсан ${reportCancelled}`, color: reportHealth.color },
+                ].map((card) => (
+                  <div key={card.label} style={{ padding: "14px 16px", borderRadius: 14, border: "1px solid var(--border)", background: `${card.color}0d` }}>
+                    <div style={{ color: "var(--muted)", fontSize: 11, fontWeight: 700, marginBottom: 8 }}>{card.label}</div>
+                    <div style={{ color: card.color, fontSize: 20, fontWeight: 850, lineHeight: 1.15, overflowWrap: "anywhere" }}>{card.value}</div>
+                    <div style={{ color: "var(--muted)", fontSize: 11, marginTop: 6 }}>{card.sub}</div>
+                  </div>
+                ))}
+              </div>
+
+              <div className="panel" style={{ padding: 18, margin: 0 }}>
+                <div className="panel-title" style={{ marginBottom: 10 }}>Тайлангийн дүгнэлт</div>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 180px), 1fr))", gap: 10 }}>
+                  {[
+                    { label: "Хүргэлтийн хувь", value: `${reportDeliveredPct}%`, sub: `${reportDelivered}/${reportTransports.length} тээвэр дууссан` },
+                    { label: "Топ чиглэл", value: reportTopDestination ? reportTopDestination[0] : "Байхгүй", sub: reportTopDestination ? `${reportTopDestination[1]} рейс` : "Тээвэр бүртгэгдээгүй" },
+                    { label: "Материалын төрөл", value: `${reportMaterialRows.length}`, sub: "Тээвэрлэгдсэн материал" },
+                    { label: "Анхаарах тээвэр", value: `${reportDelayed}`, sub: reportDelayed > 0 ? "Хугацаа хэтэрсэн" : "Идэвхтэй саатал байхгүй" },
+                  ].map((item) => (
+                    <div key={item.label} style={{ border: "1px solid var(--border)", borderRadius: 12, padding: "12px 14px", background: "rgba(255,255,255,0.025)" }}>
+                      <div style={{ color: "var(--muted)", fontSize: 11, fontWeight: 700, marginBottom: 6 }}>{item.label}</div>
+                      <div style={{ color: "var(--text)", fontSize: 15, fontWeight: 850, lineHeight: 1.25, overflowWrap: "anywhere" }}>{item.value}</div>
+                      <div style={{ color: "var(--muted)", fontSize: 11, marginTop: 5 }}>{item.sub}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 320px), 1fr))", gap: 16 }}>
+                <div className="panel" style={{ padding: 18, margin: 0 }}>
+                  <div className="panel-title" style={{ marginBottom: 12 }}>Чиглэлийн задаргаа</div>
+                  <div style={{ maxHeight: 280, overflow: "auto" }}>
+                    <table className="safety-table wh-table">
+                      <thead>
+                        <tr>
+                          <th>Очих газар</th>
+                          <th>Рейс</th>
+                          <th>Хувь</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {reportDestinationRows.length === 0 ? (
+                          <tr><td colSpan={3} style={{ padding: 18, color: "var(--muted)", textAlign: "center" }}>Чиглэлийн мэдээлэл байхгүй</td></tr>
+                        ) : reportDestinationRows.map(([destination, count]) => {
+                          const share = reportTransports.length > 0 ? Math.round((count / reportTransports.length) * 100) : 0;
+                          return (
+                            <tr key={destination}>
+                              <td><strong>{destination}</strong></td>
+                              <td style={{ color: ACCENT, fontWeight: 800 }}>{count}</td>
+                              <td>{share}%</td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+
+                <div className="panel" style={{ padding: 18, margin: 0 }}>
+                  <div className="panel-title" style={{ marginBottom: 12 }}>Материалын задаргаа</div>
+                  <div style={{ maxHeight: 280, overflow: "auto" }}>
+                    <table className="safety-table wh-table">
+                      <thead>
+                        <tr>
+                          <th>Материал</th>
+                          <th>Хэмжээ</th>
+                          <th>Рейс</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {reportMaterialRows.length === 0 ? (
+                          <tr><td colSpan={3} style={{ padding: 18, color: "var(--muted)", textAlign: "center" }}>Материалын мэдээлэл байхгүй</td></tr>
+                        ) : reportMaterialRows.map(([material, row]) => (
+                          <tr key={material}>
+                            <td><strong>{material}</strong></td>
+                            <td style={{ color: "#10B981", fontWeight: 800 }}>{row.quantity.toLocaleString("mn-MN")} {row.unit}</td>
+                            <td>{row.count}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+
+              <div className="panel" style={{ padding: 18, margin: 0 }}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, marginBottom: 12, flexWrap: "wrap" }}>
+                  <div>
+                    <div className="panel-title">14 хоногийн тээврийн бүртгэл</div>
+                    <div className="panel-sub" style={{ marginTop: 4 }}>Сүүлийн 20 тээврийг огноогоор бууруулж харуулна.</div>
+                  </div>
+                  <span style={{ color: "var(--muted)", fontSize: 11 }}>{reportTransports.length} нийт тээвэр</span>
+                </div>
+                <div style={{ maxHeight: 340, overflow: "auto" }}>
+                  <table className="safety-table wh-table">
+                    <thead>
+                      <tr>
+                        <th>Огноо</th>
+                        <th>Материал</th>
+                        <th>Хэмжээ</th>
+                        <th>Очих газар</th>
+                        <th>Статус</th>
+                        <th>Жолооч</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {reportLatestTransports.length === 0 ? (
+                        <tr><td colSpan={6} style={{ padding: 18, color: "var(--muted)", textAlign: "center" }}>Энэ хугацаанд тээвэр бүртгэгдээгүй байна</td></tr>
+                      ) : reportLatestTransports.map((transport) => (
+                        <tr key={transport.id}>
+                          <td style={{ whiteSpace: "nowrap", color: "var(--muted)", fontSize: 11 }}>{transport.transportDate.slice(0, 10)}</td>
+                          <td><strong>{transport.material.name}</strong></td>
+                          <td style={{ color: ACCENT, fontWeight: 800 }}>{transport.quantity.toLocaleString("mn-MN")} {transport.material.unit}</td>
+                          <td>{transport.destinationSite}</td>
+                          <td><span className={`bg ${STATUS_BADGES[transport.status] ?? "bg-gr"}`}>{STATUS_LABELS[transport.status] ?? transport.status}</span></td>
+                          <td style={{ color: "var(--muted)", whiteSpace: "nowrap" }}>{transportDriverName(transport)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       {calendarPopupDate ? (
         <div className="mo open" onClick={(event) => event.target === event.currentTarget && setCalendarPopupDate(null)}>
