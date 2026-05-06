@@ -143,7 +143,7 @@ export function AiAgentWidget() {
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
       role: "assistant",
-      content: "Sain baina. Project deer yu hiilgeh ve? Write/delete action deer confirm code asuuna.",
+      content: "Sain baina. Project deer yu hiilgeh ve? Erh hureh action-uudiig shuud hiine.",
     },
   ]);
   const [input, setInput] = useState("");

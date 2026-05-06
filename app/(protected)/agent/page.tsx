@@ -118,7 +118,7 @@ export default function AgentPage() {
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
       role: "assistant",
-      content: "Sain baina. Bi Dragon City KPI data-g unshij tailbarlana. Warehouse/production deer bichih esvel ustgah action hiih bol zaaval confirm code asuuna.",
+      content: "Sain baina. Bi Dragon City KPI data-g unshij tailbarlana. Erh hureh action-uudiig shuud hiine.",
     },
   ]);
   const [input, setInput] = useState("");

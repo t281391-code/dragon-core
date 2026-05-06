@@ -1,9 +1,8 @@
 import { NextResponse } from "next/server";
 import type { Prisma } from "@prisma/client";
-import { createHmac } from "node:crypto";
 import { z } from "zod";
 import { getRequestUser, type AuthUser } from "@/lib/auth";
-import { getJwtSecret, getOpenAiApiKey } from "@/lib/env";
+import { getOpenAiApiKey } from "@/lib/env";
 import { prisma } from "@/lib/prisma";
 import { checkRateLimit, safeInternalError } from "@/lib/security/api";
 import type { DepartmentName } from "@/lib/permissions";
@@ -41,7 +40,7 @@ type OpenAIResponse = {
   output_text?: string;
   error?: { message?: string };
 };
-type ToolActionType = "READ" | "CREATE" | "DELETE" | "CONFIRMATION_REQUIRED";
+type ToolActionType = "READ" | "CREATE" | "DELETE";
 type ToolRunResult = {
   result: unknown;
   actionType: ToolActionType;
@@ -50,12 +49,6 @@ type ToolRunResult = {
 const OPENAI_MODEL = process.env.OPENAI_MODEL ?? "gpt-5.5";
 const APP_TIME_ZONE = process.env.APP_TIME_ZONE ?? "Asia/Ulaanbaatar";
 const MAX_CHAT_MESSAGES = 12;
-const MUTATING_TOOLS = new Set<ToolName>([
-  "add_material_transaction",
-  "add_production_log",
-  "delete_material_transaction",
-  "delete_production_log",
-]);
 const dashboardScopeSchema = z.enum(["all", "warehouse", "production", "safety", "logistics"]);
 const toolDateInput = z.string().trim().max(64).refine((value) => value === "" || /^\d{4}-\d{2}-\d{2}$/.test(value), "Invalid date");
 const chatBodySchema = z.object({
@@ -310,106 +303,14 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
 
-function stableStringify(value: unknown): string {
-  if (!isRecord(value)) {
-    if (Array.isArray(value)) return `[${value.map(stableStringify).join(",")}]`;
-    return JSON.stringify(value);
-  }
-
-  return `{${Object.keys(value)
-    .sort()
-    .map((key) => `${JSON.stringify(key)}:${stableStringify(value[key])}`)
-    .join(",")}}`;
-}
-
 function actionTypeForTool(toolName: ToolName): ToolActionType {
   if (toolName.startsWith("delete_")) return "DELETE";
   if (toolName.startsWith("add_")) return "CREATE";
   return "READ";
 }
 
-function confirmationCode(user: AuthUser, toolName: ToolName, args: unknown) {
-  return createHmac("sha256", getJwtSecret())
-    .update(user.id)
-    .update("|")
-    .update(toolName)
-    .update("|")
-    .update(stableStringify(args))
-    .digest("hex")
-    .slice(0, 8)
-    .toUpperCase();
-}
-
-function latestUserMessage(messages: ChatMessage[]) {
-  for (let index = messages.length - 1; index >= 0; index -= 1) {
-    if (messages[index].role === "user") return messages[index].content;
-  }
-  return "";
-}
-
-function priorAssistantHasCode(messages: ChatMessage[], code: string) {
-  return messages.slice(0, -1).some((message) => (
-    message.role === "assistant" && message.content.toUpperCase().includes(code)
-  ));
-}
-
-function hasConfirmationText(message: string, code: string) {
-  const normalized = normalizeText(message);
-  const hasCode = normalized.includes(code.toLowerCase());
-  const hasConfirmWord = /\b(confirm|confirmed|yes|ok|okay|tiim|zuv|zow|zuvshuur|zowshoor|batalgaajuul|batalgaaj)\b/.test(normalized);
-  return hasCode && hasConfirmWord;
-}
-
-function textArg(args: unknown, key: string) {
-  const value = isRecord(args) ? args[key] : "";
-  return typeof value === "string" ? value.trim() : "";
-}
-
-function numberArg(args: unknown, key: string) {
-  const value = isRecord(args) ? args[key] : 0;
-  return typeof value === "number" && Number.isFinite(value) ? value : 0;
-}
-
-function boolArg(args: unknown, key: string) {
-  const value = isRecord(args) ? args[key] : false;
-  return typeof value === "boolean" ? value : false;
-}
-
-function pendingActionSummary(toolName: ToolName, args: unknown) {
-  switch (toolName) {
-    case "add_material_transaction":
-      return `CREATE warehouse ${textArg(args, "type")} transaction: ${numberArg(args, "quantityKg")} kg ${textArg(args, "materialName")} on ${textArg(args, "date") || todayInZone()}.`;
-    case "add_production_log":
-      return `CREATE production log: ${numberArg(args, "quantityKg")} kg ${textArg(args, "productName") || "default product"} on ${textArg(args, "date") || todayInZone()}.`;
-    case "delete_material_transaction":
-      return `DELETE warehouse transaction(s): material=${textArg(args, "materialName") || "any"}, type=${textArg(args, "type") || "any"}, latest=${boolArg(args, "latest")}, limit=${numberArg(args, "limit")}.`;
-    case "delete_production_log":
-      return `DELETE production log(s): lot=${textArg(args, "lotNumber") || "any"}, product=${textArg(args, "productName") || "any"}, latest=${boolArg(args, "latest")}, limit=${numberArg(args, "limit")}.`;
-    default:
-      return `${toolName} action.`;
-  }
-}
-
-function requireActionConfirmation(user: AuthUser, toolName: ToolName, args: unknown, messages: ChatMessage[]) {
-  if (!MUTATING_TOOLS.has(toolName)) return null;
-
-  const code = confirmationCode(user, toolName, args);
-  const latest = latestUserMessage(messages);
-  if (priorAssistantHasCode(messages, code) && hasConfirmationText(latest, code)) return null;
-
-  return {
-    ok: false,
-    confirmationRequired: true,
-    confirmationCode: code,
-    requiredReply: `CONFIRM ${code}`,
-    actionSummary: pendingActionSummary(toolName, args),
-    warning: "This AI write/delete action was not executed yet.",
-  };
-}
-
 function toolResultSuccess(result: unknown) {
   if (!isRecord(result)) return true;
-  if (result.confirmationRequired === true) return false;
   if (typeof result.ok === "boolean") return result.ok;
   return true;
 }
@@ -514,7 +415,6 @@ async function callOpenAI(input: unknown[]) {
     "Never bypass role or department restrictions. If a tool returns Forbidden, explain that the current user has no permission.",
     "Use tool calls whenever the user asks about current stock, recent records, totals, or wants to add/update a production or warehouse record.",
     "Use delete tools only when the user explicitly asks to delete/remove/ustga/undo warehouse transactions or production logs. Do not delete users, materials, safety incidents, or logistics records.",
-    "For create/delete actions, the server requires confirmation. If a tool result has confirmationRequired=true, stop and ask the user to reply exactly with the requiredReply value before trying that same action again.",
     "Delete can target one or many records. If the user says suuliin 3/latest 3/last 3, set limit=3 and latest=true. If the user says bugdiig/all matching, set limit=0. If the user gives an exact id, set limit=1.",
     "If a delete target is still ambiguous, show candidates and ask which one.",
     "For Mongolian romanized commands: orlogo/inbound/nemegdsen means IN; awsan/avsan/avch/used/zarlaga/hasah means OUT.",
@@ -960,7 +860,7 @@ async function deleteProductionLog(user: AuthUser, args: {
   };
 }
 
-async function runTool(user: AuthUser, call: FunctionCall, messages: ChatMessage[]): Promise<ToolRunResult> {
+async function runTool(user: AuthUser, call: FunctionCall): Promise<ToolRunResult> {
   switch (call.name) {
     case "get_project_summary":
       return {
@@ -983,8 +883,6 @@ async function runTool(user: AuthUser, call: FunctionCall, messages: ChatMessage
     }
     case "add_material_transaction": {
       const args = parseToolArgs(materialTransactionArgsSchema, call.arguments);
-      const pending = requireActionConfirmation(user, call.name, args, messages);
-      if (pending) return { actionType: "CONFIRMATION_REQUIRED", result: pending };
       return {
         actionType: actionTypeForTool(call.name),
         result: await addMaterialTransaction(user, args),
@@ -992,8 +890,6 @@ async function runTool(user: AuthUser, call: FunctionCall, messages: ChatMessage
     }
     case "add_production_log": {
       const args = parseToolArgs(productionLogArgsSchema, call.arguments);
-      const pending = requireActionConfirmation(user, call.name, args, messages);
-      if (pending) return { actionType: "CONFIRMATION_REQUIRED", result: pending };
       return {
         actionType: actionTypeForTool(call.name),
         result: await addProductionLog(user, args),
@@ -1001,8 +897,6 @@ async function runTool(user: AuthUser, call: FunctionCall, messages: ChatMessage
     }
     case "delete_material_transaction": {
       const args = parseToolArgs(deleteMaterialTransactionArgsSchema, call.arguments);
-      const pending = requireActionConfirmation(user, call.name, args, messages);
-      if (pending) return { actionType: "CONFIRMATION_REQUIRED", result: pending };
       return {
         actionType: actionTypeForTool(call.name),
         result: await deleteMaterialTransaction(user, args),
@@ -1010,8 +904,6 @@ async function runTool(user: AuthUser, call: FunctionCall, messages: ChatMessage
     }
     case "delete_production_log": {
       const args = parseToolArgs(deleteProductionLogArgsSchema, call.arguments);
-      const pending = requireActionConfirmation(user, call.name, args, messages);
-      if (pending) return { actionType: "CONFIRMATION_REQUIRED", result: pending };
       return {
         actionType: actionTypeForTool(call.name),
         result: await deleteProductionLog(user, args),
@@ -1054,7 +946,7 @@ export async function POST(request: Request) {
 
       const outputs = [];
       for (const call of calls) {
-        const { result, actionType } = await runTool(user, call, chatMessages);
+        const { result, actionType } = await runTool(user, call);
         await writeAiAuditLog(user, call.name, actionType, result);
         toolResults.push({ tool: call.name, result });
         outputs.push({
