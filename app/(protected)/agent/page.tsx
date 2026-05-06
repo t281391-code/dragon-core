@@ -20,6 +20,13 @@ type AgentResponse = {
   error?: string;
 };
 
+const SUGGESTED_PROMPTS = [
+  "Minii heltsees harah KPI summary gargaarai",
+  "Aguulahiin baga uldegdultei materialuudig haruul",
+  "Unuudriin uildverleliin tovch dugnelt gargaarai",
+  "Safety incident suuliin medeelel dugne",
+];
+
 const CYRILLIC_TO_LATIN: Record<string, string> = {
   "\u0430": "a",
   "\u0431": "b",
@@ -111,7 +118,7 @@ export default function AgentPage() {
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
       role: "assistant",
-      content: "Sain baina. Bi ene Dragon City KPI tusul deer ajilladag AI Agent. Nuuts, uildverlel, safety, teeveriin data unshij tailbarlana, erh baival burtgel nemne.",
+      content: "Sain baina. Bi Dragon City KPI data-g unshij tailbarlana. Warehouse/production deer bichih esvel ustgah action hiih bol zaaval confirm code asuuna.",
     },
   ]);
   const [input, setInput] = useState("");
@@ -184,6 +191,14 @@ export default function AgentPage() {
                 <div className="agent-msg__body">Ajillaj baina...</div>
               </div>
             ) : null}
+          </div>
+
+          <div className="agent-suggestions" aria-label="Suggested AI prompts">
+            {SUGGESTED_PROMPTS.map((prompt) => (
+              <button key={prompt} type="button" onClick={() => void sendMessage(prompt)} disabled={busy}>
+                {prompt}
+              </button>
+            ))}
           </div>
 
           <form className="agent-composer" onSubmit={submit}>

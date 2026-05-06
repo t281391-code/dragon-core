@@ -24,40 +24,41 @@ model Department {
 }
 
 model User {
-  id                   String                 @id @default(cuid())
+  id                   String                @id @default(cuid())
   fullName             String
-  email                String                 @unique
-  mrCode               String?                @unique
+  email                String                @unique
+  mrCode               String?               @unique
   passwordHash         String
   roleId               String
   departmentId         String
-  isActive             Boolean                @default(true)
-  createdAt            DateTime               @default(now())
-  updatedAt            DateTime               @updatedAt
-  role                 Role                   @relation(fields: [roleId], references: [id])
-  department           Department             @relation(fields: [departmentId], references: [id])
+  isActive             Boolean               @default(true)
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  role                 Role                  @relation(fields: [roleId], references: [id])
+  department           Department            @relation(fields: [departmentId], references: [id])
   productionLogs       ProductionLog[]
   reportedIncidents    SafetyIncident[]
   assignedTransports   Transport[]
   materialTransactions MaterialTransaction[]
+  aiAuditLogs          AiAgentAuditLog[]
 
   @@index([isActive, fullName])
 }
 
 model Material {
-  id               String               @id @default(cuid())
-  name             String
-  category         String
-  unit             String
-  currentStock     Float
-  minimumStock     Float
-  maximumStock     Float                @default(0)
-  location         String
-  transactions     MaterialTransaction[]
-  productionLogs   ProductionLog[]
-  transports       Transport[]
-  createdAt        DateTime             @default(now())
-  updatedAt        DateTime             @updatedAt
+  id             String                @id @default(cuid())
+  name           String
+  category       String
+  unit           String
+  currentStock   Float
+  minimumStock   Float
+  maximumStock   Float                 @default(0)
+  location       String
+  transactions   MaterialTransaction[]
+  productionLogs ProductionLog[]
+  transports     Transport[]
+  createdAt      DateTime              @default(now())
+  updatedAt      DateTime              @updatedAt
 
   @@index([name])
 }
@@ -65,7 +66,7 @@ model Material {
 model MaterialTransaction {
   id              String   @id @default(cuid())
   materialId      String
-  type            String   // "IN" or "OUT"
+  type            String // "IN" or "OUT"
   quantity        Float
   note            String?
   transactionDate DateTime @default(now())
@@ -149,4 +150,18 @@ model Transport {
   @@index([transportDate])
   @@index([status, transportDate])
   @@index([materialId, transportDate])
+}
+
+model AiAgentAuditLog {
+  id         String   @id @default(cuid())
+  userId     String
+  toolName   String
+  actionType String
+  success    Boolean  @default(false)
+  summary    String   @db.Text
+  createdAt  DateTime @default(now())
+  user       User     @relation(fields: [userId], references: [id])
+
+  @@index([userId, createdAt])
+  @@index([toolName, createdAt])
 }

@@ -536,7 +536,7 @@ input[type="date"] {
   background: linear-gradient(180deg, var(--panel) 0%, var(--base2) 100%);
   box-shadow: 0 24px 70px rgba(0, 0, 0, 0.34);
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr) auto;
+  grid-template-rows: auto minmax(0, 1fr) auto auto;
   overflow: hidden;
 }
 
@@ -619,6 +619,36 @@ input[type="date"] {
   font-size: 13px;
   line-height: 1.56;
   white-space: pre-wrap;
+}
+
+.topbar-ai-suggestions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 0 12px 12px;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.topbar-ai-suggestions button {
+  min-height: 28px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--base3);
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 800;
+  padding: 0 10px;
+}
+
+.topbar-ai-suggestions button:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--accent) 42%, transparent);
+  color: var(--accent);
+}
+
+.topbar-ai-suggestions button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
 }
 
 .topbar-ai-composer {
@@ -2589,7 +2619,7 @@ body.access-color-blind [style*="#f59e0b"] {
   border-radius: 16px;
   background: linear-gradient(180deg, #202b49 0%, #1b2540 100%);
   display: grid;
-  grid-template-rows: minmax(0, 1fr) auto;
+  grid-template-rows: minmax(0, 1fr) auto auto;
   overflow: hidden;
 }
 
@@ -2638,6 +2668,36 @@ body.theme-light .agent-chat {
   color: var(--text);
   font-size: 14px;
   line-height: 1.58;
+}
+
+.agent-suggestions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 0 14px 12px;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.agent-suggestions button {
+  min-height: 32px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--base3);
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 800;
+  padding: 0 12px;
+}
+
+.agent-suggestions button:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--accent) 42%, transparent);
+  color: var(--accent);
+}
+
+.agent-suggestions button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
 }
 
 .agent-composer {

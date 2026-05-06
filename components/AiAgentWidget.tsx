@@ -23,6 +23,12 @@ type AgentResponse = {
   toolResults?: { tool?: string; result?: unknown }[];
 };
 
+const SUGGESTED_PROMPTS = [
+  "Minii heltsees KPI summary",
+  "Baga uldegdultei material",
+  "Unuudriin uildverlel",
+];
+
 const WAREHOUSE_WRITE_TOOLS = new Set(["add_material_transaction", "delete_material_transaction"]);
 const PRODUCTION_WRITE_TOOLS = new Set(["add_production_log", "delete_production_log"]);
 
@@ -137,7 +143,7 @@ export function AiAgentWidget() {
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
       role: "assistant",
-      content: "Sain baina. Project deer yu hiilgeh ve?",
+      content: "Sain baina. Project deer yu hiilgeh ve? Write/delete action deer confirm code asuuna.",
     },
   ]);
   const [input, setInput] = useState("");
@@ -229,6 +235,14 @@ export function AiAgentWidget() {
                 <div className="topbar-ai-msg__body">Ajillaj baina...</div>
               </div>
             ) : null}
+          </div>
+
+          <div className="topbar-ai-suggestions" aria-label="Suggested AI prompts">
+            {SUGGESTED_PROMPTS.map((prompt) => (
+              <button key={prompt} type="button" onClick={() => void sendMessage(prompt)} disabled={busy}>
+                {prompt}
+              </button>
+            ))}
           </div>
 
           <form className="topbar-ai-composer" onSubmit={submit}>
