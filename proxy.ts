@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
+import { getJwtSecret } from "@/lib/env";
 import { blockedResponse, inspectRequest } from "@/lib/security/edge";
 
 const PUBLIC_PATHS = ["/", "/login", "/register"];
@@ -17,7 +18,7 @@ const DEPT_ROUTES = ["/warehouse", "/production", "/safety", "/logistics"];
 const AUTHENTICATED_ROUTES = ["/agent"];
 const ADMIN_ONLY_ROUTES = ["/users"];
 const DEFAULT_HOME = "/warehouse";
-const SESSION_SECRET = process.env.JWT_SECRET ?? "kpi-dashboard-dev-secret-change-in-prod";
+const SESSION_SECRET = getJwtSecret();
 
 function homeFor(department: string) {
   return DEPT_HOME[department] ?? DEFAULT_HOME;

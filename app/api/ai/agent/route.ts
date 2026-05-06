@@ -2,13 +2,16 @@ import { NextResponse } from "next/server";
 import type { Prisma } from "@prisma/client";
 import { z } from "zod";
 import { getRequestUser, type AuthUser } from "@/lib/auth";
+import { getOpenAiApiKey } from "@/lib/env";
 import { prisma } from "@/lib/prisma";
-import { checkRateLimit } from "@/lib/security/api";
+import { checkRateLimit, safeInternalError } from "@/lib/security/api";
+import type { DepartmentName } from "@/lib/permissions";
 
 export const preferredRegion = "sin1";
 
 type ChatRole = "user" | "assistant";
 type ChatMessage = { role: ChatRole; content: string };
+type DashboardScope = "all" | "warehouse" | "production" | "safety" | "logistics";
 type ToolName =
   | "get_project_summary"
   | "get_materials"
@@ -41,11 +44,58 @@ type OpenAIResponse = {
 const OPENAI_MODEL = process.env.OPENAI_MODEL ?? "gpt-5.5";
 const APP_TIME_ZONE = process.env.APP_TIME_ZONE ?? "Asia/Ulaanbaatar";
 const MAX_CHAT_MESSAGES = 12;
+const dashboardScopeSchema = z.enum(["all", "warehouse", "production", "safety", "logistics"]);
+const toolDateInput = z.string().trim().max(64).refine((value) => value === "" || /^\d{4}-\d{2}-\d{2}$/.test(value), "Invalid date");
 const chatBodySchema = z.object({
   messages: z.array(z.object({
     role: z.enum(["user", "assistant"]),
     content: z.string().trim().min(1).max(2000),
   })).min(1).max(24),
+});
+const projectSummaryArgsSchema = z.object({
+  scope: dashboardScopeSchema,
+});
+const materialsArgsSchema = z.object({
+  query: z.string().trim().max(160),
+  limit: z.coerce.number().int().min(1).max(50),
+});
+const recentActivityArgsSchema = z.object({
+  scope: dashboardScopeSchema,
+  limit: z.coerce.number().int().min(1).max(20),
+});
+const materialTransactionArgsSchema = z.object({
+  materialName: z.string().trim().min(1).max(160),
+  type: z.enum(["IN", "OUT"]),
+  quantityKg: z.coerce.number().positive().max(1_000_000_000),
+  date: toolDateInput,
+  note: z.string().trim().max(300),
+});
+const productionLogArgsSchema = z.object({
+  productName: z.string().trim().max(160),
+  quantityKg: z.coerce.number().positive().max(1_000_000_000),
+  date: toolDateInput,
+  materialName: z.string().trim().max(160),
+  note: z.string().trim().max(300),
+});
+const deleteMaterialTransactionArgsSchema = z.object({
+  transactionId: z.string().trim().max(128),
+  materialName: z.string().trim().max(160),
+  type: z.enum(["IN", "OUT", "UNKNOWN"]),
+  quantityKg: z.coerce.number().min(0).max(1_000_000_000),
+  date: toolDateInput,
+  latest: z.boolean(),
+  limit: z.coerce.number().int().min(0).max(500),
+  reason: z.string().trim().max(300),
+});
+const deleteProductionLogArgsSchema = z.object({
+  logId: z.string().trim().max(128),
+  lotNumber: z.string().trim().max(80),
+  productName: z.string().trim().max(160),
+  quantityKg: z.coerce.number().min(0).max(1_000_000_000),
+  date: toolDateInput,
+  latest: z.boolean(),
+  limit: z.coerce.number().int().min(0).max(500),
+  reason: z.string().trim().max(300),
 });
 const PRODUCT_NAMES = [
   "ANDO-V 90MM",
@@ -55,6 +105,20 @@ const PRODUCT_NAMES = [
   "ANDO-EV 25MM",
   "ANDO-SPLIT 38MM",
 ] as const;
+
+const SCOPE_DEPARTMENT: Record<Exclude<DashboardScope, "all">, DepartmentName> = {
+  warehouse: "WAREHOUSE",
+  production: "PRODUCTION",
+  safety: "SAFETY",
+  logistics: "LOGISTICS",
+};
+
+const DEPARTMENT_SCOPE: Record<DepartmentName, Exclude<DashboardScope, "all">> = {
+  WAREHOUSE: "warehouse",
+  PRODUCTION: "production",
+  SAFETY: "safety",
+  LOGISTICS: "logistics",
+};
 
 const TOOLS = [
   {
@@ -269,6 +333,21 @@ function canEditProduction(user: AuthUser) {
   return user.role === "ADMIN" || (user.role === "MODERATOR" && user.department === "PRODUCTION");
 }
 
+function canReadDepartment(user: AuthUser, department: DepartmentName) {
+  return user.role === "ADMIN" || user.department === department;
+}
+
+function scopesForUser(user: AuthUser, requested: DashboardScope): Exclude<DashboardScope, "all">[] {
+  if (requested === "all") {
+    return user.role === "ADMIN"
+      ? ["warehouse", "production", "safety", "logistics"]
+      : [DEPARTMENT_SCOPE[user.department]];
+  }
+
+  const department = SCOPE_DEPARTMENT[requested];
+  return canReadDepartment(user, department) ? [requested] : [];
+}
+
 function extractText(response: OpenAIResponse) {
   if (response.output_text) return response.output_text;
   const texts: string[] = [];
@@ -282,11 +361,7 @@ function extractText(response: OpenAIResponse) {
 }
 
 async function callOpenAI(input: unknown[]) {
-  const apiKey = process.env.OPENAI_API_KEY;
-  if (!apiKey) throw new Error("OPENAI_API_KEY тохируулаагүй байна.");
-  if (apiKey.includes("your-openai-api-key")) {
-    throw new Error(".env дотор OPENAI_API_KEY placeholder байна. Жинхэнэ OpenAI API key тавина уу.");
-  }
+  const apiKey = getOpenAiApiKey();
 
   const instructions = [
     "You are Dragon City KPI Agent, a ChatGPT-like assistant that works only inside this project.",
@@ -323,8 +398,10 @@ async function callOpenAI(input: unknown[]) {
   return data;
 }
 
-function parseArgs<T>(raw: string): T {
-  return JSON.parse(raw) as T;
+function parseToolArgs<T>(schema: z.ZodType<T>, raw: string): T {
+  const parsed = schema.safeParse(JSON.parse(raw) as unknown);
+  if (!parsed.success) throw new Error("Invalid tool arguments.");
+  return parsed.data;
 }
 
 async function findMaterial(nameOrAlias: string) {
@@ -358,17 +435,27 @@ async function findMaterial(nameOrAlias: string) {
   }) ?? null;
 }
 
-async function getProjectSummary() {
+async function getProjectSummary(user: AuthUser, requestedScope: DashboardScope) {
+  const scopes = scopesForUser(user, requestedScope);
+  if (scopes.length === 0) return { ok: false, error: "Forbidden" };
+
+  const canReadWarehouse = scopes.includes("warehouse");
+  const canReadProduction = scopes.includes("production");
+  const canReadSafety = scopes.includes("safety");
+  const canReadLogistics = scopes.includes("logistics");
+
   const [materialCount, stockTotal, productionCount, productionTotal, incidentCount, transportCount] = await Promise.all([
-    prisma.material.count(),
-    prisma.material.aggregate({ _sum: { currentStock: true } }),
-    prisma.productionLog.count(),
-    prisma.productionLog.aggregate({ _sum: { outputQuantity: true } }),
-    prisma.safetyIncident.count(),
-    prisma.transport.count(),
+    canReadWarehouse ? prisma.material.count() : Promise.resolve(0),
+    canReadWarehouse ? prisma.material.aggregate({ _sum: { currentStock: true } }) : Promise.resolve({ _sum: { currentStock: 0 } }),
+    canReadProduction ? prisma.productionLog.count() : Promise.resolve(0),
+    canReadProduction ? prisma.productionLog.aggregate({ _sum: { outputQuantity: true } }) : Promise.resolve({ _sum: { outputQuantity: 0 } }),
+    canReadSafety ? prisma.safetyIncident.count() : Promise.resolve(0),
+    canReadLogistics ? prisma.transport.count() : Promise.resolve(0),
   ]);
 
   return {
+    scope: requestedScope,
+    visibleScopes: scopes,
     materials: materialCount,
     totalStock: stockTotal._sum.currentStock ?? 0,
     productionLogs: productionCount,
@@ -378,7 +465,9 @@ async function getProjectSummary() {
   };
 }
 
-async function getMaterials(query: string, limit: number) {
+async function getMaterials(user: AuthUser, query: string, limit: number) {
+  if (!canReadDepartment(user, "WAREHOUSE")) return { ok: false, error: "Forbidden" };
+
   const normalizedQuery = query.trim();
   return prisma.material.findMany({
     where: normalizedQuery ? { name: { contains: normalizedQuery } } : undefined,
@@ -396,11 +485,14 @@ async function getMaterials(query: string, limit: number) {
   });
 }
 
-async function getRecentActivity(scope: string, limit: number) {
+async function getRecentActivity(user: AuthUser, scope: DashboardScope, limit: number) {
+  const scopes = scopesForUser(user, scope);
+  if (scopes.length === 0) return { ok: false, error: "Forbidden" };
+
   const take = Math.min(Math.max(Math.round(limit || 10), 1), 20);
   const result: Record<string, unknown> = {};
 
-  if (scope === "all" || scope === "warehouse") {
+  if (scopes.includes("warehouse")) {
     result.materialTransactions = await prisma.materialTransaction.findMany({
       orderBy: { transactionDate: "desc" },
       take,
@@ -416,7 +508,7 @@ async function getRecentActivity(scope: string, limit: number) {
     });
   }
 
-  if (scope === "all" || scope === "production") {
+  if (scopes.includes("production")) {
     result.productionLogs = await prisma.productionLog.findMany({
       orderBy: { productionDate: "desc" },
       take,
@@ -432,7 +524,7 @@ async function getRecentActivity(scope: string, limit: number) {
     });
   }
 
-  if (scope === "all" || scope === "safety") {
+  if (scopes.includes("safety")) {
     result.safetyIncidents = await prisma.safetyIncident.findMany({
       orderBy: { incidentDate: "desc" },
       take,
@@ -440,7 +532,7 @@ async function getRecentActivity(scope: string, limit: number) {
     });
   }
 
-  if (scope === "all" || scope === "logistics") {
+  if (scopes.includes("logistics")) {
     result.transports = await prisma.transport.findMany({
       orderBy: { transportDate: "desc" },
       take,
@@ -724,47 +816,29 @@ async function deleteProductionLog(user: AuthUser, args: {
 async function runTool(user: AuthUser, call: FunctionCall) {
   switch (call.name) {
     case "get_project_summary":
-      return getProjectSummary();
+      return getProjectSummary(user, parseToolArgs(projectSummaryArgsSchema, call.arguments).scope);
     case "get_materials": {
-      const args = parseArgs<{ query: string; limit: number }>(call.arguments);
-      return getMaterials(args.query, args.limit);
+      const args = parseToolArgs(materialsArgsSchema, call.arguments);
+      return getMaterials(user, args.query, args.limit);
     }
     case "get_recent_activity": {
-      const args = parseArgs<{ scope: string; limit: number }>(call.arguments);
-      return getRecentActivity(args.scope, args.limit);
+      const args = parseToolArgs(recentActivityArgsSchema, call.arguments);
+      return getRecentActivity(user, args.scope, args.limit);
     }
     case "add_material_transaction": {
-      const args = parseArgs<{ materialName: string; type: "IN" | "OUT"; quantityKg: number; date: string; note: string }>(call.arguments);
+      const args = parseToolArgs(materialTransactionArgsSchema, call.arguments);
       return addMaterialTransaction(user, args);
     }
     case "add_production_log": {
-      const args = parseArgs<{ productName: string; quantityKg: number; date: string; materialName: string; note: string }>(call.arguments);
+      const args = parseToolArgs(productionLogArgsSchema, call.arguments);
       return addProductionLog(user, args);
     }
     case "delete_material_transaction": {
-      const args = parseArgs<{
-        transactionId: string;
-        materialName: string;
-        type: "IN" | "OUT" | "UNKNOWN";
-        quantityKg: number;
-        date: string;
-        latest: boolean;
-        limit: number;
-        reason: string;
-      }>(call.arguments);
+      const args = parseToolArgs(deleteMaterialTransactionArgsSchema, call.arguments);
       return deleteMaterialTransaction(user, args);
     }
     case "delete_production_log": {
-      const args = parseArgs<{
-        logId: string;
-        lotNumber: string;
-        productName: string;
-        quantityKg: number;
-        date: string;
-        latest: boolean;
-        limit: number;
-        reason: string;
-      }>(call.arguments);
+      const args = parseToolArgs(deleteProductionLogArgsSchema, call.arguments);
       return deleteProductionLog(user, args);
     }
   }
@@ -822,8 +896,6 @@ export async function POST(request: Request) {
       toolResults,
     });
   } catch (error) {
-    return NextResponse.json({
-      error: error instanceof Error ? error.message : "AI Agent failed.",
-    }, { status: 500 });
+    return safeInternalError(error, "AI Agent failed.");
   }
 }

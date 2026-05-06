@@ -1,8 +1,9 @@
 import { createHmac, timingSafeEqual } from "crypto";
 import { cookies } from "next/headers";
 import type { AuthUser } from "@/lib/auth";
+import { getJwtSecret } from "@/lib/env";
 
-const SECRET = process.env.JWT_SECRET ?? "kpi-dashboard-dev-secret-change-in-prod";
+const SECRET = getJwtSecret();
 const COOKIE = "session";
 const TTL = 7 * 24 * 3600; // 7 days
 

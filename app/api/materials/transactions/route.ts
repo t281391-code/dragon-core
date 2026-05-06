@@ -3,7 +3,7 @@ import { Prisma } from "@prisma/client";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { getRequestUser } from "@/lib/auth";
-import { checkRateLimit, forbidden, normalizePageLimit, requireDepartmentWrite } from "@/lib/security/api";
+import { checkRateLimit, forbidden, normalizePageLimit, requireDepartmentRead, requireDepartmentWrite } from "@/lib/security/api";
 
 export const preferredRegion = "sin1";
 
@@ -33,6 +33,7 @@ const transactionSchema = z.object({
 export async function GET(request: Request) {
   const user = await getRequestUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!requireDepartmentRead(user, "WAREHOUSE")) return forbidden("Warehouse access required");
 
   const { searchParams } = new URL(request.url);
   const daysParam = Number(searchParams.get("days"));

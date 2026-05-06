@@ -20,8 +20,18 @@ export function requireDepartmentWrite(user: AuthUser, department: DepartmentNam
   return user.department === department;
 }
 
+export function requireDepartmentRead(user: AuthUser, department: DepartmentName) {
+  if (user.role === "ADMIN") return true;
+  return user.department === department;
+}
+
 export function forbidden(message = "Permission denied") {
   return NextResponse.json({ error: message }, { status: 403 });
+}
+
+export function safeInternalError(error: unknown, message = "Internal server error") {
+  console.error(error);
+  return NextResponse.json({ error: message }, { status: 500 });
 }
 
 export async function checkRateLimit(request: Request, scope: string, limit: number, windowMs: number) {

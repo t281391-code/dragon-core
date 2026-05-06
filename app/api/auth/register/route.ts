@@ -9,6 +9,10 @@ import type { RoleName, DepartmentName } from "@/lib/permissions";
 
 export const preferredRegion = "sin1";
 
+function publicRegistrationEnabled() {
+  return process.env.NODE_ENV !== "production" || process.env.ALLOW_PUBLIC_REGISTRATION === "true";
+}
+
 const registerSchema = z.object({
   fullName: z.string().trim().min(2).max(120),
   email: z.string().trim().email().max(254).transform((value) => value.toLowerCase()),
@@ -21,6 +25,10 @@ const registerSchema = z.object({
 export async function POST(request: Request) {
   const rateLimited = await checkRateLimit(request, "auth:register", 10, 60_000);
   if (rateLimited) return rateLimited;
+
+  if (!publicRegistrationEnabled()) {
+    return NextResponse.json({ error: "Public registration is disabled" }, { status: 403 });
+  }
 
   const parsed = registerSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) {
@@ -77,7 +85,11 @@ export async function POST(request: Request) {
       role: { select: { name: true } },
       department: { select: { name: true } },
     },
+  }).catch((error) => {
+    console.error(error);
+    return null;
   });
+  if (!user) return NextResponse.json({ error: "Registration failed" }, { status: 500 });
 
   const authUser = {
     id: user.id,

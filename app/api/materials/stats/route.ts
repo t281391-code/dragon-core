@@ -1,12 +1,14 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getRequestUser } from "@/lib/auth";
+import { forbidden, requireDepartmentRead } from "@/lib/security/api";
 
 export const preferredRegion = "sin1";
 
 export async function GET() {
   const user = await getRequestUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!requireDepartmentRead(user, "WAREHOUSE")) return forbidden("Warehouse access required");
 
   const rows = await prisma.$queryRaw<{ month: string; type: string; total: unknown }[]>`
     SELECT

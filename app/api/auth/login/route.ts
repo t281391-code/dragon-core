@@ -16,7 +16,7 @@ const loginSchema = z.object({
 });
 
 export async function POST(request: Request) {
-  const rateLimited = await checkRateLimit(request, "auth:login", 20, 60_000);
+  const rateLimited = await checkRateLimit(request, "auth:login", 5, 60_000);
   if (rateLimited) return rateLimited;
 
   const parsed = loginSchema.safeParse(await request.json().catch(() => null));

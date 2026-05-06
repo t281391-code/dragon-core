@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { getRequestUser } from "@/lib/auth";
-import { checkRateLimit, forbidden, requireDepartmentWrite } from "@/lib/security/api";
+import { checkRateLimit, forbidden, requireDepartmentRead, requireDepartmentWrite } from "@/lib/security/api";
 
 export const preferredRegion = "sin1";
 
@@ -33,7 +33,11 @@ const materialSchema = z.object({
 export async function GET() {
   const user = await getRequestUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!requireDepartmentRead(user, "WAREHOUSE") && !requireDepartmentRead(user, "PRODUCTION")) {
+    return forbidden("Material catalog access required");
+  }
 
+  if (requireDepartmentRead(user, "WAREHOUSE")) {
   const existingWarehouseMaterials = await prisma.material.findMany({
     where: { name: { in: WAREHOUSE_MATERIALS } },
     select: { name: true },
@@ -76,6 +80,8 @@ export async function GET() {
       })
     )
   );
+
+  }
 
   const materials = await prisma.material.findMany({
     select: {

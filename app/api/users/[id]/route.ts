@@ -3,7 +3,7 @@ import { Prisma } from "@prisma/client";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { getRequestUser } from "@/lib/auth";
-import { checkRateLimit, forbidden, requireRole } from "@/lib/security/api";
+import { checkRateLimit, forbidden, requireRole, safeInternalError } from "@/lib/security/api";
 
 export const preferredRegion = "sin1";
 
@@ -72,7 +72,7 @@ export async function PATCH(
       return NextResponse.json({ error: "Энэ MR код өөр ажилтан дээр бүртгэлтэй байна." }, { status: 409 });
     }
 
-    throw error;
+    return safeInternalError(error);
   }
 }
 

@@ -38,6 +38,7 @@ export async function GET(request: Request) {
   const hasSearch = query.length > 0;
   const includeInactive = searchParams.get("includeInactive") === "1";
   const canViewMrCode = requireRole(user, "ADMIN");
+  const canViewAllUsers = requireRole(user, "ADMIN");
 
   if (query.length > 120) {
     return NextResponse.json({ error: "Search query is too long" }, { status: 400 });
@@ -97,6 +98,7 @@ export async function GET(request: Request) {
       INNER JOIN \`Department\` d ON d.id = u.departmentId
       WHERE u.isActive = TRUE
         AND (u.fullName LIKE ${`%${query}%`} OR u.email LIKE ${`%${query}%`})
+        ${canViewAllUsers ? Prisma.empty : Prisma.sql`AND d.name = ${user.department}`}
       ORDER BY u.fullName ASC
       LIMIT ${limit}
     `);
