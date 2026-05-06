@@ -194,8 +194,8 @@ export default function UsersPage() {
           <div className="al al-b" style={{ marginBottom: 16 }}>
             <span className="al-ic">ℹ️</span>
             <div>
-              <strong>Дүр өөрчлөх:</strong> Ажилтны нэр дээр дарж Менежер болгох эсвэл буцааж Ажилтан болгоно уу.
-              Менежер нь бүх хэлтсийн мэдээллийг харах боломжтой.
+              <strong>Дүр өөрчлөх:</strong> Ажилтны нэр дээр дарж Admin, Менежер эсвэл Ажилтан болгож болно.
+              Менежер нь зөвхөн өөрийн хэлтэст бичих эрхтэй, Admin бүх эрхтэй.
             </div>
           </div>
         )}
@@ -343,18 +343,26 @@ export default function UsersPage() {
               <div className="fg">
                 <label>Шинэ дүр сонгох</label>
                 <select value={newRole} onChange={e => setNewRole(e.target.value)}>
-                  {selected.role.name === "ADMIN" && <option value="ADMIN">🔑 Admin</option>}
+                  <option value="ADMIN">Admin - full system access</option>
                   <option value="USER">👤 Ажилтан — зөвхөн өөрийн хэлтэс</option>
-                  <option value="MODERATOR">⭐ Менежер — бүх хэлтсийг харах</option>
+                  <option value="MODERATOR">Moderator - own department write access</option>
                 </select>
               </div>
 
               {/* Explanation */}
+              {newRole === "ADMIN" && selected.role.name !== "ADMIN" && (
+                <div className="al al-r" style={{ marginBottom: 12 }}>
+                  <span className="al-ic">!</span>
+                  <div>
+                    <strong>{selected.fullName}-г Admin болгоно.</strong> Бүх хэлтэс, хэрэглэгчийн эрх болон устгах/өөрчлөх үйлдэлд хандах боломжтой болно.
+                  </div>
+                </div>
+              )}
               {newRole === "MODERATOR" && selected.role.name !== "MODERATOR" && (
                 <div className="al al-a" style={{ marginBottom: 12 }}>
                   <span className="al-ic">⭐</span>
                   <div>
-                    <strong>{selected.fullName}-г Менежер болгоно.</strong> Бүх хэлтсийн хуудас болон тайлангуудыг харах боломжтой болно.
+                    <strong>{selected.fullName}-г Менежер болгоно.</strong> Өөрийн хэлтсийн хуудас дээр бичих/өөрчлөх эрхтэй болно.
                   </div>
                 </div>
               )}
