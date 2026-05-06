@@ -12,9 +12,17 @@ const userCreateSchema = z.object({
   email: z.string().trim().email().max(254).transform((value) => value.toLowerCase()),
   mrCode: z.string().trim().regex(/^MR-\d{4}$/).optional(),
   password: z.string().min(6).max(256),
-  roleId: z.string().trim().min(1).max(128),
-  departmentId: z.string().trim().min(1).max(128),
+  roleId: z.string().trim().min(1).max(128).optional(),
+  roleName: z.enum(["USER", "MODERATOR", "ADMIN"]).optional(),
+  departmentId: z.string().trim().min(1).max(128).optional(),
+  departmentName: z.enum(["WAREHOUSE", "PRODUCTION", "SAFETY", "LOGISTICS"]).optional(),
   isActive: z.boolean().optional().default(true),
+}).refine((value) => value.roleId || value.roleName, {
+  message: "Role is required",
+  path: ["roleName"],
+}).refine((value) => value.departmentId || value.departmentName, {
+  message: "Department is required",
+  path: ["departmentName"],
 });
 
 const userSelect = {
@@ -153,8 +161,12 @@ export async function POST(request: Request) {
   }
 
   const [role, department] = await Promise.all([
-    prisma.role.findUnique({ where: { id: body.roleId }, select: { id: true } }),
-    prisma.department.findUnique({ where: { id: body.departmentId }, select: { id: true } }),
+    body.roleId
+      ? prisma.role.findUnique({ where: { id: body.roleId }, select: { id: true } })
+      : prisma.role.findUnique({ where: { name: body.roleName }, select: { id: true } }),
+    body.departmentId
+      ? prisma.department.findUnique({ where: { id: body.departmentId }, select: { id: true } })
+      : prisma.department.findUnique({ where: { name: body.departmentName }, select: { id: true } }),
   ]);
   if (!role || !department) {
     return NextResponse.json({ error: "Role or department not found" }, { status: 404 });

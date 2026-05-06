@@ -37,6 +37,15 @@ export default function UsersPage() {
   const [changeErr, setChangeErr] = useState("");
   const [kickingId, setKickingId] = useState<string | null>(null);
   const [kickErr, setKickErr] = useState("");
+  const [createOpen, setCreateOpen] = useState(false);
+  const [creating, setCreating] = useState(false);
+  const [createErr, setCreateErr] = useState("");
+  const [createFullName, setCreateFullName] = useState("");
+  const [createEmail, setCreateEmail] = useState("");
+  const [createPassword, setCreatePassword] = useState("");
+  const [createMrCode, setCreateMrCode] = useState("");
+  const [createRole, setCreateRole] = useState("USER");
+  const [createDepartment, setCreateDepartment] = useState("WAREHOUSE");
 
   useEscapeClose(Boolean(selected), () => setSelected(null));
 
@@ -124,6 +133,57 @@ export default function UsersPage() {
     load();
   }
 
+  function resetCreateForm() {
+    setCreateFullName("");
+    setCreateEmail("");
+    setCreatePassword("");
+    setCreateMrCode("");
+    setCreateRole("USER");
+    setCreateDepartment("WAREHOUSE");
+    setCreateErr("");
+  }
+
+  function closeCreateModal() {
+    setCreateOpen(false);
+    setCreating(false);
+    resetCreateForm();
+  }
+
+  async function submitCreateUser(e: React.FormEvent) {
+    e.preventDefault();
+    const mrCode = normalizeMrCode(createMrCode);
+    if (mrCode === undefined) {
+      setCreateErr("MR код 0001-2215 хооронд байх ёстой.");
+      return;
+    }
+
+    setCreating(true);
+    setCreateErr("");
+    const res = await fetch("/api/users", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        fullName: createFullName,
+        email: createEmail,
+        password: createPassword,
+        mrCode: mrCode ?? undefined,
+        roleName: createRole,
+        departmentName: createDepartment,
+        isActive: true,
+      }),
+    });
+    const data = await res.json().catch(() => null) as { error?: string } | null;
+
+    if (!res.ok) {
+      setCreateErr(data?.error ?? "User үүсгэхэд алдаа гарлаа");
+      setCreating(false);
+      return;
+    }
+
+    closeCreateModal();
+    void load();
+  }
+
   if (me?.role !== "ADMIN") {
     return (
       <div className="content" style={{ display: "flex", alignItems: "center", justifyContent: "center", height: 300 }}>
@@ -153,6 +213,9 @@ export default function UsersPage() {
       <div className="topbar">
         <div className="topbar-title">👥 Ажилтан удирдлага</div>
         <div className="topbar-right">
+          <button className="btn bp bs" type="button" onClick={() => setCreateOpen(true)}>
+            + User нэмэх
+          </button>
           <span className="topbar-date">{new Date().toLocaleDateString("mn-MN", { year: "numeric", month: "long", day: "numeric" })}</span>
         </div>
       </div>
@@ -389,6 +452,72 @@ export default function UsersPage() {
                   disabled={changing || (newRole === selected.role.name && normalizeMrCode(newMrCode) === (selected.mrCode ?? null))}
                 >
                   {changing ? "Хадгалж байна..." : (newRole === selected.role.name && normalizeMrCode(newMrCode) === (selected.mrCode ?? null)) ? "Өөрчлөлт байхгүй" : "✓ Хадгалах"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {createOpen && (
+        <div className="mo open" onClick={e => { if (e.target === e.currentTarget) closeCreateModal(); }}>
+          <div className="mc" style={{ width: 460 }}>
+            <div className="mh">
+              <h3>Шинэ user нэмэх</h3>
+              <button className="mx" type="button" onClick={closeCreateModal}>×</button>
+            </div>
+
+            <form onSubmit={submitCreateUser}>
+              <div className="fg">
+                <label>Бүтэн нэр</label>
+                <input value={createFullName} onChange={(e) => setCreateFullName(e.target.value)} minLength={2} maxLength={120} required />
+              </div>
+              <div className="fg">
+                <label>И-мэйл</label>
+                <input type="email" value={createEmail} onChange={(e) => setCreateEmail(e.target.value)} maxLength={254} required />
+              </div>
+              <div className="fg">
+                <label>Нууц үг</label>
+                <input type="password" value={createPassword} onChange={(e) => setCreatePassword(e.target.value)} minLength={6} maxLength={256} required />
+              </div>
+              <div className="fg">
+                <label>MR код</label>
+                <input value={createMrCode} onChange={(e) => setCreateMrCode(e.target.value.toUpperCase())} placeholder="MR-0970" autoComplete="off" />
+              </div>
+              <div className="fg">
+                <label>Хэлтэс</label>
+                <select value={createDepartment} onChange={(e) => setCreateDepartment(e.target.value)}>
+                  <option value="WAREHOUSE">Агуулах</option>
+                  <option value="PRODUCTION">Үйлдвэрлэл</option>
+                  <option value="SAFETY">ХЭАБО</option>
+                  <option value="LOGISTICS">Тээвэр</option>
+                </select>
+              </div>
+              <div className="fg">
+                <label>Дүр</label>
+                <select value={createRole} onChange={(e) => setCreateRole(e.target.value)}>
+                  <option value="USER">Ажилтан</option>
+                  <option value="MODERATOR">Moderator</option>
+                  <option value="ADMIN">Admin</option>
+                </select>
+              </div>
+
+              {createRole === "ADMIN" && (
+                <div className="al al-r" style={{ marginBottom: 12 }}>
+                  <span className="al-ic">!</span>
+                  <div>Admin бүх хэлтэс болон хэрэглэгчийн эрх өөрчлөх боломжтой.</div>
+                </div>
+              )}
+              {createErr && (
+                <div style={{ color: "#f87171", fontSize: 12, marginBottom: 10, padding: "8px 12px", background: "rgba(239,68,68,.08)", borderRadius: 6, border: "1px solid rgba(239,68,68,.25)" }}>
+                  {createErr}
+                </div>
+              )}
+
+              <div className="mf">
+                <button type="button" className="btn bo2" onClick={closeCreateModal}>Цуцлах</button>
+                <button type="submit" className="btn bp" disabled={creating}>
+                  {creating ? "Үүсгэж байна..." : "✓ Үүсгэх"}
                 </button>
               </div>
             </form>
