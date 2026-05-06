@@ -432,7 +432,7 @@ html {
 }
 
 .login-box__title {
-  margin: 0.8rem 0 0;
+  margin: -2rem 0 0;
   color: #f4fbff;
   font-size: 1.9rem;
   font-weight: 700;
