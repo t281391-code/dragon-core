@@ -58,6 +58,28 @@ const PRODUCT_COLORS: Record<string, string> = {
   "ANDO-V 90MM": "#10B981","ANDO-V 120MM": "#3B82F6","ANDO-V 60MM": "#F59E0B",
   "ANDO-EV 32MM": "#A78BFA","ANDO-EV 25MM": "#14B8A6","ANDO-SPLIT 38MM": "#F97316",
 };
+
+const RPM_MACHINES = [
+  { name: "Mono pump", current: 2200, max: 2950 },
+  { name: "Final mixer", current: 31000, max: 36000 },
+  { name: "Solution pump", current: 2100, max: 2950 },
+  { name: "Oil mixer", current: 1200, max: 1800 },
+] as const;
+
+const DIAMETER_GROUPS = [
+  { title: "Жижиг диаметр", items: ["EV 25mm", "EV 32mm", "SPLIT 38mm"], accent: "#22D3EE" },
+  { title: "Том диаметр", items: ["V 120mm", "V 90mm", "V 60mm"], accent: "#10B981" },
+] as const;
+
+function rpmLoadPercent(current: number, max: number) {
+  return Math.round((current / max) * 100);
+}
+
+function rpmStatus(percent: number) {
+  if (percent > 95) return { label: "Critical", color: "#EF4444", bg: "rgba(239,68,68,.12)", border: "rgba(239,68,68,.34)" };
+  if (percent > 80) return { label: "Warning", color: "#F59E0B", bg: "rgba(245,158,11,.12)", border: "rgba(245,158,11,.34)" };
+  return { label: "Normal", color: "#10B981", bg: "rgba(16,185,129,.12)", border: "rgba(16,185,129,.34)" };
+}
 const MINE_OPTIONS = ["Оюутолгой","Эрдэнэт","Тавантолгой","Нарийнсухайт","Цагаан суварга"];
 const PAGE_SIZE = 20;
 const REPORT_DAYS = 14;
@@ -207,6 +229,164 @@ function ProdTooltip({ active, payload, label }: { active?: boolean; payload?: C
           {p.name}: <strong>{fmtDisplay(Number(p.value))}</strong>
         </div>
       ))}
+    </div>
+  );
+}
+
+function RpmDonut({ percent, color }: { percent: number; color: string }) {
+  const clamped = Math.min(100, Math.max(0, percent));
+  const radius = 18;
+  const circumference = 2 * Math.PI * radius;
+  const dash = (clamped / 100) * circumference;
+
+  return (
+    <svg width="54" height="54" viewBox="0 0 48 48" aria-label={`${percent}% RPM load`} style={{ flexShrink: 0 }}>
+      <circle cx="24" cy="24" r={radius} fill="none" stroke="rgba(148,163,184,.16)" strokeWidth="6" />
+      <circle
+        cx="24"
+        cy="24"
+        r={radius}
+        fill="none"
+        stroke={color}
+        strokeWidth="6"
+        strokeLinecap="round"
+        strokeDasharray={`${dash} ${circumference - dash}`}
+        transform="rotate(-90 24 24)"
+      />
+      <text x="24" y="24" textAnchor="middle" dominantBaseline="middle" fill="var(--text)" fontSize="10" fontWeight="800">
+        {percent}%
+      </text>
+    </svg>
+  );
+}
+
+function RpmMonitoringCard() {
+  const finalMixerLoad = rpmLoadPercent(RPM_MACHINES[1].current, RPM_MACHINES[1].max);
+
+  return (
+    <div className="panel" style={{ padding: 20 }}>
+      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12, marginBottom: 14 }}>
+        <div>
+          <div className="panel-title">Тоног төхөөрөмжийн эргэлт / RPM</div>
+          <div className="panel-sub" style={{ marginTop: 4 }}>Одоогийн эргэлтийн ачаалал</div>
+        </div>
+        <span style={{
+          border: "1px solid rgba(34,211,238,.28)",
+          background: "rgba(34,211,238,.1)",
+          color: "#22D3EE",
+          borderRadius: 999,
+          padding: "4px 8px",
+          fontSize: 10,
+          fontWeight: 800,
+          whiteSpace: "nowrap",
+        }}>
+          RPM LOAD
+        </span>
+      </div>
+
+      <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+        {RPM_MACHINES.map((machine) => {
+          const percent = rpmLoadPercent(machine.current, machine.max);
+          const status = rpmStatus(percent);
+          return (
+            <div key={machine.name} style={{
+              border: "1px solid rgba(148,163,184,.14)",
+              background: "rgba(15,23,42,.22)",
+              borderRadius: 10,
+              padding: 12,
+            }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                <RpmDonut percent={percent} color={status.color} />
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: 6 }}>
+                    <div style={{ color: "var(--text)", fontSize: 13, fontWeight: 800, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                      {machine.name}
+                    </div>
+                    <span style={{
+                      border: `1px solid ${status.border}`,
+                      background: status.bg,
+                      color: status.color,
+                      borderRadius: 999,
+                      padding: "3px 7px",
+                      fontSize: 10,
+                      fontWeight: 800,
+                      lineHeight: 1,
+                      whiteSpace: "nowrap",
+                    }}>
+                      {status.label}
+                    </span>
+                  </div>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: 8, color: "var(--muted)", fontSize: 11, flexWrap: "wrap" }}>
+                    <span>Одоогийн: <strong style={{ color: "var(--text)" }}>{machine.current.toLocaleString("mn-MN")}</strong> rpm</span>
+                    <span>Дээд: <strong style={{ color: "var(--text)" }}>{machine.max.toLocaleString("mn-MN")}</strong> rpm</span>
+                  </div>
+                  <div style={{ height: 8, borderRadius: 999, background: "rgba(15,23,42,.7)", overflow: "hidden", border: "1px solid rgba(148,163,184,.12)" }}>
+                    <div style={{
+                      width: `${Math.min(100, percent)}%`,
+                      height: "100%",
+                      background: status.color,
+                      borderRadius: 999,
+                      boxShadow: `0 0 16px ${status.color}66`,
+                    }} />
+                  </div>
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      <div style={{
+        marginTop: 12,
+        border: "1px solid rgba(245,158,11,.24)",
+        background: "rgba(245,158,11,.08)",
+        color: "#FBBF24",
+        borderRadius: 10,
+        padding: "10px 12px",
+        fontSize: 11,
+        lineHeight: 1.45,
+        fontWeight: 700,
+      }}>
+        Final mixer {finalMixerLoad}% load дээр ажиллаж байна — хэт ачааллаас сэргийлж шалгах шаардлагатай.
+      </div>
+    </div>
+  );
+}
+
+function DiameterCard() {
+  return (
+    <div className="panel" style={{ padding: 20 }}>
+      <div className="panel-title" style={{ marginBottom: 12 }}>Савалгааны диаметр</div>
+      <div style={{ display: "grid", gap: 12 }}>
+        {DIAMETER_GROUPS.map((group) => (
+          <div key={group.title} style={{
+            border: "1px solid rgba(148,163,184,.14)",
+            background: "rgba(15,23,42,.2)",
+            borderRadius: 10,
+            padding: 12,
+          }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 9 }}>
+              <span style={{ width: 8, height: 8, borderRadius: "50%", background: group.accent, boxShadow: `0 0 0 4px ${group.accent}22` }} />
+              <span style={{ color: "var(--text)", fontSize: 12, fontWeight: 800 }}>{group.title}</span>
+            </div>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 7 }}>
+              {group.items.map((item) => (
+                <span key={item} style={{
+                  border: `1px solid ${group.accent}33`,
+                  background: `${group.accent}12`,
+                  color: group.accent,
+                  borderRadius: 999,
+                  padding: "5px 8px",
+                  fontSize: 11,
+                  fontWeight: 800,
+                }}>
+                  {item}
+                </span>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
@@ -1105,6 +1285,8 @@ export default function ProductionPage() {
               emptyBody="Өнөөдрийн гарц, ачилтын хуваарь, бүтээгдэхүүний давтамж хэвийн байна."
             />
 
+            <RpmMonitoringCard />
+            <DiameterCard />
 
             {/* Alert panel — richer context */}
             <div className="panel" style={{padding:20,flex:1}}>
