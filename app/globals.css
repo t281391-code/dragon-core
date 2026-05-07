@@ -2482,6 +2482,25 @@ body.theme-light .empty-row td {
   margin-bottom: 20px;
 }
 
+.production-monitor-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 300px;
+  gap: 14px;
+  align-items: start;
+  margin-bottom: 14px;
+}
+
+.production-chart-stack,
+.production-monitor-sidebar {
+  min-width: 0;
+}
+
+.production-monitor-sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
 .wh-tr-hover {
   transition: background 0.15s;
 }
@@ -2516,6 +2535,7 @@ body.theme-light .empty-row td {
   .g2,
   .prod-list,
   .mat-grid,
+  .production-monitor-grid,
   .wh-main-grid,
   .wh-chart-row {
     grid-template-columns: 1fr;

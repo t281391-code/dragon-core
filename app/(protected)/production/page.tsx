@@ -77,7 +77,7 @@ function rpmLoadPercent(current: number, max: number) {
 
 function rpmStatus(percent: number) {
   if (percent > 95) return { label: "Critical", color: "#EF4444", bg: "rgba(239,68,68,.12)", border: "rgba(239,68,68,.34)" };
-  if (percent > 80) return { label: "Warning", color: "#F59E0B", bg: "rgba(245,158,11,.12)", border: "rgba(245,158,11,.34)" };
+  if (percent >= 80) return { label: "Warning", color: "#F59E0B", bg: "rgba(245,158,11,.12)", border: "rgba(245,158,11,.34)" };
   return { label: "Normal", color: "#10B981", bg: "rgba(16,185,129,.12)", border: "rgba(16,185,129,.34)" };
 }
 const MINE_OPTIONS = ["Оюутолгой","Эрдэнэт","Тавантолгой","Нарийнсухайт","Цагаан суварга"];
@@ -240,7 +240,7 @@ function RpmDonut({ percent, color }: { percent: number; color: string }) {
   const dash = (clamped / 100) * circumference;
 
   return (
-    <svg width="54" height="54" viewBox="0 0 48 48" aria-label={`${percent}% RPM load`} style={{ flexShrink: 0 }}>
+    <svg width="74" height="74" viewBox="0 0 48 48" aria-label={`${percent}% RPM load`} style={{ flexShrink: 0 }}>
       <circle cx="24" cy="24" r={radius} fill="none" stroke="rgba(148,163,184,.16)" strokeWidth="6" />
       <circle
         cx="24"
@@ -261,79 +261,100 @@ function RpmDonut({ percent, color }: { percent: number; color: string }) {
 }
 
 function RpmMonitoringCard() {
-  const finalMixerLoad = rpmLoadPercent(RPM_MACHINES[1].current, RPM_MACHINES[1].max);
+  const rpmRows = RPM_MACHINES.map((machine) => {
+    const percent = rpmLoadPercent(machine.current, machine.max);
+    const status = rpmStatus(percent);
+    return { ...machine, percent, status };
+  });
+  const averageLoad = Math.round(rpmRows.reduce((sum, machine) => sum + machine.percent, 0) / rpmRows.length);
+  const averageStatus = rpmStatus(averageLoad);
+  const finalMixerLoad = rpmRows.find((machine) => machine.name === "Final mixer")?.percent ?? 0;
+  const statusCounts = rpmRows.reduce<Record<string, number>>((acc, machine) => {
+    acc[machine.status.label] = (acc[machine.status.label] ?? 0) + 1;
+    return acc;
+  }, {});
 
   return (
-    <div className="panel" style={{ padding: 20 }}>
-      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12, marginBottom: 14 }}>
+    <div className="panel" style={{ padding: 16 }}>
+      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12, marginBottom: 12 }}>
         <div>
           <div className="panel-title">Тоног төхөөрөмжийн эргэлт / RPM</div>
           <div className="panel-sub" style={{ marginTop: 4 }}>Одоогийн эргэлтийн ачаалал</div>
         </div>
         <span style={{
-          border: "1px solid rgba(34,211,238,.28)",
-          background: "rgba(34,211,238,.1)",
-          color: "#22D3EE",
+          border: "1px solid rgba(16,185,129,.28)",
+          background: "rgba(16,185,129,.1)",
+          color: "#10B981",
           borderRadius: 999,
-          padding: "4px 8px",
+          padding: "4px 7px",
           fontSize: 10,
           fontWeight: 800,
           whiteSpace: "nowrap",
         }}>
-          RPM LOAD
+          AI
         </span>
       </div>
 
-      <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-        {RPM_MACHINES.map((machine) => {
-          const percent = rpmLoadPercent(machine.current, machine.max);
-          const status = rpmStatus(percent);
-          return (
-            <div key={machine.name} style={{
-              border: "1px solid rgba(148,163,184,.14)",
-              background: "rgba(15,23,42,.22)",
-              borderRadius: 10,
-              padding: 12,
-            }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                <RpmDonut percent={percent} color={status.color} />
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: 6 }}>
-                    <div style={{ color: "var(--text)", fontSize: 13, fontWeight: 800, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                      {machine.name}
-                    </div>
-                    <span style={{
-                      border: `1px solid ${status.border}`,
-                      background: status.bg,
-                      color: status.color,
-                      borderRadius: 999,
-                      padding: "3px 7px",
-                      fontSize: 10,
-                      fontWeight: 800,
-                      lineHeight: 1,
-                      whiteSpace: "nowrap",
-                    }}>
-                      {status.label}
-                    </span>
-                  </div>
-                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: 8, color: "var(--muted)", fontSize: 11, flexWrap: "wrap" }}>
-                    <span>Одоогийн: <strong style={{ color: "var(--text)" }}>{machine.current.toLocaleString("mn-MN")}</strong> rpm</span>
-                    <span>Дээд: <strong style={{ color: "var(--text)" }}>{machine.max.toLocaleString("mn-MN")}</strong> rpm</span>
-                  </div>
-                  <div style={{ height: 8, borderRadius: 999, background: "rgba(15,23,42,.7)", overflow: "hidden", border: "1px solid rgba(148,163,184,.12)" }}>
-                    <div style={{
-                      width: `${Math.min(100, percent)}%`,
-                      height: "100%",
-                      background: status.color,
-                      borderRadius: 999,
-                      boxShadow: `0 0 16px ${status.color}66`,
-                    }} />
-                  </div>
+      <div style={{ display: "flex", flexDirection: "column", gap: 11 }}>
+        {rpmRows.map((machine) => (
+          <div key={machine.name}>
+            <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 10, marginBottom: 5 }}>
+              <div style={{ minWidth: 0 }}>
+                <div style={{ color: "var(--text)", fontSize: 11, fontWeight: 800, lineHeight: 1.25 }}>
+                  {machine.name}
+                </div>
+                <div style={{ color: "var(--muted)", fontSize: 10, lineHeight: 1.35 }}>
+                  {machine.current.toLocaleString("mn-MN")} / {machine.max.toLocaleString("mn-MN")} rpm
                 </div>
               </div>
+              <div style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
+                <span style={{ color: "var(--text)", fontSize: 10, fontWeight: 800, minWidth: 28, textAlign: "right" }}>{machine.percent}%</span>
+                <span style={{
+                  border: `1px solid ${machine.status.border}`,
+                  background: machine.status.bg,
+                  color: machine.status.color,
+                  borderRadius: 7,
+                  padding: "5px 9px",
+                  fontSize: 9,
+                  fontWeight: 800,
+                  lineHeight: 1,
+                  minWidth: 58,
+                  textAlign: "center",
+                }}>
+                  {machine.status.label}
+                </span>
+              </div>
             </div>
-          );
-        })}
+            <div style={{ height: 7, borderRadius: 999, background: "rgba(15,23,42,.72)", overflow: "hidden", border: "1px solid rgba(148,163,184,.1)" }}>
+              <div style={{
+                width: `${Math.min(100, machine.percent)}%`,
+                height: "100%",
+                background: machine.status.color,
+                borderRadius: 999,
+                boxShadow: `0 0 14px ${machine.status.color}55`,
+              }} />
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div style={{ display: "grid", gridTemplateColumns: "86px 1fr", gap: 12, alignItems: "center", marginTop: 16 }}>
+        <RpmDonut percent={averageLoad} color={averageStatus.color} />
+        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+          {[
+            { label: "Normal (0-80%)", color: "#10B981", value: statusCounts.Normal ?? 0 },
+            { label: "Warning (80-95%)", color: "#F59E0B", value: statusCounts.Warning ?? 0 },
+            { label: "Critical (95%+)", color: "#EF4444", value: statusCounts.Critical ?? 0 },
+          ].map((item) => (
+            <div key={item.label} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, fontSize: 10 }}>
+              <span style={{ display: "flex", alignItems: "center", gap: 6, color: "var(--muted)", minWidth: 0 }}>
+                <span style={{ width: 7, height: 7, borderRadius: "50%", background: item.color, flexShrink: 0 }} />
+                <span style={{ whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{item.label}</span>
+              </span>
+              <strong style={{ color: item.color, fontSize: 10 }}>{item.value}</strong>
+            </div>
+          ))}
+        </div>
       </div>
 
       <div style={{
@@ -341,9 +362,9 @@ function RpmMonitoringCard() {
         border: "1px solid rgba(245,158,11,.24)",
         background: "rgba(245,158,11,.08)",
         color: "#FBBF24",
-        borderRadius: 10,
-        padding: "10px 12px",
-        fontSize: 11,
+        borderRadius: 9,
+        padding: "9px 10px",
+        fontSize: 10,
         lineHeight: 1.45,
         fontWeight: 700,
       }}>
@@ -961,6 +982,8 @@ export default function ProductionPage() {
             sparklineColor="#F59E0B" />
         </div>
 
+        <div className="production-monitor-grid">
+          <div className="production-chart-stack">
         {/* Main Charts Row */}
         <div className="wh-main-grid">
           <div className="panel">
@@ -1115,6 +1138,12 @@ export default function ProductionPage() {
                 </AreaChart>
               </ResponsiveContainer>
             </div>
+          </div>
+        </div>
+          </div>
+          <div className="production-monitor-sidebar">
+            <RpmMonitoringCard />
+            <DiameterCard />
           </div>
         </div>
 
@@ -1284,9 +1313,6 @@ export default function ProductionPage() {
               emptyTitle="Үйлдвэрлэлийн төлөв тогтвортой"
               emptyBody="Өнөөдрийн гарц, ачилтын хуваарь, бүтээгдэхүүний давтамж хэвийн байна."
             />
-
-            <RpmMonitoringCard />
-            <DiameterCard />
 
             {/* Alert panel — richer context */}
             <div className="panel" style={{padding:20,flex:1}}>
