@@ -43,6 +43,7 @@ model User {
   aiAuditLogs          AiAgentAuditLog[]
   shiftEntries         ShiftEntry[]
   shiftParticipant     ShiftParticipant?
+  shiftArchives        ShiftArchive[]
 
   @@index([isActive, fullName])
 }
@@ -66,6 +67,21 @@ model ShiftEntry {
 
   @@unique([userId, date])
   @@index([date])
+}
+
+model ShiftArchive {
+  id          String   @id @default(cuid())
+  startDate   String
+  endDate     String
+  title       String
+  snapshot    Json
+  createdById String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  createdBy   User     @relation(fields: [createdById], references: [id])
+
+  @@unique([startDate, endDate])
+  @@index([createdAt])
 }
 
 model Material {

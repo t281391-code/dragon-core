@@ -40,6 +40,39 @@ type OvertimeEditor = {
   dateLabel: string;
   value: string;
 };
+type ShiftArchiveSnapshot = {
+  version: number;
+  startDate: string;
+  endDate: string;
+  archivedAt: string;
+  days: { key: string; label: string }[];
+  users: {
+    id: string;
+    fullName: string;
+    mrCode: string | null;
+    roleName: string;
+    departmentName: string;
+    totalHours: number;
+  }[];
+  entries: {
+    userId: string;
+    date: string;
+    shiftCode: ShiftCode;
+    overtimeHours: number;
+  }[];
+};
+type ShiftArchive = {
+  id: string;
+  startDate: string;
+  endDate: string;
+  title: string;
+  snapshot?: ShiftArchiveSnapshot;
+  createdAt: string;
+  updatedAt: string;
+  createdBy?: { fullName: string; email: string };
+};
+type ArchiveListResponse = { data?: ShiftArchive[] };
+type ArchiveResponse = { data?: ShiftArchive };
 
 const DEPT_LABEL: Record<string, string> = {
   WAREHOUSE:  "Агуу",
@@ -90,6 +123,89 @@ function userTotalHours(userId: string, days: DayWindow[], schedule: Schedule) {
     if (!entry) return sum;
     return sum + SHIFT_META[entry.code].hours + entry.ot;
   }, 0);
+}
+
+function archiveEntryMap(snapshot: ShiftArchiveSnapshot) {
+  return new Map(snapshot.entries.map((entry) => [`${entry.userId}:${entry.date}`, entry]));
+}
+
+function escapeHtml(value: unknown) {
+  return String(value ?? "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+}
+
+function printArchivePdf(archive: ShiftArchive) {
+  if (typeof window === "undefined" || !archive.snapshot) return;
+
+  const snapshot = archive.snapshot;
+  const entries = archiveEntryMap(snapshot);
+  const dayHeaders = snapshot.days.map((day) => `<th>${escapeHtml(day.label)}</th>`).join("");
+  const rows = snapshot.users.map((user) => {
+    const cells = snapshot.days.map((day) => {
+      const entry = entries.get(`${user.id}:${day.key}`);
+      const meta = SHIFT_META[(entry?.shiftCode as ShiftCode | undefined) ?? "rest"];
+      const overtime = entry?.overtimeHours ? `<small>+${entry.overtimeHours}ц</small>` : "";
+      return `<td><strong>${escapeHtml(meta.short)}</strong>${overtime}</td>`;
+    }).join("");
+
+    return `
+      <tr>
+        <td class="name">${escapeHtml(user.fullName)}${user.mrCode ? `<small>${escapeHtml(user.mrCode)}</small>` : ""}</td>
+        <td>${escapeHtml(DEPT_LABEL[user.departmentName] ?? user.departmentName)}</td>
+        ${cells}
+        <td class="total">${user.totalHours}ц</td>
+      </tr>
+    `;
+  }).join("");
+
+  const popup = window.open("", "_blank", "width=1200,height=800");
+  if (!popup) return;
+
+  popup.document.write(`
+    <!doctype html>
+    <html>
+      <head>
+        <meta charset="utf-8" />
+        <title>${escapeHtml(archive.title)}</title>
+        <style>
+          @page { size: A4 landscape; margin: 10mm; }
+          body { font-family: Arial, sans-serif; color: #111827; margin: 0; }
+          h1 { font-size: 18px; margin: 0 0 4px; }
+          .meta { color: #64748b; font-size: 11px; margin-bottom: 14px; }
+          table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+          th, td { border: 1px solid #d1d5db; padding: 5px 4px; text-align: center; font-size: 10px; }
+          th { background: #f1f5f9; color: #334155; }
+          .name { text-align: left; width: 130px; font-weight: 700; }
+          .name small { display: block; color: #64748b; font-weight: 400; margin-top: 2px; }
+          .total { font-weight: 800; color: #047857; }
+          td small { display: block; color: #dc2626; font-weight: 800; margin-top: 2px; }
+        </style>
+      </head>
+      <body>
+        <h1>${escapeHtml(archive.title)}</h1>
+        <div class="meta">${escapeHtml(snapshot.startDate)} - ${escapeHtml(snapshot.endDate)} · PDF хэвлэх</div>
+        <table>
+          <thead>
+            <tr>
+              <th class="name">Ажилтан</th>
+              <th>Хэлтэс</th>
+              ${dayHeaders}
+              <th>Цаг</th>
+            </tr>
+          </thead>
+          <tbody>${rows}</tbody>
+        </table>
+        <script>
+          window.onload = () => setTimeout(() => window.print(), 120);
+        </script>
+      </body>
+    </html>
+  `);
+  popup.document.close();
 }
 
 // ── DonutChart ────────────────────────────────────────────────────────────────
@@ -352,6 +468,186 @@ function AddParticipantModal({
   );
 }
 
+function ArchiveModal({
+  archives,
+  selected,
+  loading,
+  error,
+  onClose,
+  onSelect,
+  onRefresh,
+  onPrint,
+}: {
+  archives: ShiftArchive[];
+  selected: ShiftArchive | null;
+  loading: boolean;
+  error: string;
+  onClose: () => void;
+  onSelect: (id: string) => void;
+  onRefresh: () => void;
+  onPrint: (archive: ShiftArchive) => void;
+}) {
+  const snapshot = selected?.snapshot;
+  const entries = snapshot ? archiveEntryMap(snapshot) : null;
+
+  return (
+    <div
+      onClick={onClose}
+      style={{
+        position: "fixed", inset: 0, zIndex: 1000,
+        background: "rgba(0,0,0,0.55)", display: "flex",
+        alignItems: "center", justifyContent: "center",
+      }}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          width: 980, maxWidth: "96vw", maxHeight: "88vh",
+          background: "var(--base2)", border: "1px solid var(--border)",
+          borderRadius: 14, boxShadow: "0 8px 32px rgba(0,0,0,0.35)",
+          display: "grid", gridTemplateColumns: "260px 1fr", overflow: "hidden",
+        }}
+      >
+        <aside style={{ borderRight: "1px solid var(--border)", padding: 16, overflowY: "auto" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+            <strong style={{ fontSize: 14 }}>Архив</strong>
+            <button
+              type="button"
+              onClick={onRefresh}
+              style={{ border: "1px solid var(--border)", background: "var(--base3)", color: "var(--muted)", borderRadius: 8, padding: "5px 8px", fontSize: 11, cursor: "pointer" }}
+            >
+              Шинэчлэх
+            </button>
+          </div>
+
+          {loading ? (
+            <div style={{ color: "var(--muted)", fontSize: 12, padding: "12px 0" }}>Ачаалж байна…</div>
+          ) : archives.length === 0 ? (
+            <div style={{ color: "var(--muted)", fontSize: 12, padding: "12px 0" }}>Архив байхгүй байна.</div>
+          ) : (
+            archives.map((archive) => (
+              <button
+                key={archive.id}
+                type="button"
+                onClick={() => onSelect(archive.id)}
+                style={{
+                  width: "100%", textAlign: "left", marginBottom: 8,
+                  border: `1px solid ${selected?.id === archive.id ? "rgba(6,182,212,.55)" : "var(--border)"}`,
+                  background: selected?.id === archive.id ? "rgba(6,182,212,.12)" : "var(--base3)",
+                  color: "var(--text)", borderRadius: 9, padding: "9px 10px",
+                  cursor: "pointer",
+                }}
+              >
+                <strong style={{ display: "block", fontSize: 12 }}>{archive.startDate} - {archive.endDate}</strong>
+                <span style={{ display: "block", color: "var(--muted)", fontSize: 11, marginTop: 3 }}>
+                  {archive.createdBy?.fullName ?? archive.createdBy?.email ?? "System"}
+                </span>
+              </button>
+            ))
+          )}
+        </aside>
+
+        <section style={{ minWidth: 0, padding: 16, overflow: "auto" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "start", gap: 12, marginBottom: 12 }}>
+            <div>
+              <strong style={{ fontSize: 14 }}>{selected?.title ?? "Архив сонгоно уу"}</strong>
+              {selected ? (
+                <div style={{ color: "var(--muted)", fontSize: 11, marginTop: 3 }}>
+                  {selected.startDate} - {selected.endDate}
+                </div>
+              ) : null}
+            </div>
+            <div style={{ display: "flex", gap: 8 }}>
+              {selected?.snapshot ? (
+                <button
+                  type="button"
+                  onClick={() => onPrint(selected)}
+                  style={{
+                    border: "1px solid rgba(239,68,68,.45)",
+                    background: "rgba(239,68,68,.12)", color: "#f87171",
+                    borderRadius: 8, padding: "7px 10px", fontSize: 12,
+                    fontWeight: 800, cursor: "pointer",
+                  }}
+                >
+                  PDF татах
+                </button>
+              ) : null}
+              <button
+                type="button"
+                onClick={onClose}
+                style={{ background: "none", border: "none", color: "var(--muted)", fontSize: 20, cursor: "pointer", padding: "0 4px", lineHeight: 1 }}
+              >
+                ×
+              </button>
+            </div>
+          </div>
+
+          {error ? (
+            <div style={{ padding: 12, color: "#f87171", border: "1px solid rgba(239,68,68,.35)", borderRadius: 9, background: "rgba(239,68,68,.08)", fontSize: 12 }}>
+              {error}
+            </div>
+          ) : null}
+
+          {snapshot && entries ? (
+            <div className="shift-grid-wrap" style={{ border: "1px solid var(--border)", borderRadius: 10 }}>
+              <table className="safety-table shift-table">
+                <thead>
+                  <tr>
+                    <th className="shift-col-worker">Ажилтан</th>
+                    <th className="shift-col-dept">Хэлтэс</th>
+                    {snapshot.days.map((day) => (
+                      <th key={day.key} className="shift-col-day">{day.label}</th>
+                    ))}
+                    <th className="shift-col-total">Цаг</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {snapshot.users.map((archiveUser) => (
+                    <tr key={archiveUser.id}>
+                      <td className="shift-col-worker">
+                        <strong>{archiveUser.fullName}</strong>
+                        {archiveUser.mrCode ? <div style={{ color: "var(--muted)", fontSize: 11 }}>{archiveUser.mrCode}</div> : null}
+                      </td>
+                      <td className="shift-col-dept">
+                        <span className="shift-dept-chip">
+                          {DEPT_LABEL[archiveUser.departmentName] ?? archiveUser.departmentName}
+                        </span>
+                      </td>
+                      {snapshot.days.map((day) => {
+                        const entry = entries.get(`${archiveUser.id}:${day.key}`);
+                        const code = (entry?.shiftCode ?? "rest") as ShiftCode;
+                        const meta = SHIFT_META[code];
+                        return (
+                          <td key={day.key} className="shift-col-day">
+                            <span className={`shift-cell ${meta.className}`} style={{ cursor: "default" }}>
+                              <span>{meta.short}</span>
+                              <small>{entry?.overtimeHours ? `+${entry.overtimeHours}ц` : ""}</small>
+                            </span>
+                          </td>
+                        );
+                      })}
+                      <td className="shift-col-total">
+                        <strong style={{ color: "#22C55E" }}>{archiveUser.totalHours}ц</strong>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <DashboardEmptyState
+              icon="⛏"
+              title="Архив сонгоно уу"
+              message="Зүүн талын жагсаалтаас 14 хоногийн архив сонгож харна."
+              tone="normal"
+            />
+          )}
+        </section>
+      </div>
+    </div>
+  );
+}
+
 // ── Main page ─────────────────────────────────────────────────────────────────
 export default function ShiftsPage() {
   const { user: me } = useAuth();
@@ -366,6 +662,12 @@ export default function ShiftsPage() {
   const [search, setSearch]       = useState("");
   const [showAddModal, setShowAddModal] = useState(false);
   const [overtimeEditor, setOvertimeEditor] = useState<OvertimeEditor | null>(null);
+  const [showArchiveModal, setShowArchiveModal] = useState(false);
+  const [archives, setArchives] = useState<ShiftArchive[]>([]);
+  const [selectedArchive, setSelectedArchive] = useState<ShiftArchive | null>(null);
+  const [archiveLoading, setArchiveLoading] = useState(false);
+  const [archiveErr, setArchiveErr] = useState("");
+  const [archiving, setArchiving] = useState(false);
 
   const canEdit = me?.role === "MODERATOR" || me?.role === "ADMIN";
 
@@ -483,6 +785,69 @@ export default function ShiftsPage() {
     }
   }
 
+  const loadArchive = useCallback(async (archiveId: string) => {
+    setArchiveLoading(true);
+    setArchiveErr("");
+    try {
+      const response = await fetch(`/api/shifts/archives?id=${encodeURIComponent(archiveId)}`);
+      const data = await response.json() as ArchiveResponse;
+      if (!response.ok || !data.data) throw new Error("Archive fetch failed");
+      setSelectedArchive(data.data);
+    } catch {
+      setArchiveErr("Архив ачаалахад алдаа гарлаа");
+    } finally {
+      setArchiveLoading(false);
+    }
+  }, []);
+
+  const fetchArchives = useCallback(async (selectFirst = false) => {
+    setArchiveLoading(true);
+    setArchiveErr("");
+    try {
+      const response = await fetch("/api/shifts/archives");
+      const data = await response.json() as ArchiveListResponse;
+      if (!response.ok) throw new Error("Archive list failed");
+      const nextArchives = data.data ?? [];
+      setArchives(nextArchives);
+      if (selectFirst && nextArchives[0]) {
+        await loadArchive(nextArchives[0].id);
+      }
+    } catch {
+      setArchiveErr("Архивын жагсаалт ачаалахад алдаа гарлаа");
+    } finally {
+      setArchiveLoading(false);
+    }
+  }, [loadArchive]);
+
+  async function archiveCurrentWindow() {
+    if (!canEdit || archiving) return;
+    setArchiving(true);
+    setArchiveErr("");
+    try {
+      const startDate = days[0].key;
+      const endDate = days[days.length - 1].key;
+      const response = await fetch("/api/shifts/archives", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ startDate, endDate }),
+      });
+      const data = await response.json() as ArchiveResponse;
+      if (!response.ok || !data.data) throw new Error("Archive save failed");
+      setSelectedArchive(data.data);
+      setShowArchiveModal(true);
+      await fetchArchives(false);
+    } catch {
+      setFetchErr("14 хоногийн архив хадгалахад алдаа гарлаа");
+    } finally {
+      setArchiving(false);
+    }
+  }
+
+  function openArchiveModal() {
+    setShowArchiveModal(true);
+    void fetchArchives(true);
+  }
+
   const filteredUsers = useMemo(() => {
     const query = search.trim().toLowerCase();
     return users.filter((u) => {
@@ -578,19 +943,45 @@ export default function ShiftsPage() {
               <div style={{ fontSize: 11, color: "var(--muted)" }}>
                 Нийт <strong style={{ color: "var(--text)" }}>{users.length}</strong> ажилтан
               </div>
+              <button
+                type="button"
+                onClick={openArchiveModal}
+                style={{
+                  padding: "6px 12px", borderRadius: 8, border: "1px solid rgba(6,182,212,.42)",
+                  background: "rgba(6,182,212,.1)", color: "#22d3ee",
+                  fontSize: 12, fontWeight: 700, cursor: "pointer",
+                }}
+              >
+                Архив
+              </button>
               {canEdit && (
-                <button
-                  type="button"
-                  onClick={() => setShowAddModal(true)}
-                  style={{
-                    padding: "6px 14px", borderRadius: 8, border: "1px solid rgba(34,197,94,.4)",
-                    background: "rgba(34,197,94,.1)", color: "#22c55e",
-                    fontSize: 12, fontWeight: 600, cursor: "pointer",
-                    display: "flex", alignItems: "center", gap: 5,
-                  }}
-                >
-                  + Ажилтан нэмэх
-                </button>
+                <>
+                  <button
+                    type="button"
+                    onClick={() => void archiveCurrentWindow()}
+                    disabled={archiving}
+                    style={{
+                      padding: "6px 12px", borderRadius: 8, border: "1px solid rgba(245,158,11,.42)",
+                      background: "rgba(245,158,11,.1)", color: "#fbbf24",
+                      fontSize: 12, fontWeight: 800, cursor: archiving ? "not-allowed" : "pointer",
+                      opacity: archiving ? 0.6 : 1,
+                    }}
+                  >
+                    {archiving ? "Хадгалж байна..." : "14 хоног архивлах"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setShowAddModal(true)}
+                    style={{
+                      padding: "6px 14px", borderRadius: 8, border: "1px solid rgba(34,197,94,.4)",
+                      background: "rgba(34,197,94,.1)", color: "#22c55e",
+                      fontSize: 12, fontWeight: 600, cursor: "pointer",
+                      display: "flex", alignItems: "center", gap: 5,
+                    }}
+                  >
+                    + Ажилтан нэмэх
+                  </button>
+                </>
               )}
             </div>
           </div>
@@ -735,6 +1126,19 @@ export default function ShiftsPage() {
           existingIds={existingIds}
           onAdd={addParticipant}
           onClose={() => setShowAddModal(false)}
+        />
+      )}
+
+      {showArchiveModal && (
+        <ArchiveModal
+          archives={archives}
+          selected={selectedArchive}
+          loading={archiveLoading}
+          error={archiveErr}
+          onClose={() => setShowArchiveModal(false)}
+          onRefresh={() => { void fetchArchives(true); }}
+          onSelect={(id) => { void loadArchive(id); }}
+          onPrint={printArchivePdf}
         />
       )}
 
