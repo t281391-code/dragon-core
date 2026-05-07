@@ -21,6 +21,7 @@ import {
   YAxis,
 } from "recharts";
 import { useAuth } from "@/components/AuthProvider";
+import { AiDecisionCenter, DashboardEmptyState, PriorityStatusBar } from "@/components/DashboardUX";
 import { DeptTopbar } from "@/components/DeptTopbar";
 import { KpiCard } from "@/components/KpiCard";
 import { ChartHint, RealtimeBadge, REALTIME_REFRESH_MS } from "@/components/RealtimeBadge";
@@ -445,6 +446,26 @@ export default function SafetyPage() {
     [incidents]
   );
 
+  const safetyPriorityTone = alerts.length > 0 ? "critical" : openIncidents > 0 ? "warning" : "normal";
+  const safetyPrioritySummary = safetyPriorityTone === "critical"
+    ? alerts.length + " өндөр эрсдэлтэй incident нээлттэй байна. Шуурхай шалгалт шаардлагатай."
+    : safetyPriorityTone === "warning"
+      ? openIncidents + " incident шалгагдаж байна. Хариуцагч, хаалтын төлөвийг баталгаажуулна уу."
+      : "Нээлттэй incident байхгүй. Систем хэвийн ажиллаж байна.";
+  const safetyRecommendations = (() => {
+    const items = [];
+    if (alerts.length > 0) {
+      items.push({ tone: "critical" as const, title: "Өндөр эрсдэлийг түрүүлж хаах", body: alerts[0].msg, actionLabel: "Өндөр эрсдэл харах", onAction: () => updateTableFilter("high") });
+    }
+    if (openIncidents > 0) {
+      items.push({ tone: "warning" as const, title: "Нээлттэй incident шалгах", body: openIncidents + " incident нээлттэй эсвэл шалгалтын төлөвтэй байна. Хариуцагч болон хаалтын төлвөө шинэчилнэ үү.", actionLabel: "Нээлттэй харах", onAction: () => updateTableFilter("open") });
+    }
+    if (totalIncidents === 0) {
+      items.push({ tone: "normal" as const, title: "Incident бүртгэл байхгүй", body: "Систем хэвийн төлөвтэй байна. Шинэ incident гарвал шууд бүртгэж мөр үлдээнэ үү.", actionLabel: canEdit ? "+ Incident нэмэх" : undefined, onAction: canEdit ? () => setModal(true) : undefined });
+    }
+    return items.slice(0, 3);
+  })();
+
   const reportNow = useMemo(() => reportClock ?? lastUpdated ?? new Date(), [lastUpdated, reportClock]);
   const reportStart = useMemo(() => {
     const start = new Date(reportNow);
@@ -525,41 +546,20 @@ export default function SafetyPage() {
           </div>
           <RealtimeBadge lastUpdated={lastUpdated} />
         </div>
-
-        {/* Safety Status Banner */}
-        <div style={{ display: "flex", gap: 10, marginBottom: 20, flexWrap: "wrap" }}>
-          {highSeverity > 0 && (
-            <div style={{ flex: "1 1 220px", padding: "12px 16px", borderRadius: 12, border: "1px solid rgba(239,68,68,0.28)", background: "rgba(239,68,68,0.06)", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
-              <div style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
-                <span style={{ fontSize: 16 }}>🔴</span>
-                <div>
-                  <div style={{ fontSize: 12, fontWeight: 800, color: "#EF4444" }}>ӨНДӨР ЭРСДЭЛ: {highSeverity} INCIDENT</div>
-                  <div style={{ fontSize: 11, color: "var(--muted)", marginTop: 2 }}>Яаралтай арга хэмжээ авах шаардлагатай</div>
-                </div>
-              </div>
-              <button type="button" onClick={() => updateTableFilter("high")} style={{ padding: "5px 12px", borderRadius: 7, border: "1px solid rgba(239,68,68,0.5)", background: "rgba(239,68,68,0.12)", color: "#EF4444", fontSize: 10, fontWeight: 800, cursor: "pointer", flexShrink: 0 }}>Шалгах</button>
-            </div>
-          )}
-          {openIncidents > 0 && (
-            <div style={{ flex: "1 1 200px", padding: "12px 16px", borderRadius: 12, border: "1px solid rgba(245,158,11,0.25)", background: "rgba(245,158,11,0.06)", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
-              <div style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
-                <span style={{ fontSize: 16 }}>🟠</span>
-                <div>
-                  <div style={{ fontSize: 12, fontWeight: 800, color: "#F59E0B" }}>НЭЭЛТТЭЙ: {openIncidents} INCIDENT</div>
-                  <div style={{ fontSize: 11, color: "var(--muted)", marginTop: 2 }}>Шалгаж, шийдвэрлэх шаардлагатай</div>
-                </div>
-              </div>
-              <button type="button" onClick={() => updateTableFilter("open")} style={{ padding: "5px 12px", borderRadius: 7, border: "1px solid rgba(245,158,11,0.5)", background: "rgba(245,158,11,0.1)", color: "#F59E0B", fontSize: 10, fontWeight: 800, cursor: "pointer", flexShrink: 0 }}>Харах</button>
-            </div>
-          )}
-          <div style={{ flex: "0 0 auto", padding: "12px 16px", borderRadius: 12, border: `1px solid ${openIncidents === 0 ? "rgba(16,185,129,0.22)" : "rgba(100,116,139,0.2)"}`, background: openIncidents === 0 ? "rgba(16,185,129,0.05)" : "rgba(100,116,139,0.05)", display: "flex", alignItems: "center", gap: 10 }}>
-            <span style={{ fontSize: 16 }}>{openIncidents === 0 ? "🟢" : "⚪"}</span>
-            <div>
-              <div style={{ fontSize: 12, fontWeight: 800, color: openIncidents === 0 ? "#10B981" : "var(--muted)" }}>СИСТЕМИЙН ТӨЛӨВ: {openIncidents === 0 ? "ТОГТВОРТОЙ" : "АНХААРУУЛГА"}</div>
-              <div style={{ fontSize: 11, color: "var(--muted)", marginTop: 2 }}>{openIncidents === 0 ? "Нээлттэй incident байхгүй" : `${openIncidents} incident хянагдаж байна`}</div>
-            </div>
-          </div>
-        </div>
+        <PriorityStatusBar
+          tone={safetyPriorityTone}
+          title={safetyPriorityTone === "normal" ? "Систем хэвийн" : "Safety incident анхаарал шаардсан"}
+          summary={safetyPrioritySummary}
+          attention={safetyPriorityTone === "critical" ? "Өндөр эрсдэл" : safetyPriorityTone === "warning" ? "Нээлттэй incident" : "Анхаарах зүйлгүй"}
+          action={safetyPriorityTone === "normal" ? "Хяналтыг үргэлжлүүлэх" : "Incident шалгаж хаах"}
+          actionLabel={safetyPriorityTone === "normal" ? (canEdit ? "+ Incident" : "Шинэчлэх") : "Шалгах"}
+          onAction={safetyPriorityTone === "normal" ? (canEdit ? () => setModal(true) : () => void mutate()) : () => updateTableFilter(safetyPriorityTone === "critical" ? "high" : "open")}
+          metrics={[
+            { label: "Critical", value: alerts.length, tone: alerts.length > 0 ? "critical" : "normal" },
+            { label: "Warning", value: openIncidents, tone: openIncidents > 0 ? "warning" : "normal" },
+            { label: "Closed", value: closedIncidents, tone: "normal" },
+          ]}
+        />
 
         <div className="kpi-grid" style={{ marginBottom: 14 }}>
           <KpiCard label="Нийт incident" value={totalIncidents} change="Нийт бүртгэгдсэн" icon="🛡️"
@@ -745,14 +745,16 @@ export default function SafetyPage() {
                 </thead>
                 <tbody>
                   {paginatedIncidents.length === 0 ? (
-                    <tr className="empty-row">
-                      <td colSpan={7} style={{ padding: "32px 16px" }}>
-                        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 10 }}>
-                          <span style={{ fontSize: 32 }}>🛡️</span>
-                          <div style={{ fontWeight: 700, color: "var(--text)", fontSize: 14 }}>Incident бүртгэл байхгүй</div>
-                          <div style={{ fontSize: 12, color: "var(--muted)" }}>Одоогоор аюулгүй байдлын бүртгэл алга</div>
-                          {canEdit && <button type="button" onClick={() => setModal(true)} style={{ marginTop: 4, padding: "6px 18px", borderRadius: 8, border: "1px solid #EF4444", background: "rgba(239,68,68,0.1)", color: "#EF4444", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>+ Incident нэмэх</button>}
-                        </div>
+                                        <tr className="empty-row">
+                      <td colSpan={7} style={{ padding: 18 }}>
+                        <DashboardEmptyState
+                          icon="🛡️"
+                          title="Incident бүртгэл байхгүй"
+                          message="Incident бүртгэл байхгүй. Систем хэвийн ажиллаж байна."
+                          actionLabel={canEdit ? "+ Incident нэмэх" : undefined}
+                          onAction={canEdit ? () => setModal(true) : undefined}
+                          tone="normal"
+                        />
                       </td>
                     </tr>
                   ) : (
@@ -819,6 +821,12 @@ export default function SafetyPage() {
                 ))}
               </div>
             </div>
+            <AiDecisionCenter
+              recommendations={safetyRecommendations}
+              emptyTitle="Safety төлөв хэвийн"
+              emptyBody="Өндөр эрсдэлтэй эсвэл нээлттэй incident илрээгүй. Хяналтын төлөв тогтвортой байна."
+            />
+
 
             <div className="panel">
               <div className="panel-hdr"><div className="panel-title">Анхааруулга</div></div>

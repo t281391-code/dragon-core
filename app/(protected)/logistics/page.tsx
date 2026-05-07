@@ -21,6 +21,7 @@ import {
   YAxis,
 } from "recharts";
 import { useAuth } from "@/components/AuthProvider";
+import { AiDecisionCenter, DashboardEmptyState, PriorityStatusBar } from "@/components/DashboardUX";
 import { DeptTopbar } from "@/components/DeptTopbar";
 import { KpiCard } from "@/components/KpiCard";
 import { ChartHint, RealtimeBadge, REALTIME_REFRESH_MS } from "@/components/RealtimeBadge";
@@ -461,6 +462,20 @@ export default function LogisticsPage() {
       .map((t) => ({ msg: `Саатал: ${t.material.name} → ${t.destinationSite}` }));
   }, [transports]);
 
+  const logisticsPriorityTone = alerts.length > 0 ? "critical" : pendingTrips > 0 || activeTrips > 0 ? "warning" : "normal";
+  const logisticsPrioritySummary = logisticsPriorityTone === "critical"
+    ? alerts.length + " тээвэр хугацаа хэтэрсэн байна. Маршрут, жолооч, хүргэлтийн огноог шалгана уу."
+    : logisticsPriorityTone === "warning"
+      ? activeTrips + " идэвхтэй, " + pendingTrips + " хүлээгдэж буй тээвэр байна. Хүргэлтийн төлвийг баталгаажуулна уу."
+      : "Бүх тээврийн төлөв хэвийн байна.";
+  const logisticsRecommendations = (() => {
+    const items = [];
+    if (alerts.length > 0) items.push({ tone: "critical" as const, title: "Саатсан тээврийг шалгах", body: alerts[0].msg, actionLabel: "Саатал харах", onAction: () => updateTableFilter("cancelled") });
+    if (activeTrips > 0) items.push({ tone: "warning" as const, title: "Идэвхтэй маршрутыг хянах", body: activeTrips + " тээвэр замд явж байна. Дараагийн хүргэлтийн огноо болон жолоочийн мэдээллийг баталгаажуулна уу.", actionLabel: "Идэвхтэй харах", onAction: () => updateTableFilter("in_transit") });
+    if (transports.length === 0) items.push({ tone: "normal" as const, title: "Тээврийн бүртгэл байхгүй", body: "Одоогоор тээвэрлэлтийн бүртгэл алга. Шинэ тээвэр үүсгэснээр календарь, чиг хандлага ажиллана.", actionLabel: canEdit ? "+ Transport нэмэх" : undefined, onAction: canEdit ? () => setModal(true) : undefined });
+    return items.slice(0, 3);
+  })();
+
   const reportNow = useMemo(() => reportClock ?? lastUpdated ?? new Date(), [lastUpdated, reportClock]);
   const reportStart = useMemo(() => {
     const start = new Date(reportNow);
@@ -586,38 +601,20 @@ export default function LogisticsPage() {
           </div>
           <RealtimeBadge lastUpdated={lastUpdated} />
         </div>
-
-        {/* Logistics Status Banner */}
-        <div style={{ display: "flex", gap: 10, marginBottom: 20, flexWrap: "wrap" }}>
-          {alerts.length > 0 && (
-            <div style={{ flex: "1 1 220px", padding: "12px 16px", borderRadius: 12, border: "1px solid rgba(239,68,68,0.28)", background: "rgba(239,68,68,0.06)", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
-              <div style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
-                <span style={{ fontSize: 16 }}>🔴</span>
-                <div>
-                  <div style={{ fontSize: 12, fontWeight: 800, color: "#EF4444" }}>СААТСАН ТЭЭВЭР: {alerts.length} ачилт</div>
-                  <div style={{ fontSize: 11, color: "var(--muted)", marginTop: 2 }}>Хүргэлт хугацаа хэтэрсэн байна</div>
-                </div>
-              </div>
-              <button type="button" onClick={() => updateTableFilter("cancelled")} style={{ padding: "5px 12px", borderRadius: 7, border: "1px solid rgba(239,68,68,0.5)", background: "rgba(239,68,68,0.12)", color: "#EF4444", fontSize: 10, fontWeight: 800, cursor: "pointer", flexShrink: 0 }}>Шалгах</button>
-            </div>
-          )}
-          {activeTrips > 0 && (
-            <div style={{ flex: "1 1 200px", padding: "12px 16px", borderRadius: 12, border: "1px solid rgba(59,130,246,0.25)", background: "rgba(59,130,246,0.06)", display: "flex", alignItems: "center", gap: 12 }}>
-              <span style={{ fontSize: 16 }}>🔵</span>
-              <div>
-                <div style={{ fontSize: 12, fontWeight: 800, color: "#3B82F6" }}>ИДЭВХТЭЙ: {activeTrips} тээвэр явж байна</div>
-                <div style={{ fontSize: 11, color: "var(--muted)", marginTop: 2 }}>Бодит цагийн хяналт</div>
-              </div>
-            </div>
-          )}
-          <div style={{ flex: "0 0 auto", padding: "12px 16px", borderRadius: 12, border: `1px solid ${alerts.length === 0 ? "rgba(16,185,129,0.22)" : "rgba(100,116,139,0.2)"}`, background: alerts.length === 0 ? "rgba(16,185,129,0.05)" : "rgba(100,116,139,0.04)", display: "flex", alignItems: "center", gap: 10 }}>
-            <span style={{ fontSize: 16 }}>{alerts.length === 0 ? "🟢" : "⚪"}</span>
-            <div>
-              <div style={{ fontSize: 12, fontWeight: 800, color: alerts.length === 0 ? "#10B981" : "var(--muted)" }}>СИСТЕМИЙН ТӨЛӨВ: {alerts.length === 0 ? "ТОГТВОРТОЙ" : "АНХААРУУЛГА"}</div>
-              <div style={{ fontSize: 11, color: "var(--muted)", marginTop: 2 }}>{alerts.length === 0 ? "Бүх тээвэр хэвийн явж байна" : `${alerts.length} ачилт саатсан байна`}</div>
-            </div>
-          </div>
-        </div>
+        <PriorityStatusBar
+          tone={logisticsPriorityTone}
+          title={logisticsPriorityTone === "normal" ? "Систем хэвийн" : "Тээврийн төлөв анхаарал шаардсан"}
+          summary={logisticsPrioritySummary}
+          attention={logisticsPriorityTone === "critical" ? "Саатсан тээвэр" : logisticsPriorityTone === "warning" ? "Идэвхтэй маршрут" : "Анхаарах зүйлгүй"}
+          action={logisticsPriorityTone === "normal" ? "Календарийг хэвийн хянах" : "Маршрут / хүргэлтийн төлөв шалгах"}
+          actionLabel={logisticsPriorityTone === "normal" ? (canEdit ? "+ Transport" : "Шинэчлэх") : "Шалгах"}
+          onAction={logisticsPriorityTone === "normal" ? (canEdit ? () => setModal(true) : () => void mutateTransports()) : () => updateTableFilter(logisticsPriorityTone === "critical" ? "cancelled" : "in_transit")}
+          metrics={[
+            { label: "Critical", value: alerts.length, tone: alerts.length > 0 ? "critical" : "normal" },
+            { label: "Active", value: activeTrips, tone: activeTrips > 0 ? "warning" : "normal" },
+            { label: "Delivered", value: deliveredTrips, tone: "normal" },
+          ]}
+        />
 
         <div className="kpi-grid" style={{ marginBottom: 14 }}>
           <KpiCard label="Идэвхтэй тээвэр" value={activeTrips} valueStyle={{ color: ACCENT }}
@@ -785,14 +782,16 @@ export default function LogisticsPage() {
                 </thead>
                 <tbody>
                   {paginatedTransports.length === 0 ? (
-                    <tr className="empty-row">
-                      <td colSpan={8} style={{ padding: "32px 16px" }}>
-                        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 10 }}>
-                          <span style={{ fontSize: 32 }}>🚛</span>
-                          <div style={{ fontWeight: 700, color: "var(--text)", fontSize: 14 }}>Тээвэрлэлтийн бүртгэл байхгүй</div>
-                          <div style={{ fontSize: 12, color: "var(--muted)" }}>Одоогоор тээвэрлэлтийн бүртгэл алга</div>
-                          {canEdit && <button type="button" onClick={() => setModal(true)} style={{ marginTop: 4, padding: "6px 18px", borderRadius: 8, border: "1px solid #3B82F6", background: "rgba(59,130,246,0.1)", color: "#3B82F6", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>+ Transport нэмэх</button>}
-                        </div>
+                                        <tr className="empty-row">
+                      <td colSpan={8} style={{ padding: 18 }}>
+                        <DashboardEmptyState
+                          icon="🚚"
+                          title="Тээврийн бүртгэл байхгүй"
+                          message="Тээврийн бүртгэл байхгүй. Систем хэвийн ажиллаж байна."
+                          actionLabel={canEdit ? "+ Transport нэмэх" : undefined}
+                          onAction={canEdit ? () => setModal(true) : undefined}
+                          tone="normal"
+                        />
                       </td>
                     </tr>
                   ) : (
@@ -978,6 +977,12 @@ export default function LogisticsPage() {
                 ))}
               </div>
             </div>
+            <AiDecisionCenter
+              recommendations={logisticsRecommendations}
+              emptyTitle="Тээврийн төлөв хэвийн"
+              emptyBody="Саатсан тээвэр илрээгүй. Календарь болон маршрутын хяналт тогтвортой байна."
+            />
+
 
             <div className="panel">
               <div className="panel-hdr"><div className="panel-title">Анхааруулга</div></div>

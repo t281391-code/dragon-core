@@ -41,8 +41,31 @@ model User {
   assignedTransports   Transport[]
   materialTransactions MaterialTransaction[]
   aiAuditLogs          AiAgentAuditLog[]
+  shiftEntries         ShiftEntry[]
+  shiftParticipant     ShiftParticipant?
 
   @@index([isActive, fullName])
+}
+
+model ShiftParticipant {
+  id      String   @id @default(cuid())
+  userId  String   @unique
+  addedAt DateTime @default(now())
+  user    User     @relation(fields: [userId], references: [id])
+}
+
+model ShiftEntry {
+  id            String   @id @default(cuid())
+  userId        String
+  date          String
+  shiftCode     String
+  overtimeHours Int      @default(0)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  user          User     @relation(fields: [userId], references: [id])
+
+  @@unique([userId, date])
+  @@index([date])
 }
 
 model Material {

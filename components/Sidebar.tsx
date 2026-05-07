@@ -28,14 +28,17 @@ const DEPT_COLORS: Record<string, string> = {
   "/production": "#10B981",
   "/safety": "#EF4444",
   "/logistics": "#3B82F6",
+  "/shifts": "#06B6D4",
 };
 
 function getNavItems(role: string, department: string): NavItem[] {
+  const shiftItem: NavItem = { href: "/shifts", icon: "⛏", label: "Ээлжийн бүртгэл", section: "Үйл ажиллагаа" };
   const departmentItems: NavItem[] = [
     { href: "/warehouse", icon: "🏭", label: "Агуулах", section: "Үйл ажиллагаа" },
     { href: "/production", icon: "⚙️", label: "Үйлдвэрлэл", section: "Үйл ажиллагаа" },
     { href: "/safety", icon: "🛡️", label: "ХЭАБО", section: "Үйл ажиллагаа" },
     { href: "/logistics", icon: "🚛", label: "Тээвэрлэлт", section: "Үйл ажиллагаа" },
+    shiftItem,
   ];
 
   if (role === "ADMIN") {
@@ -53,7 +56,7 @@ function getNavItems(role: string, department: string): NavItem[] {
   };
 
   const allowedPath = departmentMap[department] ?? "/warehouse";
-  return departmentItems.filter((item) => item.href === allowedPath);
+  return [...departmentItems.filter((item) => item.href === allowedPath), shiftItem];
 }
 
 function initials(fullName: string): string {
@@ -82,7 +85,8 @@ export default function Sidebar() {
   }, [items, router, user]);
 
   useEffect(() => {
-    setMobileOpen(false);
+    const timeoutId = window.setTimeout(() => setMobileOpen(false), 0);
+    return () => window.clearTimeout(timeoutId);
   }, [pathname]);
 
   useEffect(() => {

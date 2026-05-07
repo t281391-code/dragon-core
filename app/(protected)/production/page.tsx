@@ -19,6 +19,7 @@ import {
   YAxis,
 } from "recharts";
 import { useAuth } from "@/components/AuthProvider";
+import { AiDecisionCenter, DashboardEmptyState, PriorityStatusBar } from "@/components/DashboardUX";
 import { DeptTopbar } from "@/components/DeptTopbar";
 import { KpiCard } from "@/components/KpiCard";
 import { ChartHint, RealtimeBadge, REALTIME_REFRESH_MS } from "@/components/RealtimeBadge";
@@ -296,9 +297,16 @@ export default function ProductionPage() {
   const materials: Material[] = useMemo(() => materialsData?.data ?? [], [materialsData]);
   const loading = logsLoading || materialsLoading;
 
-  useEffect(() => {
-    if (!selectedMaterialId && materials[0]) setSelectedMaterialId(materials[0].id);
-  }, [materials, selectedMaterialId]);
+  function closeShipmentModal() {
+    setShipmentModal(false);
+    setShipmentLog(null);
+    setShipmentProductName("");
+    setShipmentAmount("");
+    setShipmentAmountUnit("ton");
+    setShipmentDate("");
+    setShipmentDestinationMine("");
+    setShipmentError("");
+  }
 
   useEffect(() => {
     if (!modal && !shipmentModal && !selectedLog && !reportModal) return;
@@ -364,10 +372,11 @@ export default function ProductionPage() {
     const densityValue = density.trim() ? Number(density) : null;
     if (!qty) { setError("Үйлдвэрлэсэн хэмжээг зөв оруулна уу"); return; }
     if (densityValue === null || !Number.isFinite(densityValue) || densityValue <= 0) { setError("Нягтын утгыг заавал зөв оруулна уу"); return; }
+    const effectiveMaterialId = selectedMaterialId || materials[0]?.id || "";
     setSubmitting(true); setError("");
     const res = await fetch("/api/production-logs", {
       method:"POST", headers:{"Content-Type":"application/json"},
-      body: JSON.stringify({ lotNumber:makeLotNumber(), productionDate, productName, outputQuantity:qty, destinationMine, materialId:selectedMaterialId || null, workerInfo:workerInfo.trim()||null, density:densityValue, note:note||null }),
+      body: JSON.stringify({ lotNumber:makeLotNumber(), productionDate, productName, outputQuantity:qty, destinationMine, materialId:effectiveMaterialId || null, workerInfo:workerInfo.trim()||null, density:densityValue, note:note||null }),
     });
     const data = await res.json();
     if (!res.ok) { setError(data.error??"Алдаа гарлаа"); setSubmitting(false); return; }
@@ -432,17 +441,6 @@ export default function ProductionPage() {
   function openShipmentDateModal(log: ProductionLog | null) {
     applyShipmentForm(log);
     setShipmentModal(true);
-  }
-
-  function closeShipmentModal() {
-    setShipmentModal(false);
-    setShipmentLog(null);
-    setShipmentProductName("");
-    setShipmentAmount("");
-    setShipmentAmountUnit("ton");
-    setShipmentDate("");
-    setShipmentDestinationMine("");
-    setShipmentError("");
   }
 
   async function saveShipmentDate() {
@@ -608,6 +606,46 @@ export default function ProductionPage() {
     return sorted[0] ?? null;
   },[alerts]);
 
+  const productionPriorityTone = topAlert?.type === "crit" || todayProduced < avgDaily * 0.5 ? "critical" : topAlert || pendingCount > 0 ? "warning" : "normal";
+  const productionPrioritySummary = productionPriorityTone === "critical"
+    ? "Үйлдвэрлэлийн төлөвлөгөө эсвэл бүтээгдэхүүний тасралт анхаарал шаардсан байна."
+    : productionPriorityTone === "warning"
+      ? "Үйлдвэрлэл ажиллаж байна, гэхдээ ачилт эсвэл бүтээгдэхүүний давтамжийг шалгах хэрэгтэй."
+      : "Үйлдвэрлэлийн үндсэн урсгал хэвийн байна.";
+  const productionAttention = topAlert ? topAlert.name : pendingCount > 0 ? "Хүлээгдэж буй ачилт" : "Анхаарах зүйлгүй";
+  const productionAction = productionPriorityTone === "normal" ? "Өдрийн гарцыг үргэлжлүүлэн хянах" : topAlert ? "Бүртгэл нэмэх / төлөв засах" : "Ачилтын огноог баталгаажуулах";
+  const productionRecommendations = (() => {
+    const items = [];
+    if (topAlert) {
+      items.push({
+        tone: topAlert.type === "crit" ? "critical" as const : "warning" as const,
+        title: topAlert.name,
+        body: topAlert.detail,
+        actionLabel: topAlert.action,
+        onAction: () => openCreateModal(topAlert.name as (typeof PRODUCTS)[number]),
+      });
+    }
+    if (todayProduced < avgDaily * 0.5) {
+      items.push({
+        tone: "critical" as const,
+        title: "Өнөөдрийн гарц бага байна",
+        body: fmtDisplay(todayProduced) + " бүртгэгдсэн. Дундаж зорилттой харьцуулж үйлдвэрлэлийн бүртгэлээ нэмж шалгана уу.",
+        actionLabel: "+ Бүртгэл нэмэх",
+        onAction: () => openCreateModal(),
+      });
+    }
+    if (pendingCount > 0) {
+      items.push({
+        tone: "warning" as const,
+        title: "Ачилтын төлөв баталгаажуулах",
+        body: pendingCount + " ачилт хүлээгдэж байна. Дараагийн ачилт: " + nextShipmentDate + (nextShipmentTimeText ? " · " + nextShipmentTimeText : "") + ".",
+        actionLabel: "Ачилт засах",
+        onAction: () => openShipmentDateModal(shipmentEditableLog),
+      });
+    }
+    return items.slice(0, 3);
+  })();
+
   const selectedWorkers = useMemo(() => splitWorkerInfo(selectedLog?.workerInfo ?? null), [selectedLog]);
   const selectedDayPoint = useMemo(
     () => selectedLog ? dailySeries.find(d=>d.key===selectedLog.productionDate.slice(0,10)) : undefined,
@@ -709,55 +747,20 @@ export default function ProductionPage() {
           <span style={{flex:1}} />
           <RealtimeBadge lastUpdated={lastUpdated} />
         </div>
-
-        {/* Production Status Banner */}
-        <div style={{display:"flex",gap:10,marginBottom:20,flexWrap:"wrap"}}>
-          <div style={{
-            flex:"1 1 220px", padding:"12px 16px", borderRadius:12,
-            border:`1px solid ${todayProduced>=avgDaily*1.2?"rgba(16,185,129,0.28)":todayProduced>=avgDaily*0.5?"rgba(245,158,11,0.28)":"rgba(239,68,68,0.28)"}`,
-            background:todayProduced>=avgDaily*1.2?"rgba(16,185,129,0.06)":todayProduced>=avgDaily*0.5?"rgba(245,158,11,0.06)":"rgba(239,68,68,0.06)",
-            display:"flex",alignItems:"center",gap:12,
-          }}>
-            <span style={{fontSize:16}}>{todayProduced>=avgDaily*1.2?"🟢":todayProduced>=avgDaily*0.5?"🟠":"🔴"}</span>
-            <div>
-              <div style={{fontSize:12,fontWeight:800,color:todayProduced>=avgDaily*1.2?"#10B981":todayProduced>=avgDaily*0.5?"#F59E0B":"#EF4444"}}>
-                ӨНӨӨДРИЙН ГАРЦ: {fmtKg(todayProduced)}
-              </div>
-              <div style={{fontSize:11,color:"var(--muted)",marginTop:2}}>
-                {todayProduced>=avgDaily*1.2?"Зорилго биелсэн — маш сайн!":todayProduced>=avgDaily*0.5?"Хэвийн явц":"Зорилгоос хоцорч байна"}
-              </div>
-            </div>
-          </div>
-          <div
-            role="button"
-            tabIndex={0}
-            onClick={()=>openShipmentDateModal(shipmentEditableLog)}
-            onKeyDown={(event)=>{
-              if (event.key === "Enter" || event.key === " ") {
-                event.preventDefault();
-                openShipmentDateModal(shipmentEditableLog);
-              }
-            }}
-            style={{flex:"1 1 260px",padding:"12px 16px",borderRadius:12,border:"1px solid rgba(59,130,246,0.24)",background:"rgba(59,130,246,0.06)",display:"flex",alignItems:"center",gap:12,cursor:"pointer"}}
-          >
-            <span style={{fontSize:16}}>🚚</span>
-            <div style={{minWidth:0}}>
-              <div style={{fontSize:12,fontWeight:800,color:"#3B82F6"}}>
-                ДАРААГИЙН АЧИЛТ: {nextShipmentDate}
-              </div>
-              <div style={{fontSize:11,color:"var(--muted)",marginTop:2,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>
-                {nextShipmentLog ? `${nextShipmentSummary} · ${nextShipmentTimeText}` : "Ачигдах бүртгэл алга"}
-              </div>
-            </div>
-          </div>
-          <div style={{flex:"0 0 auto",padding:"12px 16px",borderRadius:12,border:"1px solid rgba(16,185,129,0.22)",background:"rgba(16,185,129,0.05)",display:"flex",alignItems:"center",gap:10}}>
-            <span style={{fontSize:16}}>🟢</span>
-            <div>
-              <div style={{fontSize:12,fontWeight:800,color:"#10B981"}}>СИСТЕМИЙН ТӨЛӨВ: ТОГТВОРТОЙ</div>
-              <div style={{fontSize:11,color:"var(--muted)",marginTop:2}}>Үйлдвэрлэл хэвийн ажиллаж байна</div>
-            </div>
-          </div>
-        </div>
+        <PriorityStatusBar
+          tone={productionPriorityTone}
+          title={productionPriorityTone === "normal" ? "Систем хэвийн" : "Үйлдвэрлэл анхаарал шаардсан"}
+          summary={productionPrioritySummary}
+          attention={productionAttention}
+          action={productionAction}
+          actionLabel={productionPriorityTone === "normal" ? "Шинэчлэх" : topAlert ? "+ Бүртгэл" : "Ачилт засах"}
+          onAction={productionPriorityTone === "normal" ? () => { void mutateLogs(); void mutateMaterials(); } : topAlert ? () => openCreateModal(topAlert.name as (typeof PRODUCTS)[number]) : () => openShipmentDateModal(shipmentEditableLog)}
+          metrics={[
+            { label: "Өнөөдөр", value: fmtDisplay(todayProduced), tone: todayProduced < avgDaily * 0.5 ? "critical" : "normal" },
+            { label: "Warning", value: alerts.filter((item) => item.type !== "crit").length, tone: alerts.some((item) => item.type !== "crit") ? "warning" : "normal" },
+            { label: "Ачилт", value: pendingCount, tone: pendingCount > 0 ? "warning" : "normal" },
+          ]}
+        />
 
         {/* KPI Cards */}
         <div className="kpi-grid">
@@ -997,14 +1000,16 @@ export default function ProductionPage() {
                 </thead>
                 <tbody>
                   {paginatedLogs.length===0 ? (
-                    <tr className="empty-row">
-                      <td colSpan={9} style={{padding:"32px 16px"}}>
-                        <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:10}}>
-                          <span style={{fontSize:32}}>🏭</span>
-                          <div style={{fontWeight:700,color:"var(--text)",fontSize:14}}>Бүртгэл байхгүй</div>
-                          <div style={{fontSize:12,color:"var(--muted)"}}>Одоогоор бүртгэл алга. Шинэ бүртгэл нэмж эхлэцгээе.</div>
-                          {canEdit&&<button type="button" onClick={()=>openCreateModal()} style={{marginTop:4,padding:"6px 18px",borderRadius:8,border:"1px solid #10B981",background:"rgba(16,185,129,0.1)",color:"#10B981",fontSize:11,fontWeight:700,cursor:"pointer"}}>+ Бүртгэл нэмэх</button>}
-                        </div>
+                                        <tr className="empty-row">
+                      <td colSpan={9} style={{ padding: 18 }}>
+                        <DashboardEmptyState
+                          icon="🏭"
+                          title="Үйлдвэрлэлийн бүртгэл байхгүй"
+                          message="Одоогоор үйлдвэрлэлийн бүртгэл алга. Шинэ бүртгэл нэмснээр гарц, ачилтын график ажиллана."
+                          actionLabel={canEdit ? "+ Бүртгэл нэмэх" : undefined}
+                          onAction={canEdit ? () => openCreateModal() : undefined}
+                          tone="normal"
+                        />
                       </td>
                     </tr>
                   ) : paginatedLogs.map((l,i)=>{
@@ -1094,6 +1099,12 @@ export default function ProductionPage() {
                 ))}
               </div>
             </div>
+            <AiDecisionCenter
+              recommendations={productionRecommendations}
+              emptyTitle="Үйлдвэрлэлийн төлөв тогтвортой"
+              emptyBody="Өнөөдрийн гарц, ачилтын хуваарь, бүтээгдэхүүний давтамж хэвийн байна."
+            />
+
 
             {/* Alert panel — richer context */}
             <div className="panel" style={{padding:20,flex:1}}>

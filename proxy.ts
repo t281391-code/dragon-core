@@ -15,7 +15,7 @@ const DEPT_HOME: Record<string, string> = {
 };
 
 const DEPT_ROUTES = ["/warehouse", "/production", "/safety", "/logistics"];
-const AUTHENTICATED_ROUTES = ["/agent"];
+const AUTHENTICATED_ROUTES = ["/agent", "/shifts"];
 const ADMIN_ONLY_ROUTES = ["/users"];
 const DEFAULT_HOME = "/warehouse";
 const SESSION_SECRET = getJwtSecret();

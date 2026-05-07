@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { JetBrains_Mono, Manrope, Orbitron, Syne } from "next/font/google";
+import { Inter, JetBrains_Mono, Manrope, Orbitron, Syne } from "next/font/google";
 import "./globals.css";
 import "./landing-ui.css";
 
@@ -13,6 +13,12 @@ const jetbrainsMono = JetBrains_Mono({
   subsets: ["latin"],
   variable: "--font-mono",
   weight: ["400", "500", "600"],
+});
+
+const inter = Inter({
+  subsets: ["latin"],
+  variable: "--font-inter",
+  display: "swap",
 });
 
 const manrope = Manrope({
@@ -44,7 +50,7 @@ export default function RootLayout({
   return (
     <html lang="mn">
       <body
-        className={`${syne.variable} ${jetbrainsMono.variable} ${manrope.variable} ${orbitron.variable} theme-light`}
+        className={`${inter.variable} ${syne.variable} ${jetbrainsMono.variable} ${manrope.variable} ${orbitron.variable} theme-light`}
         suppressHydrationWarning
       >
         {children}

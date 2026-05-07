@@ -22,6 +22,7 @@ import {
   YAxis,
 } from "recharts";
 import { useAuth } from "@/components/AuthProvider";
+import { AiDecisionCenter, DashboardEmptyState, PriorityStatusBar } from "@/components/DashboardUX";
 import { DeptTopbar } from "@/components/DeptTopbar";
 import { KpiCard } from "@/components/KpiCard";
 import { ChartHint, RealtimeBadge, REALTIME_REFRESH_MS } from "@/components/RealtimeBadge";
@@ -200,92 +201,6 @@ function FlowTooltip({ active, payload, label }: { active?: boolean; payload?: F
   );
 }
 
-function SystemStatusBanner({ materials, txnsByMaterial, onOrder }: {
-  materials: Material[];
-  txnsByMaterial: Map<string, MaterialTransaction[]>;
-  onOrder: () => void;
-}) {
-  const bannerItems = useMemo(() => {
-    return materials
-      .map(m => {
-        const tone = stockTone(m);
-        const maxFillPct = fillPercent(m);
-        const days = computeDaysRemaining(m, txnsByMaterial.get(m.name) ?? []);
-        return { material: m, tone, maxFillPct, days };
-      })
-      .filter(x => x.tone.className !== "ok")
-      .sort((a, b) => {
-        if (a.tone.className === "crit" && b.tone.className !== "crit") return -1;
-        if (a.tone.className !== "crit" && b.tone.className === "crit") return 1;
-        return (a.days ?? 999) - (b.days ?? 999);
-      })
-      .slice(0, 3);
-  }, [materials, txnsByMaterial]);
-
-  const systemOK = bannerItems.length === 0;
-
-  return (
-    <div style={{ display: "flex", gap: 10, marginBottom: 20, flexWrap: "wrap" }}>
-      {bannerItems.map(({ material, tone, maxFillPct, days }) => (
-        <div key={material.id} style={{
-          flex: "1 1 240px",
-          padding: "12px 16px",
-          borderRadius: 12,
-          border: `1px solid ${tone.className === "crit" ? "rgba(239,68,68,0.28)" : "rgba(245,158,11,0.28)"}`,
-          background: tone.className === "crit" ? "rgba(239,68,68,0.06)" : "rgba(245,158,11,0.06)",
-          display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12,
-        }}>
-          <div style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
-            <span style={{ fontSize: 16, flexShrink: 0 }}>{tone.className === "crit" ? "🔴" : "🟠"}</span>
-            <div>
-              <div style={{ fontSize: 12, fontWeight: 800, color: tone.color }}>{material.name} — {maxFillPct}% дүүрсэн</div>
-              <div style={{ fontSize: 11, color: "var(--muted)", marginTop: 2 }}>
-                {days !== null
-                  ? `${days} хоногийн дотор дуусах эрсдэлтэй`
-                  : tone.className === "crit" ? "Шуурхай нөхөх шаардлагатай" : "Анхааруулга шаардлагатай"}
-              </div>
-            </div>
-          </div>
-          <button type="button" onClick={onOrder} style={{
-            padding: "5px 12px", borderRadius: 7,
-            border: `1px solid ${tone.color}55`,
-            background: `${tone.color}12`,
-            color: tone.color, fontSize: 10, fontWeight: 800, cursor: "pointer", flexShrink: 0,
-          }}>
-            {tone.className === "crit" ? "Захиалах" : "Анхаарах"}
-          </button>
-        </div>
-      ))}
-      <div style={{
-        flex: systemOK ? "1 1 auto" : "0 0 auto",
-        padding: "12px 16px",
-        borderRadius: 12,
-        border: "1px solid rgba(16,185,129,0.22)",
-        background: "rgba(16,185,129,0.05)",
-        display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12,
-      }}>
-        <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-          <span style={{ fontSize: 16 }}>🟢</span>
-          <div>
-            <div style={{ fontSize: 12, fontWeight: 800, color: "#10B981" }}>
-              СИСТЕМИЙН ТӨЛӨВ: {systemOK ? "ТОГТВОРТОЙ" : "АНХААРУУЛГА"}
-            </div>
-            <div style={{ fontSize: 11, color: "var(--muted)", marginTop: 2 }}>
-              {systemOK ? "Бүх үндсэн систем хэвийн ажиллаж байна" : `${bannerItems.length} материал анхаарал шаардлагатай`}
-            </div>
-          </div>
-        </div>
-        <button type="button" style={{
-          padding: "5px 12px", borderRadius: 7,
-          border: "1px solid rgba(16,185,129,0.28)",
-          background: "rgba(16,185,129,0.09)",
-          color: "#10B981", fontSize: 10, fontWeight: 800, cursor: "pointer", flexShrink: 0,
-        }}>Дэлгэрэнгүй</button>
-      </div>
-    </div>
-  );
-}
-
 function WarehouseSkeleton() {
   return (
     <div className="department-warehouse">
@@ -409,15 +324,10 @@ export default function WarehousePage() {
     return () => window.clearInterval(intervalId);
   }, [mutateMaterials, mutateReportTxns, mutateStats, mutateTxns, reportModal]);
 
-  useEffect(() => {
-    if (modal && !WAREHOUSE_PRIORITY.includes(materialName)) {
-      setMaterialName(WAREHOUSE_PRIORITY[0]);
-    }
-  }, [materialName, modal]);
 
   async function submitTransaction(event: { preventDefault(): void }) {
     event.preventDefault();
-    const selectedMaterialName = materialName || WAREHOUSE_PRIORITY[0];
+    const selectedMaterialName = WAREHOUSE_PRIORITY.includes(materialName) ? materialName : WAREHOUSE_PRIORITY[0];
     const selectedMaterial = materials.find((material) => material.name === selectedMaterialName);
     const numericQuantity = Number(quantity);
     if (!selectedMaterialName || !numericQuantity || numericQuantity <= 0) {
@@ -577,12 +487,11 @@ export default function WarehousePage() {
     normalCount,
     criticalStockTotal,
     lowStockTotal,
-    normalStockTotal,
     totalStock,
   } = useMemo(() => {
     const toneMap = new Map<string, ReturnType<typeof stockTone>>();
     let criticalCount = 0, lowCount = 0, normalCount = 0;
-    let criticalStockTotal = 0, lowStockTotal = 0, normalStockTotal = 0;
+    let criticalStockTotal = 0, lowStockTotal = 0;
     let totalStock = 0;
     for (const m of displayMaterials) {
       const tone = stockTone(m);
@@ -590,9 +499,9 @@ export default function WarehousePage() {
       totalStock += m.currentStock;
       if (tone.className === "crit") { criticalCount++; criticalStockTotal += m.currentStock; }
       else if (tone.className === "low") { lowCount++; lowStockTotal += m.currentStock; }
-      else { normalCount++; normalStockTotal += m.currentStock; }
+      else { normalCount++; }
     }
-    return { toneMap, criticalCount, lowCount, normalCount, criticalStockTotal, lowStockTotal, normalStockTotal, totalStock };
+    return { toneMap, criticalCount, lowCount, normalCount, criticalStockTotal, lowStockTotal, totalStock };
   }, [displayMaterials]);
 
   const totalInbound = useMemo(() => flowSeries.reduce((s, d) => s + d.inbound, 0), [flowSeries]);
@@ -742,17 +651,35 @@ export default function WarehousePage() {
   const canEdit = user?.role === "ADMIN" || (user?.role === "MODERATOR" && user.department === "WAREHOUSE");
   const TARGET_LINE = 3000;
 
-  const aiAdvice = useMemo(() => {
+  const priorityTone = criticalCount > 0 ? "critical" : lowCount > 0 ? "warning" : "normal";
+  const prioritySummary = priorityTone === "critical"
+    ? criticalCount + " материал критик түвшинд байна. Нөөц тасалдахаас өмнө захиалга үүсгэнэ үү."
+    : priorityTone === "warning"
+      ? lowCount + " материал бага түвшинд байна. Өнөөдрийн хөдөлгөөнтэй тулгаж шалгана уу."
+      : "Агуулахын үндсэн нөөц хэвийн түвшинд байна.";
+  const priorityAttention = priorityTone === "critical" ? "Критик нөөц" : priorityTone === "warning" ? "Бага нөөц" : "Анхаарах зүйлгүй";
+  const priorityAction = priorityTone === "normal" ? "Хөдөлгөөнийг хэвийн хянах" : "Орлого / захиалга бүртгэх";
+
+  const aiRecommendations = useMemo(() => {
     const items = displayMaterials
       .map(m => ({ m, tone: toneMap.get(m.id)!, days: computeDaysRemaining(m, txnsByMaterial.get(m.name) ?? []) }))
       .filter(x => x.tone.className !== "ok");
-    if (items.length === 0) return null;
-    const withDays = items.filter(x => x.days !== null).sort((a, b) => (a.days ?? 999) - (b.days ?? 999));
-    const best = withDays[0] ?? items[0];
-    const text = best.days !== null
-      ? `${best.m.name} ${best.days} хоногийн дотор дуусах төлөвтэй. Захиалга хийхийг зөвлөж байна.`
-      : `${best.m.name} нь ${best.tone.label.toLowerCase()} түвшинд байна. Яаралтай захиалга хийхийг зөвлөж байна.`;
-    return { text, tone: best.tone };
+    return items
+      .sort((a, b) => {
+        if (a.tone.className === "crit" && b.tone.className !== "crit") return -1;
+        if (a.tone.className !== "crit" && b.tone.className === "crit") return 1;
+        return (a.days ?? 999) - (b.days ?? 999);
+      })
+      .slice(0, 3)
+      .map((item) => ({
+        tone: item.tone.className === "crit" ? "critical" as const : "warning" as const,
+        title: item.tone.className === "crit" ? item.m.name + ": критик нөөц" : item.m.name + ": бага нөөц",
+        body: item.days !== null
+          ? item.days + " хоногийн дотор дуусах эрсдэлтэй. Нөөцийн захиалга эсвэл орлогын бүртгэл үүсгэнэ үү."
+          : "Одоогийн үлдэгдэл " + formatValue(item.m.currentStock, item.m.unit) + ". Доод хэмжээнээс доогуур байгаа эсэхийг шалгана уу.",
+        actionLabel: "Орлого / захиалга",
+        onAction: () => setModal(true),
+      }));
   }, [displayMaterials, toneMap, txnsByMaterial]);
 
   if (loading) return <WarehouseSkeleton />;
@@ -772,7 +699,20 @@ export default function WarehousePage() {
         </div>
 
         {/* System Status / Alert Banner */}
-        <SystemStatusBanner materials={displayMaterials} txnsByMaterial={txnsByMaterial} onOrder={() => setModal(true)} />
+        <PriorityStatusBar
+          tone={priorityTone}
+          title={priorityTone === "normal" ? "Систем хэвийн" : "Агуулахын нөөц анхаарал шаардсан"}
+          summary={prioritySummary}
+          attention={priorityAttention}
+          action={priorityAction}
+          actionLabel={priorityTone === "normal" ? "Шинэчлэх" : "Орлого / зарлага"}
+          onAction={priorityTone === "normal" ? () => { void mutateMaterials(); void mutateTxns(); void mutateStats(); } : () => setModal(true)}
+          metrics={[
+            { label: "Critical", value: criticalCount, tone: criticalCount > 0 ? "critical" : "normal" },
+            { label: "Warning", value: lowCount, tone: lowCount > 0 ? "warning" : "normal" },
+            { label: "Normal", value: normalCount, tone: "normal" },
+          ]}
+        />
 
         {/* KPI Cards */}
         <div className="kpi-grid">
@@ -990,14 +930,16 @@ export default function WarehousePage() {
                 </thead>
                 <tbody>
                   {filteredMaterials.length === 0 ? (
-                    <tr className="empty-row">
-                      <td colSpan={7} style={{ padding: "32px 16px" }}>
-                        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 10 }}>
-                          <span style={{ fontSize: 32 }}>📦</span>
-                          <div style={{ fontWeight: 700, color: "var(--text)", fontSize: 14 }}>Материал олдсонгүй</div>
-                          <div style={{ fontSize: 12, color: "var(--muted)" }}>Шүүлтүүр эсвэл хайлтыг өөрчилж үзнэ үү</div>
-                          {canEdit && <button type="button" onClick={() => setModal(true)} style={{ marginTop: 4, padding: "6px 18px", borderRadius: 8, border: "1px solid var(--accent)", background: "var(--accent-dim)", color: "var(--accent)", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>+ Орлого нэмэх</button>}
-                        </div>
+                                        <tr className="empty-row">
+                      <td colSpan={7} style={{ padding: 18 }}>
+                        <DashboardEmptyState
+                          icon="📦"
+                          title="Материал олдсонгүй"
+                          message="Шүүлтүүрт тохирох материал алга. Нөөцийн хяналт хэвийн үргэлжилж байна."
+                          actionLabel={canEdit ? "+ Орлого нэмэх" : undefined}
+                          onAction={canEdit ? () => setModal(true) : undefined}
+                          tone="normal"
+                        />
                       </td>
                     </tr>
                   ) : (
@@ -1064,29 +1006,11 @@ export default function WarehousePage() {
               </div>
             </div>
 
-            {aiAdvice ? (
-              <div className="panel" style={{ padding: 16, border: `1px solid ${aiAdvice.tone.color}28` }}>
-                <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 8 }}>
-                  <span style={{ fontSize: 15 }}>🤖</span>
-                  <div style={{ fontSize: 12, fontWeight: 800, color: "var(--text)" }}>AI Зөвлөмж</div>
-                </div>
-                <div style={{ fontSize: 11.5, color: "var(--text)", lineHeight: 1.55, marginBottom: 12 }}>{aiAdvice.text}</div>
-                <button type="button" onClick={() => setModal(true)} style={{
-                  width: "100%", padding: "7px 14px", borderRadius: 8,
-                  border: `1px solid ${aiAdvice.tone.color}50`,
-                  background: `${aiAdvice.tone.color}12`,
-                  color: aiAdvice.tone.color, fontSize: 11, fontWeight: 700, cursor: "pointer",
-                }}>Захиалга хийх</button>
-              </div>
-            ) : (
-              <div className="panel" style={{ padding: 16, border: "1px solid rgba(16,185,129,0.2)" }}>
-                <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 6 }}>
-                  <span style={{ fontSize: 15 }}>🤖</span>
-                  <div style={{ fontSize: 12, fontWeight: 800, color: "var(--text)" }}>AI Зөвлөмж</div>
-                </div>
-                <div style={{ fontSize: 11.5, color: "var(--muted)", lineHeight: 1.55 }}>Бүх нөөц тогтвортой байна. Одоогоор захиалга шаардлагагүй.</div>
-              </div>
-            )}
+            <AiDecisionCenter
+              recommendations={aiRecommendations}
+              emptyTitle="Нөөц тогтвортой"
+              emptyBody="Бүх үндсэн материал хэвийн түвшинд байна. Одоогоор AI зөвлөмж шаардагдах эрсдэл илрээгүй."
+            />
 
             <div className="panel" style={{ padding: 20, flex: 1 }}>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
@@ -1310,7 +1234,7 @@ export default function WarehousePage() {
               <div className="fr2">
                 <div className="fg">
                   <label>Материал</label>
-                  <select value={materialName} onChange={(e) => setMaterialName(e.target.value)}>
+                  <select value={WAREHOUSE_PRIORITY.includes(materialName) ? materialName : WAREHOUSE_PRIORITY[0]} onChange={(e) => setMaterialName(e.target.value)}>
                     {WAREHOUSE_PRIORITY.map((name) => {
                       const material = materials.find((item) => item.name === name);
                       return <option key={name} value={name}>{name} ({material?.unit ?? "КГ"})</option>;
