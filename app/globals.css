@@ -4245,3 +4245,140 @@ body.theme-light .agent-chat {
   }
 }
 
+@media print {
+  @page {
+    size: A4 landscape;
+    margin: 10mm;
+  }
+
+  html,
+  body {
+    width: 100% !important;
+    height: auto !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    background: #ffffff !important;
+  }
+
+  .mo.open {
+    display: block !important;
+    position: static !important;
+    inset: auto !important;
+    padding: 0 !important;
+    background: #ffffff !important;
+  }
+
+  .report-print-root,
+  .production-report-print {
+    position: static !important;
+    display: block !important;
+    width: 100% !important;
+    max-width: none !important;
+    min-width: 0 !important;
+    max-height: none !important;
+    overflow: visible !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    transform: none !important;
+    box-shadow: none !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    background: #ffffff !important;
+  }
+
+  .production-report-print .mh {
+    display: block !important;
+    padding: 0 0 6px !important;
+    margin: 0 0 8px !important;
+    min-height: 0 !important;
+    border-bottom: 1px solid #d1d5db !important;
+  }
+
+  .production-report-print .mh h3 {
+    margin: 2px 0 4px !important;
+    font-size: 14px !important;
+    line-height: 1.25 !important;
+  }
+
+  .production-report-print .mh > div:first-child > div {
+    display: block !important;
+    margin: 0 0 3px !important;
+    font-size: 8px !important;
+    line-height: 1.25 !important;
+  }
+
+  .production-report-print .mh span {
+    display: inline !important;
+    box-shadow: none !important;
+  }
+
+  .production-report-print > div[style*="padding"] {
+    display: block !important;
+    padding: 0 !important;
+    gap: 0 !important;
+  }
+
+  .production-report-print [style*="grid-template-columns"] {
+    grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+    gap: 6px !important;
+  }
+
+  .production-report-print [style*="repeat(auto-fit"] {
+    grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+  }
+
+  .production-report-print .panel {
+    padding: 8px !important;
+    margin: 0 0 8px !important;
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  .production-report-print .panel-title {
+    font-size: 10px !important;
+    line-height: 1.25 !important;
+    margin: 0 0 4px !important;
+  }
+
+  .production-report-print .panel-sub {
+    font-size: 7px !important;
+    line-height: 1.25 !important;
+  }
+
+  .production-report-print div:has(> table),
+  .production-report-print .panel > div:has(> table) {
+    max-height: none !important;
+    overflow: visible !important;
+  }
+
+  .production-report-print table,
+  .production-report-print .wh-table,
+  .production-report-print .safety-table,
+  .production-report-print .production-report-table {
+    min-width: 0 !important;
+    width: 100% !important;
+    table-layout: fixed !important;
+    border-collapse: collapse !important;
+  }
+
+  .production-report-print th,
+  .production-report-print td {
+    padding: 3px 4px !important;
+    font-size: 7px !important;
+    line-height: 1.25 !important;
+    letter-spacing: 0 !important;
+    text-transform: none !important;
+    white-space: normal !important;
+    overflow-wrap: anywhere !important;
+    word-break: normal !important;
+    vertical-align: top !important;
+  }
+
+  .production-report-print td strong,
+  .production-report-print td div,
+  .production-report-print td span {
+    font-size: inherit !important;
+    line-height: inherit !important;
+  }
+}
+
