@@ -1359,48 +1359,6 @@ export default function ProductionPage() {
               emptyBody="Өнөөдрийн гарц, ачилтын хуваарь, бүтээгдэхүүний давтамж хэвийн байна."
             />
 
-            {/* Alert panel — richer context */}
-            <div className="panel" style={{padding:20,flex:1}}>
-              <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:14}}>
-                <div className="panel-title">Анхааруулга</div>
-                {alerts.length>0 && (
-                  <span style={{background:"#EF4444",color:"#fff",borderRadius:999,fontSize:10,fontWeight:800,padding:"2px 7px"}}>{alerts.length}</span>
-                )}
-              </div>
-              {alerts.length===0 ? (
-                <div style={{color:"var(--muted)",fontSize:12,textAlign:"center",padding:"20px 0"}}>✅ Анхааруулга байхгүй</div>
-              ) : (
-                <div style={{display:"flex",flexDirection:"column",gap:10}}>
-                  {alerts.map((a,i)=>(
-                    <div key={i} style={{
-                      padding:"11px 12px", borderRadius:10,
-                      border:`1px solid ${a.type==="crit"?"rgba(239,68,68,.25)":"rgba(245,158,11,.25)"}`,
-                      background: a.type==="crit"?"rgba(239,68,68,.05)":"rgba(245,158,11,.05)",
-                    }}>
-                      <div style={{display:"flex",alignItems:"flex-start",gap:8,marginBottom:8}}>
-                        <span style={{fontSize:15,flexShrink:0,marginTop:1}}>{a.type==="crit"?"🚨":"⚠️"}</span>
-                        <div style={{flex:1,minWidth:0}}>
-                          <div style={{fontSize:12,fontWeight:800,color:a.type==="crit"?"#EF4444":"#F59E0B",marginBottom:2}}>{a.name}</div>
-                          <div style={{fontSize:11,color:"var(--text)",fontWeight:600,marginBottom:2}}>{a.msg}</div>
-                          <div style={{fontSize:10,color:"var(--muted)",lineHeight:1.4}}>{a.detail}</div>
-                        </div>
-                      </div>
-                      {canEdit && (
-                        <button type="button" onClick={()=>openCreateModal(a.name as (typeof PRODUCTS)[number])} style={{
-                          width:"100%", padding:"6px 10px", borderRadius:7,
-                          border:`1px solid ${a.type==="crit"?"rgba(239,68,68,.35)":"rgba(245,158,11,.35)"}`,
-                          background: a.type==="crit"?"rgba(239,68,68,.09)":"rgba(245,158,11,.09)",
-                          color: a.type==="crit"?"#EF4444":"#F59E0B",
-                          fontSize:10, fontWeight:800, cursor:"pointer",
-                        }}>
-                          {a.action}
-                        </button>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
           </div>
         </div>
       </div>
