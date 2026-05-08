@@ -33,9 +33,12 @@ export async function GET(request: Request) {
   const now = new Date();
   const defaultFrom = new Date(now);
   defaultFrom.setDate(now.getDate() - 14);
+  const defaultTo = new Date(now);
+  defaultTo.setDate(now.getDate() + 1);
+  defaultTo.setHours(23, 59, 59, 999);
 
   const from = parseDateParam(searchParams.get("from"), defaultFrom);
-  const to = parseDateParam(searchParams.get("to"), now, true);
+  const to = parseDateParam(searchParams.get("to"), defaultTo, true);
   const productType = searchParams.get("productType")?.trim() || undefined;
   const equipmentId = searchParams.get("equipmentId")?.trim() || undefined;
 
@@ -87,25 +90,27 @@ export async function GET(request: Request) {
     status: row.status,
   }));
 
-  const summaryEquipment = equipmentId ? equipment.filter((item) => item.id === equipmentId) : equipment;
-  const equipmentSummaries = summaryEquipment.map((item) => {
-    const rows = telemetry.filter((row) => row.equipmentId === item.id);
-    const latestRow = rows.at(-1) ?? null;
+  const latestProductionLogId = latest?.productionLogId ?? null;
+  const currentTelemetry = latestProductionLogId
+    ? telemetry.filter((row) => row.productionLogId === latestProductionLogId)
+    : [];
+  const equipmentSummaries = currentTelemetry.map((latestRow) => {
+    const rows = telemetry.filter((row) => row.equipmentId === latestRow.equipmentId);
     return {
-      equipmentId: item.id,
-      equipmentName: item.name,
-      equipmentType: item.type,
-      maxRpm: item.maxRpm,
-      latestRpm: latestRow?.rpm ?? null,
-      latestLoadPercent: latestRow?.loadPercent ?? null,
+      equipmentId: latestRow.equipment.id,
+      equipmentName: latestRow.equipment.name,
+      equipmentType: latestRow.equipment.type,
+      maxRpm: latestRow.equipment.maxRpm,
+      latestRpm: latestRow.rpm,
+      latestLoadPercent: latestRow.loadPercent,
       avgRpm: rows.length ? round(getAverage(rows.map((row) => row.rpm))) : null,
       avgLoadPercent: rows.length ? round(getAverage(rows.map((row) => row.loadPercent))) : null,
-      temperature: latestRow?.temperature ?? null,
-      pressure: latestRow?.pressure ?? null,
-      vibration: latestRow?.vibration ?? null,
-      status: latestRow?.status ?? "NO_DATA",
-      lastRecordedAt: latestRow?.recordedAt.toISOString() ?? null,
-      healthScore: latestRow ? Math.max(0, Math.round(100 - Math.max(0, latestRow.loadPercent - 75) * 1.2 - Math.max(0, (latestRow.vibration ?? 0) - 3) * 4)) : null,
+      temperature: latestRow.temperature,
+      pressure: latestRow.pressure,
+      vibration: latestRow.vibration,
+      status: latestRow.status,
+      lastRecordedAt: latestRow.recordedAt.toISOString(),
+      healthScore: Math.max(0, Math.round(100 - Math.max(0, latestRow.loadPercent - 75) * 1.2 - Math.max(0, (latestRow.vibration ?? 0) - 3) * 4)),
       trend: rows.slice(-12).map((row) => ({
         time: row.recordedAt.toISOString(),
         rpm: row.rpm,

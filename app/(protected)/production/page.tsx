@@ -163,6 +163,11 @@ function toDateTimeInputValue(date = new Date()) {
   return local.toISOString().slice(0, 16);
 }
 
+function localDateTimeToIso(value: string) {
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? new Date().toISOString() : parsed.toISOString();
+}
+
 function getTelemetryStatus(loadPercent: number) {
   if (loadPercent >= 95) return "CRITICAL";
   if (loadPercent >= 80) return "WARNING";
@@ -604,17 +609,17 @@ function mergeSavedTelemetryIntoSummary(
     });
   }
 
-  const summaryById = new Map<string, EquipmentSummary>();
-  for (const item of equipmentById.values()) summaryById.set(item.id, emptyEquipmentSummary(item));
-  for (const item of current?.data.equipmentSummaries ?? []) summaryById.set(item.equipmentId, item);
-
+  const equipmentSummaries: EquipmentSummary[] = [];
+  const savedEquipmentIds = new Set(savedTelemetry.map((telemetry) => telemetry.equipment.id));
   for (const item of equipmentById.values()) {
+    if (!savedEquipmentIds.has(item.id)) continue;
+    const savedPoint = savedPoints.find((point) => point.equipmentId === item.id);
     const rows = chartData.filter((point) => point.equipmentId === item.id);
-    if (!rows.length) continue;
-    const latest = rows.at(-1)!;
+    const latest = savedPoint ?? rows.at(-1);
+    if (!latest || !rows.length) continue;
     const rpmValues = rows.map((row) => row.rpm);
     const loadValues = rows.map((row) => row.loadPercent);
-    summaryById.set(item.id, {
+    equipmentSummaries.push({
       equipmentId: item.id,
       equipmentName: item.name,
       equipmentType: item.type,
@@ -651,7 +656,7 @@ function mergeSavedTelemetryIntoSummary(
       warningCount: chartData.filter((point) => point.status === "WARNING").length,
       criticalCount: chartData.filter((point) => point.status === "CRITICAL").length,
       chartData,
-      equipmentSummaries: Array.from(summaryById.values()),
+      equipmentSummaries,
     },
     filters: {
       from: current?.filters.from ?? new Date(Date.now() - 14 * 24 * 3600 * 1000).toISOString(),
@@ -660,6 +665,10 @@ function mergeSavedTelemetryIntoSummary(
       equipment: Array.from(equipmentById.values()),
     },
   };
+}
+
+function hasRpmSummary(summary: RpmSummaryResponse | undefined) {
+  return Boolean(summary?.data.equipmentSummaries?.some((item) => item.latestRpm !== null));
 }
 function ProductionSkeleton() {
   return (
@@ -758,6 +767,20 @@ export default function ProductionPage() {
   const productionPlans: ProductionPlan[] = useMemo(() => logsData?.plans ?? [], [logsData]);
   const materials: Material[] = useMemo(() => materialsData?.data ?? [], [materialsData]);
   const equipmentOptions: EquipmentOption[] = useMemo(() => equipmentData?.data ?? [], [equipmentData]);
+  const latestLogWithTelemetry = useMemo(
+    () => [...logs]
+      .filter((log) => (log.telemetryLogs ?? []).length > 0)
+      .sort((a, b) => new Date(b.productionDate).getTime() - new Date(a.productionDate).getTime())[0],
+    [logs]
+  );
+  const latestLogRpmSummary = useMemo(
+    () => latestLogWithTelemetry ? mergeSavedTelemetryIntoSummary(undefined, latestLogWithTelemetry, equipmentOptions) : undefined,
+    [equipmentOptions, latestLogWithTelemetry]
+  );
+  const visibleRpmSummary = useMemo(
+    () => hasRpmSummary(rpmSummaryData) ? rpmSummaryData : latestLogRpmSummary ?? rpmSummaryData,
+    [latestLogRpmSummary, rpmSummaryData]
+  );
   const loading = logsLoading || materialsLoading;
 
   function closeShipmentModal() {
@@ -918,7 +941,7 @@ export default function ProductionPage() {
       method:"POST", headers:{"Content-Type":"application/json"},
       body: JSON.stringify({
         lotNumber: makeLotNumber(),
-        productionDateTime: productionDate,
+        productionDateTime: localDateTimeToIso(productionDate),
         productType: productName,
         producedKg: qty,
         destinationMine,
@@ -1508,7 +1531,7 @@ export default function ProductionPage() {
 
         <div className="production-equipment-row">
           <RpmMonitoringCard
-            summary={rpmSummaryData}
+            summary={visibleRpmSummary}
             equipment={equipmentOptions}
           />
         </div>
@@ -2160,6 +2183,40 @@ export default function ProductionPage() {
                 </div>
               ) : (
                 <div style={{fontSize:12,color:"var(--muted)"}}>Ажилтан болон MR код бүртгээгүй байна.</div>
+              )}
+            </div>
+
+            <div style={{padding:"14px",borderRadius:12,border:"1px solid rgba(34,211,238,0.18)",background:"rgba(34,211,238,0.06)",marginBottom:12}}>
+              <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,marginBottom:10}}>
+                <div style={{fontSize:12,color:"#22D3EE",fontWeight:800}}>Тоног төхөөрөмжийн RPM</div>
+                <div style={{fontSize:11,color:"var(--muted)"}}>{(selectedLog.telemetryLogs ?? []).length} мөр</div>
+              </div>
+              {(selectedLog.telemetryLogs ?? []).length === 0 ? (
+                <div style={{fontSize:12,color:"var(--muted)"}}>Энэ бүртгэл дээр RPM telemetry хадгалагдаагүй байна.</div>
+              ) : (
+                <div style={{display:"grid",gap:8}}>
+                  {(selectedLog.telemetryLogs ?? []).map((telemetry) => {
+                    const tone = rpmStatusFromLabel(telemetry.status);
+                    return (
+                      <div key={telemetry.id} style={{display:"grid",gridTemplateColumns:"1.25fr .8fr .65fr .65fr .65fr",gap:10,alignItems:"center",padding:"10px 12px",borderRadius:10,border:"1px solid rgba(255,255,255,0.08)",background:"rgba(8,14,26,0.42)"}}>
+                        <div>
+                          <div style={{fontSize:12,color:"#fff",fontWeight:800}}>{telemetry.equipment.name}</div>
+                          <div style={{fontSize:10,color:"var(--muted)",marginTop:2}}>{formatDateTime(new Date(telemetry.recordedAt))}</div>
+                        </div>
+                        <div style={{fontFamily:"var(--font-mono), monospace",fontSize:12,color:"#fff",fontWeight:800}}>
+                          {telemetry.rpm.toLocaleString("mn-MN")} / {telemetry.maxRpm.toLocaleString("mn-MN")} rpm
+                        </div>
+                        <div style={{fontSize:12,color:tone.color,fontWeight:850}}>{Math.round(telemetry.loadPercent)}%</div>
+                        <div style={{fontSize:11,color:"var(--muted)"}}>
+                          T {telemetry.temperature ?? "-"} · P {telemetry.pressure ?? "-"} · V {telemetry.vibration ?? "-"}
+                        </div>
+                        <div style={{justifySelf:"end",fontSize:10,fontWeight:850,color:tone.color,border:`1px solid ${tone.border}`,background:tone.bg,borderRadius:999,padding:"5px 8px"}}>
+                          {tone.label}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
               )}
             </div>
 
