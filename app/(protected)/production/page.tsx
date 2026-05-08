@@ -391,12 +391,11 @@ function SemiCircleRpmGauge({ percent, rpm, max, color, animate }: { percent: nu
 }
 
 function WaveformTrace({ values, color, delay = 0 }: { values: readonly number[]; color: string; delay?: number }) {
-  const points = values
-    .map((value, index) => {
-      const x = (index / Math.max(values.length - 1, 1)) * 120;
-      const y = 30 - (Math.min(100, Math.max(0, value)) / 100) * 22;
-      return `${x.toFixed(1)},${y.toFixed(1)}`;
-    })
+  const pointCount = Math.max(values.length, 8);
+  const points = Array.from({ length: pointCount }, (_, index) => {
+    const x = (index / Math.max(pointCount - 1, 1)) * 120;
+    return `${x.toFixed(1)},17`;
+  })
     .join(" ");
 
   return (
@@ -461,7 +460,7 @@ function EquipmentMachineCard({ summary, animate, index }: { summary: EquipmentS
       <div className="scada-wave-row">
         <span className="scada-wave-label">RPM load trend</span>
         <span className="scada-pulse" style={{ borderColor: loadStatus.color }} />
-        <WaveformTrace values={trendValues} color={loadStatus.color} delay={index * -0.3} />
+        <WaveformTrace values={trendValues} color={loadStatus.color} delay={0} />
       </div>
     </div>
   );
