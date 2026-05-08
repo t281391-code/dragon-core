@@ -155,7 +155,7 @@ export default function Sidebar() {
 
       <div className="logo">
         <Image
-          src="/EXPLOSIVE.png"
+          src="/img/last.png"
           alt="EXPLO-KPI"
           width={52}
           height={52}
