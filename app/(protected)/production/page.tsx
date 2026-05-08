@@ -1701,13 +1701,13 @@ export default function ProductionPage() {
       {/* Modal */}
       {modal && (
         <div className="mo open" onClick={e=>e.target===e.currentTarget&&setModal(false)}>
-          <div className="mc" style={{width:"min(980px, 100%)",overflowY:"visible"}}>
+          <div className="mc production-log-modal">
             <div className="mh">
               <h3>Бүртгэл нэмэх</h3>
               <button className="mx" type="button" onClick={()=>setModal(false)}>×</button>
             </div>
             <form onSubmit={submitLog}>
-              <div style={{display:"grid",gridTemplateColumns:"repeat(3,minmax(0,1fr))",gap:12}}>
+              <div className="production-log-form-grid">
                 <div className="fg"><label>Бүтээгдэхүүн</label>
                   <select value={productName} onChange={e=>{ const next = e.target.value as (typeof PRODUCTS)[number]; setProductName(next); resetEquipmentRows(next); }}>
                     {PRODUCTS.map(p=><option key={p} value={p}>{p}</option>)}
@@ -1745,12 +1745,12 @@ export default function ProductionPage() {
                   </select>
                 </div>
               </div>
-              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+              <div className="production-log-text-grid">
                 <div className="fg"><label>Ажилтнууд / MR код</label>
-                  <textarea style={{height:112,minHeight:112,maxHeight:112,overflow:"hidden",resize:"none"}} value={workerInfo} onChange={e=>setWorkerInfo(e.target.value)} placeholder={"Жишээ:\nБат MR-0123\nСараа MR-0456"}/>
+                  <textarea className="production-log-textarea" value={workerInfo} onChange={e=>setWorkerInfo(e.target.value)} placeholder={"Жишээ:\nБат MR-0123\nСараа MR-0456"}/>
                 </div>
                 <div className="fg"><label>Тэмдэглэл</label>
-                  <textarea style={{height:112,minHeight:112,maxHeight:112,overflow:"hidden",resize:"none"}} value={note} onChange={e=>setNote(e.target.value)} placeholder="Нэмэлт тайлбар"/>
+                  <textarea className="production-log-textarea" value={note} onChange={e=>setNote(e.target.value)} placeholder="Нэмэлт тайлбар"/>
                 </div>
               </div>
               <div className="equipment-rpm-editor">

@@ -1844,6 +1844,60 @@ input[type="date"] {
   box-shadow: 0 28px 80px rgba(0, 0, 0, 0.42);
 }
 
+.production-log-modal {
+  width: min(1180px, calc(100vw - 24px));
+  max-height: calc(100dvh - 24px);
+  padding: 18px;
+  overflow-y: auto;
+  scrollbar-gutter: stable;
+}
+
+.production-log-modal .mh {
+  margin-bottom: 14px;
+}
+
+.production-log-form-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  column-gap: 12px;
+  row-gap: 8px;
+}
+
+.production-log-text-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.production-log-modal .fg {
+  margin-bottom: 10px;
+}
+
+.production-log-modal .fg input,
+.production-log-modal .fg select,
+.production-log-modal .fg textarea {
+  min-height: 48px;
+  padding: 9px 12px;
+}
+
+.production-log-textarea {
+  height: 88px;
+  min-height: 88px;
+  max-height: 88px;
+  overflow: hidden;
+  resize: none;
+}
+
+.production-log-modal .mf {
+  position: sticky;
+  bottom: -18px;
+  z-index: 2;
+  margin: 10px -18px -18px;
+  padding: 12px 18px 16px;
+  background: linear-gradient(180deg, rgba(24, 34, 56, 0.86), #182238 42%);
+  border-top: 1px solid rgba(148, 163, 184, 0.12);
+}
+
 .mh {
   display: flex;
   align-items: center;
@@ -3150,8 +3204,13 @@ body.theme-light .empty-row td {
   }
 
   .rpm-filter-row,
+  .production-log-form-grid,
   .equipment-rpm-row {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .production-log-text-grid {
+    grid-template-columns: 1fr;
   }
 
   .wh-bottom-grid {
@@ -3174,6 +3233,8 @@ body.theme-light .empty-row td {
   .scada-summary-strip,
   .scada-topology,
   .rpm-filter-row,
+  .production-log-form-grid,
+  .production-log-text-grid,
   .equipment-rpm-row {
     grid-template-columns: 1fr;
   }
