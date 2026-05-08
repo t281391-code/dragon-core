@@ -4260,6 +4260,22 @@ body.theme-light .agent-chat {
     background: #ffffff !important;
   }
 
+  .sidebar,
+  .topbar-ai-widget,
+  .department-production > :not(.mo.open) {
+    display: none !important;
+  }
+
+  .main,
+  .department-production {
+    display: block !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    min-height: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
   .mo.open {
     display: block !important;
     position: static !important;
