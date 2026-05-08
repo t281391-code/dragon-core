@@ -1592,8 +1592,8 @@ export default function ProductionPage() {
                 )}
               </div>
             </div>
-            <div style={{borderTop:"1px solid var(--border)",overflowX:"auto"}}>
-              <table className="safety-table wh-table">
+            <div className="production-log-table-wrap" style={{borderTop:"1px solid var(--border)"}}>
+              <table className="safety-table wh-table production-log-table">
                 <thead>
                   <tr>
                     <th style={{width:8,padding:0}}/>
