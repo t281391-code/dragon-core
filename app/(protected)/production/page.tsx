@@ -469,30 +469,12 @@ function EquipmentMachineCard({ summary, animate, index }: { summary: EquipmentS
 
 function RpmMonitoringCard({
   summary,
-  equipment,
 }: {
   summary?: RpmSummaryResponse;
-  equipment: EquipmentOption[];
 }) {
   const [animateGauges, setAnimateGauges] = useState(false);
-  const data = summary?.data;
-  const equipmentSummaries = data?.equipmentSummaries ?? equipment.map((item) => ({
-    equipmentId: item.id,
-    equipmentName: item.name,
-    equipmentType: item.type,
-    maxRpm: item.maxRpm,
-    latestRpm: null,
-    latestLoadPercent: null,
-    avgRpm: null,
-    avgLoadPercent: null,
-    temperature: null,
-    pressure: null,
-    vibration: null,
-    status: "NO_DATA",
-    lastRecordedAt: null,
-    healthScore: null,
-    trend: [],
-  } satisfies EquipmentSummary));
+  const equipmentSummaries = (summary?.data.equipmentSummaries ?? [])
+    .filter((item) => item.latestRpm !== null);
 
   useEffect(() => {
     const timer = window.setTimeout(() => setAnimateGauges(true), 80);
@@ -512,32 +494,16 @@ function RpmMonitoringCard({
       </div>
 
       <div className="scada-machine-list">
-        {equipmentSummaries.map((item, index) => (
+        {equipmentSummaries.length === 0 ? (
+          <div style={{padding:"18px",border:"1px dashed rgba(34,211,238,0.22)",borderRadius:12,color:"var(--muted)",fontSize:12,textAlign:"center"}}>
+            RPM бүртгэл хадгалагдаагүй байна
+          </div>
+        ) : equipmentSummaries.map((item, index) => (
           <EquipmentMachineCard key={item.equipmentId} summary={item} animate={animateGauges} index={index} />
         ))}
       </div>
     </div>
   );
-}
-
-function emptyEquipmentSummary(item: EquipmentOption): EquipmentSummary {
-  return {
-    equipmentId: item.id,
-    equipmentName: item.name,
-    equipmentType: item.type,
-    maxRpm: item.maxRpm,
-    latestRpm: null,
-    latestLoadPercent: null,
-    avgRpm: null,
-    avgLoadPercent: null,
-    temperature: null,
-    pressure: null,
-    vibration: null,
-    status: "NO_DATA",
-    lastRecordedAt: null,
-    healthScore: null,
-    trend: [],
-  };
 }
 
 function calculateHealthScore(loadPercent: number, vibration: number | null) {
@@ -561,7 +527,7 @@ function mergeSavedTelemetryIntoSummary(
         warningCount: 0,
         criticalCount: 0,
         chartData: [],
-        equipmentSummaries: equipmentOptions.map(emptyEquipmentSummary),
+        equipmentSummaries: [],
       },
       filters: {
         from: new Date(Date.now() - 14 * 24 * 3600 * 1000).toISOString(),
@@ -1532,7 +1498,6 @@ export default function ProductionPage() {
         <div className="production-equipment-row">
           <RpmMonitoringCard
             summary={visibleRpmSummary}
-            equipment={equipmentOptions}
           />
         </div>
 
