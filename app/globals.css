@@ -4136,6 +4136,61 @@ body.theme-light .agent-chat {
     color: #111827 !important;
   }
 
+  .production-report-print,
+  .production-report-print * {
+    font-family: Arial, Helvetica, sans-serif !important;
+    letter-spacing: 0 !important;
+    text-rendering: optimizeLegibility;
+  }
+
+  .production-report-print .production-report-table {
+    width: 100% !important;
+    table-layout: fixed !important;
+    font-size: 8px !important;
+    line-height: 1.35 !important;
+  }
+
+  .production-report-print .production-report-table th,
+  .production-report-print .production-report-table td {
+    padding: 4px 5px !important;
+    font-size: 8px !important;
+    line-height: 1.35 !important;
+    vertical-align: top !important;
+    white-space: normal !important;
+    overflow-wrap: anywhere !important;
+    word-break: normal !important;
+  }
+
+  .production-report-print .production-report-table strong,
+  .production-report-print .production-report-table div,
+  .production-report-print .production-report-table span {
+    font-size: inherit !important;
+    line-height: inherit !important;
+    white-space: normal !important;
+    overflow-wrap: anywhere !important;
+  }
+
+  .production-report-print .production-rpm-report-table th:nth-child(1),
+  .production-report-print .production-rpm-report-table td:nth-child(1) { width: 12% !important; }
+  .production-report-print .production-rpm-report-table th:nth-child(2),
+  .production-report-print .production-rpm-report-table td:nth-child(2) { width: 13% !important; }
+  .production-report-print .production-rpm-report-table th:nth-child(3),
+  .production-report-print .production-rpm-report-table td:nth-child(3) { width: 14% !important; }
+  .production-report-print .production-rpm-report-table th:nth-child(4),
+  .production-report-print .production-rpm-report-table td:nth-child(4) { width: 13% !important; }
+  .production-report-print .production-rpm-report-table th:nth-child(5),
+  .production-report-print .production-rpm-report-table td:nth-child(5) { width: 6% !important; }
+  .production-report-print .production-rpm-report-table th:nth-child(6),
+  .production-report-print .production-rpm-report-table td:nth-child(6) { width: 8% !important; }
+  .production-report-print .production-rpm-report-table th:nth-child(7),
+  .production-report-print .production-rpm-report-table td:nth-child(7) { width: 8% !important; }
+  .production-report-print .production-rpm-report-table th:nth-child(8),
+  .production-report-print .production-rpm-report-table td:nth-child(8) { width: 8% !important; }
+  .production-report-print .production-rpm-report-table th:nth-child(9),
+  .production-report-print .production-rpm-report-table td:nth-child(9) { width: 8% !important; }
+  .production-report-print .production-rpm-report-table th:nth-child(10),
+  .production-report-print .production-rpm-report-table td:nth-child(10) { width: 10% !important; }
+
   .report-print-root .bg {
     border: 1px solid #d1d5db !important;
     background: #f3f4f6 !important;

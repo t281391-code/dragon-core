@@ -50,6 +50,10 @@ type ProductionPlan = {
   planDate: string;
   targetQuantity: number;
 };
+type ProductionLogsResponse = {
+  data: ProductionLog[];
+  plans: ProductionPlan[];
+};
 type EquipmentTelemetryLog = {
   id: string;
   productionLogId: string;
@@ -734,8 +738,9 @@ export default function ProductionPage() {
   const [selectedMaterialId, setSelectedMaterialId] = useState("");
   const [equipmentRows, setEquipmentRows] = useState<EquipmentRpmFormRow[]>(() => [createBlankEquipmentRow()]);
   const [toastMessage, setToastMessage] = useState("");
+  const [recentSavedLog, setRecentSavedLog] = useState<ProductionLog | null>(null);
 
-  const { data: logsData, isLoading: logsLoading, mutate: mutateLogs } = useSWR(
+  const { data: logsData, isLoading: logsLoading, mutate: mutateLogs } = useSWR<ProductionLogsResponse>(
     "/api/production-logs?limit=180",
     fetcher,
     { refreshInterval: REALTIME_REFRESH_MS, revalidateOnFocus: false, onSuccess: () => setLastUpdated(new Date()) }
@@ -770,9 +775,13 @@ export default function ProductionPage() {
     () => latestLogWithTelemetry ? mergeSavedTelemetryIntoSummary(undefined, latestLogWithTelemetry, equipmentOptions) : undefined,
     [equipmentOptions, latestLogWithTelemetry]
   );
+  const recentSavedRpmSummary = useMemo(
+    () => recentSavedLog ? mergeSavedTelemetryIntoSummary(undefined, recentSavedLog, equipmentOptions) : undefined,
+    [equipmentOptions, recentSavedLog]
+  );
   const visibleRpmSummary = useMemo(
-    () => hasRpmSummary(rpmSummaryData) ? rpmSummaryData : latestLogRpmSummary ?? rpmSummaryData,
-    [latestLogRpmSummary, rpmSummaryData]
+    () => recentSavedRpmSummary ?? (hasRpmSummary(rpmSummaryData) ? rpmSummaryData : latestLogRpmSummary ?? rpmSummaryData),
+    [latestLogRpmSummary, recentSavedRpmSummary, rpmSummaryData]
   );
   const loading = logsLoading || materialsLoading;
 
@@ -949,13 +958,21 @@ export default function ProductionPage() {
     if (!res.ok) { setError(data.error??"Алдаа гарлаа"); setSubmitting(false); return; }
     const savedLog = data?.data as ProductionLog | undefined;
     if (savedLog?.telemetryLogs?.length) {
+      setRecentSavedLog(savedLog);
       await mutateRpmSummary((current) => mergeSavedTelemetryIntoSummary(current, savedLog, equipmentOptions), { revalidate: false });
       setLastUpdated(new Date());
     }
     const firstTelemetry = savedLog?.telemetryLogs?.[0];
     setToastMessage(`${productName.replace("ANDO-", "")} үйлдвэрлэл бүртгэгдлээ — ${firstTelemetry?.equipment?.name ?? telemetry[0].equipmentName} ${firstTelemetry?.rpm ?? telemetry[0].rpm} rpm`);
     setModal(false); setSubmitting(false); setAmount(""); setWorkerInfo(""); setDensity(""); setNote(""); resetEquipmentRows(productName);
-    await Promise.all([mutateLogs(), mutateMaterials(), mutateEquipment()]);
+    if (savedLog) {
+      await mutateLogs((current) => ({
+        ...(current ?? {}),
+        data: [savedLog, ...((current?.data as ProductionLog[] | undefined) ?? []).filter((log) => log.id !== savedLog.id)],
+        plans: current?.plans ?? productionPlans,
+      }), { revalidate: false });
+    }
+    await Promise.all([mutateMaterials(), mutateEquipment(), mutateLogs()]);
   }
   async function deleteSelectedLog() {
     if (!selectedLog) return;
@@ -975,6 +992,7 @@ export default function ProductionPage() {
     }
 
     setDeletingLog(false);
+    if (recentSavedLog?.id === selectedLog.id) setRecentSavedLog(null);
     setSelectedLog(null);
     await mutateLogs();
   }
@@ -1711,7 +1729,7 @@ export default function ProductionPage() {
           aria-labelledby="production-report-title"
           onClick={(e) => e.target === e.currentTarget && setReportModal(false)}
         >
-          <div className="mc report-print-root" style={{ maxWidth: 1080, width: "100%", padding: 0 }} onClick={(e) => e.stopPropagation()}>
+          <div className="mc report-print-root production-report-print" style={{ maxWidth: 1080, width: "100%", padding: 0 }} onClick={(e) => e.stopPropagation()}>
             <div className="mh" style={{ marginBottom: 0, padding: "22px 24px 0", flexWrap: "wrap" }}>
               <div>
                 <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
@@ -1797,7 +1815,7 @@ export default function ProductionPage() {
                   </span>
                 </div>
                 <div style={{ maxHeight: 320, overflow: "auto" }}>
-                  <table className="safety-table wh-table">
+                  <table className="safety-table wh-table production-report-table">
                     <thead>
                       <tr>
                         <th>Огноо</th>
@@ -1838,7 +1856,7 @@ export default function ProductionPage() {
                   <span style={{ color: "var(--muted)", fontSize: 11 }}>{reportActiveProductCount} идэвхтэй бүтээгдэхүүн</span>
                 </div>
                 <div style={{ maxHeight: 320, overflow: "auto" }}>
-                  <table className="safety-table wh-table">
+                  <table className="safety-table wh-table production-report-table">
                     <thead>
                       <tr>
                         <th>Бүтээгдэхүүн</th>
@@ -1874,7 +1892,7 @@ export default function ProductionPage() {
                   </span>
                 </div>
                 <div style={{ maxHeight: 360, overflow: "auto" }}>
-                  <table className="safety-table wh-table">
+                  <table className="safety-table wh-table production-report-table production-rpm-report-table">
                     <thead>
                       <tr>
                         <th>Огноо</th>
@@ -1923,7 +1941,7 @@ export default function ProductionPage() {
                   <span style={{ color: "var(--muted)", fontSize: 11 }}>{reportLogs.length} нийт бүртгэл</span>
                 </div>
                 <div style={{ maxHeight: 320, overflow: "auto" }}>
-                  <table className="safety-table wh-table">
+                  <table className="safety-table wh-table production-report-table">
                     <thead>
                       <tr>
                         <th>Огноо</th>
