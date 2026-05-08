@@ -469,12 +469,20 @@ function EquipmentMachineCard({ summary, animate, index }: { summary: EquipmentS
 
 function RpmMonitoringCard({
   summary,
+  equipment,
 }: {
   summary?: RpmSummaryResponse;
+  equipment: EquipmentOption[];
 }) {
   const [animateGauges, setAnimateGauges] = useState(false);
-  const equipmentSummaries = (summary?.data.equipmentSummaries ?? [])
-    .filter((item) => item.latestRpm !== null);
+  const savedSummaries = summary?.data.equipmentSummaries ?? [];
+  const savedByEquipmentId = new Map(savedSummaries.map((item) => [item.equipmentId, item]));
+  const equipmentSource = equipment.length ? equipment : summary?.filters.equipment ?? [];
+  const equipmentSourceIds = new Set(equipmentSource.map((item) => item.id));
+  const equipmentSummaries = [
+    ...equipmentSource.map((item) => savedByEquipmentId.get(item.id) ?? emptyEquipmentSummary(item)),
+    ...savedSummaries.filter((item) => !equipmentSourceIds.has(item.equipmentId)),
+  ];
 
   useEffect(() => {
     const timer = window.setTimeout(() => setAnimateGauges(true), 80);
@@ -504,6 +512,26 @@ function RpmMonitoringCard({
       </div>
     </div>
   );
+}
+
+function emptyEquipmentSummary(item: EquipmentOption): EquipmentSummary {
+  return {
+    equipmentId: item.id,
+    equipmentName: item.name,
+    equipmentType: item.type,
+    maxRpm: item.maxRpm,
+    latestRpm: null,
+    latestLoadPercent: null,
+    avgRpm: null,
+    avgLoadPercent: null,
+    temperature: null,
+    pressure: null,
+    vibration: null,
+    status: "NO_DATA",
+    lastRecordedAt: null,
+    healthScore: null,
+    trend: [],
+  };
 }
 
 function calculateHealthScore(loadPercent: number, vibration: number | null) {
@@ -1498,6 +1526,7 @@ export default function ProductionPage() {
         <div className="production-equipment-row">
           <RpmMonitoringCard
             summary={visibleRpmSummary}
+            equipment={equipmentOptions}
           />
         </div>
 
