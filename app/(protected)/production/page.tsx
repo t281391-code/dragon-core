@@ -129,16 +129,6 @@ const EQUIPMENT_TOPOLOGY = [
   { label: "Output", sub: "Packing" },
 ] as const;
 
-const PREDICTIVE_ALERTS = [
-  { tone: "warning", title: "Final mixer vibration increased by 12%", detail: "Maintenance recommended within 48h" },
-  { tone: "normal", title: "Pump train pressure stable", detail: "No cavitation pattern detected" },
-] as const;
-
-const DIAMETER_GROUPS = [
-  { title: "Жижиг диаметр", items: ["EV 25mm", "EV 32mm", "SPLIT 38mm"], accent: "#22D3EE" },
-  { title: "Том диаметр", items: ["V 120mm", "V 90mm", "V 60mm"], accent: "#10B981" },
-] as const;
-
 function rpmLoadPercent(current: number, max: number) {
   return Math.round((current / max) * 100);
 }
@@ -465,54 +455,6 @@ function RpmMonitoringCard() {
       <div className="scada-machine-list">
         {RPM_MACHINES.map((machine, index) => (
           <EquipmentMachineCard key={machine.name} machine={machine} animate={animateGauges} index={index} />
-        ))}
-      </div>
-
-      <div className="scada-predictive-panel">
-        <div className="scada-predictive-panel__title">Predictive maintenance</div>
-        {PREDICTIVE_ALERTS.map((alert) => (
-          <div key={alert.title} className={`scada-predictive-alert ${alert.tone === "warning" ? "is-warning" : ""}`}>
-            <strong>{alert.title}</strong>
-            <span>{alert.detail}</span>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function DiameterCard() {
-  return (
-    <div className="panel" style={{ padding: 20 }}>
-      <div className="panel-title" style={{ marginBottom: 12 }}>Савалгааны диаметр</div>
-      <div style={{ display: "grid", gap: 12 }}>
-        {DIAMETER_GROUPS.map((group) => (
-          <div key={group.title} style={{
-            border: "1px solid rgba(148,163,184,.14)",
-            background: "rgba(15,23,42,.2)",
-            borderRadius: 10,
-            padding: 12,
-          }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 9 }}>
-              <span style={{ width: 8, height: 8, borderRadius: "50%", background: group.accent, boxShadow: `0 0 0 4px ${group.accent}22` }} />
-              <span style={{ color: "var(--text)", fontSize: 12, fontWeight: 800 }}>{group.title}</span>
-            </div>
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 7 }}>
-              {group.items.map((item) => (
-                <span key={item} style={{
-                  border: `1px solid ${group.accent}33`,
-                  background: `${group.accent}12`,
-                  color: group.accent,
-                  borderRadius: 999,
-                  padding: "5px 8px",
-                  fontSize: 11,
-                  fontWeight: 800,
-                }}>
-                  {item}
-                </span>
-              ))}
-            </div>
-          </div>
         ))}
       </div>
     </div>
@@ -1248,7 +1190,6 @@ export default function ProductionPage() {
 
         <div className="production-equipment-row">
           <RpmMonitoringCard />
-          <DiameterCard />
         </div>
 
         {/* Bottom: Table + Right panel */}
