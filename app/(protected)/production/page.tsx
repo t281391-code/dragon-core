@@ -41,6 +41,7 @@ type ProductionLog = {
   note: string | null;
   createdBy: { fullName: string };
   material: { name: string; unit: string };
+  telemetryLogs: EquipmentTelemetryLog[];
 };
 
 type Material = { id: string; name: string; unit: string };
@@ -48,6 +49,26 @@ type ProductionPlan = {
   id: string;
   planDate: string;
   targetQuantity: number;
+};
+type EquipmentTelemetryLog = {
+  id: string;
+  productionLogId: string;
+  rpm: number;
+  maxRpm: number;
+  loadPercent: number;
+  temperature: number | null;
+  pressure: number | null;
+  vibration: number | null;
+  status: string;
+  note: string | null;
+  recordedAt: string;
+  createdAt: string;
+  equipment: {
+    id: string;
+    name: string;
+    type: string;
+    maxRpm: number;
+  };
 };
 type EquipmentOption = { id: string; name: string; type: string; maxRpm: number; department: string; isActive: boolean };
 type EquipmentRpmFormRow = {
@@ -1100,6 +1121,17 @@ export default function ProductionPage() {
       .slice(0, 20),
     [reportLogs]
   );
+  const reportTelemetryRows = useMemo(
+    () => reportLogs
+      .flatMap((log) => (log.telemetryLogs ?? []).map((telemetry) => ({ log, telemetry })))
+      .sort((a, b) => new Date(b.telemetry.recordedAt).getTime() - new Date(a.telemetry.recordedAt).getTime()),
+    [reportLogs]
+  );
+  const reportTelemetryAvgLoad = reportTelemetryRows.length
+    ? Math.round(reportTelemetryRows.reduce((sum, row) => sum + row.telemetry.loadPercent, 0) / reportTelemetryRows.length)
+    : null;
+  const reportTelemetryWarningCount = reportTelemetryRows.filter((row) => row.telemetry.status === "WARNING").length;
+  const reportTelemetryCriticalCount = reportTelemetryRows.filter((row) => row.telemetry.status === "CRITICAL").length;
   const reportHealth = reportTotalTarget === 0
     ? { label: "Төлөвлөгөө бүртгэгдээгүй", color: "#64748B" }
     : reportEfficiencyPct >= 100
@@ -1548,6 +1580,7 @@ export default function ProductionPage() {
                   { label: "Ачилтын хэмжээ", value: fmtDisplay(reportShipmentTotal), sub: `${reportShipments.length} төлөвлөгөөт ачилт`, color: "#F59E0B" },
                   { label: "Гүйцэтгэл", value: reportTotalTarget > 0 ? `${reportEfficiencyPct}%` : "N/A", sub: reportTotalTarget > 0 ? `Төлөвлөгөө ${fmtDisplay(reportTotalTarget)}` : "Төлөвлөгөө бүртгэгдээгүй", color: reportHealth.color },
                   { label: "Бүтээгдэхүүн", value: `${reportActiveProductCount}/${PRODUCTS.length}`, sub: "Хөдөлгөөнтэй төрөл", color: "#A78BFA" },
+                  { label: "RPM бүртгэл", value: `${reportTelemetryRows.length}`, sub: reportTelemetryAvgLoad === null ? "Telemetry байхгүй" : `Дундаж ачаалал ${reportTelemetryAvgLoad}%`, color: "#22D3EE" },
                 ].map((card) => (
                   <div key={card.label} style={{ padding: "14px 16px", borderRadius: 14, border: "1px solid var(--border)", background: `${card.color}0d` }}>
                     <div style={{ color: "var(--muted)", fontSize: 11, fontWeight: 700, marginBottom: 8 }}>{card.label}</div>
@@ -1565,6 +1598,7 @@ export default function ProductionPage() {
                     { label: "Топ бүтээгдэхүүн", value: reportTopProduct ? reportTopProduct.product : "Байхгүй", sub: reportTopProduct ? fmtDisplay(reportTopProduct.produced) : "Үйлдвэрлэл бүртгэгдээгүй" },
                     { label: "Тайлангийн төлөв", value: reportHealth.label, sub: reportTotalTarget > 0 ? `${reportEfficiencyPct}% гүйцэтгэл` : "Төлөвлөгөө оруулаагүй" },
                     { label: "Идэвхтэй өдөр", value: `${reportDailyRows.filter((row) => row.count > 0).length}`, sub: `${REPORT_DAYS} өдрөөс үйлдвэрлэлтэй өдөр` },
+                    { label: "RPM анхааруулга", value: `${reportTelemetryWarningCount + reportTelemetryCriticalCount}`, sub: `Warning ${reportTelemetryWarningCount} · Critical ${reportTelemetryCriticalCount}` },
                   ].map((item) => (
                     <div key={item.label} style={{ border: "1px solid var(--border)", borderRadius: 12, padding: "12px 14px", background: "rgba(255,255,255,0.025)" }}>
                       <div style={{ color: "var(--muted)", fontSize: 11, fontWeight: 700, marginBottom: 6 }}>{item.label}</div>
@@ -1647,6 +1681,57 @@ export default function ProductionPage() {
                           <td style={{ color: row.shipped > 0 ? "#3B82F6" : "var(--muted)", fontWeight: 800 }}>{fmtDisplay(row.shipped)}</td>
                         </tr>
                       ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              <div className="panel" style={{ padding: 18, margin: 0 }}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, marginBottom: 12, flexWrap: "wrap" }}>
+                  <div>
+                    <div className="panel-title">Тоног төхөөрөмжийн RPM бүртгэл</div>
+                    <div className="panel-sub" style={{ marginTop: 4 }}>Үйлдвэрлэл бүртгэх үед DB-д хадгалсан тоног төхөөрөмжийн RPM telemetry.</div>
+                  </div>
+                  <span style={{ color: "var(--muted)", fontSize: 11 }}>
+                    {reportTelemetryRows.length} мөр · Warning {reportTelemetryWarningCount} · Critical {reportTelemetryCriticalCount}
+                  </span>
+                </div>
+                <div style={{ maxHeight: 360, overflow: "auto" }}>
+                  <table className="safety-table wh-table">
+                    <thead>
+                      <tr>
+                        <th>Огноо</th>
+                        <th>Бүтээгдэхүүн</th>
+                        <th>Тоног төхөөрөмж</th>
+                        <th>RPM</th>
+                        <th>Load</th>
+                        <th>Төлөв</th>
+                        <th>Temp</th>
+                        <th>Pressure</th>
+                        <th>Vibration</th>
+                        <th>Тэмдэглэл</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {reportTelemetryRows.length === 0 ? (
+                        <tr><td colSpan={10} style={{ padding: 18, color: "var(--muted)", textAlign: "center" }}>Энэ хугацаанд RPM telemetry бүртгэл байхгүй байна</td></tr>
+                      ) : reportTelemetryRows.map(({ log, telemetry }) => {
+                        const statusTone = rpmStatusFromLabel(telemetry.status);
+                        return (
+                          <tr key={telemetry.id}>
+                            <td style={{ whiteSpace: "nowrap", color: "var(--muted)", fontSize: 11 }}>{formatDateTime(new Date(telemetry.recordedAt))}</td>
+                            <td><strong>{log.productName}</strong><div style={{ color: "var(--muted)", fontSize: 10 }}>{fmtDisplay(log.outputQuantity)}</div></td>
+                            <td><strong>{telemetry.equipment.name}</strong><div style={{ color: "var(--muted)", fontSize: 10 }}>{telemetry.equipment.type}</div></td>
+                            <td style={{ fontFamily: "var(--font-mono), monospace", fontWeight: 800 }}>{telemetry.rpm.toLocaleString("mn-MN")} / {telemetry.maxRpm.toLocaleString("mn-MN")}</td>
+                            <td style={{ color: statusTone.color, fontWeight: 800 }}>{Math.round(telemetry.loadPercent)}%</td>
+                            <td><span style={{ color: statusTone.color, fontWeight: 800 }}>{statusTone.label}</span></td>
+                            <td>{telemetry.temperature === null ? "-" : `${telemetry.temperature}°C`}</td>
+                            <td>{telemetry.pressure === null ? "-" : `${telemetry.pressure} bar`}</td>
+                            <td>{telemetry.vibration === null ? "-" : `${telemetry.vibration} mm/s`}</td>
+                            <td style={{ maxWidth: 180, whiteSpace: "normal" }}>{telemetry.note || "-"}</td>
+                          </tr>
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>

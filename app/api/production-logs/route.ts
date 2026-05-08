@@ -104,6 +104,41 @@ export async function GET(request: Request) {
     }),
   ]);
 
+  const telemetryRows = logRows.length
+    ? await prisma.equipmentTelemetryLog.findMany({
+        where: { productionLogId: { in: logRows.map((row) => row.id) } },
+        orderBy: [{ recordedAt: "asc" }, { createdAt: "asc" }],
+        select: {
+          id: true,
+          productionLogId: true,
+          rpm: true,
+          maxRpm: true,
+          loadPercent: true,
+          temperature: true,
+          pressure: true,
+          vibration: true,
+          status: true,
+          note: true,
+          recordedAt: true,
+          createdAt: true,
+          equipment: {
+            select: {
+              id: true,
+              name: true,
+              type: true,
+              maxRpm: true,
+            },
+          },
+        },
+      })
+    : [];
+  const telemetryByLog = new Map<string, typeof telemetryRows>();
+  for (const row of telemetryRows) {
+    const rows = telemetryByLog.get(row.productionLogId) ?? [];
+    rows.push(row);
+    telemetryByLog.set(row.productionLogId, rows);
+  }
+
   const logs = logRows.map((row) => ({
     id: row.id,
     lotNumber: row.lotNumber,
@@ -119,6 +154,7 @@ export async function GET(request: Request) {
     note: row.note,
     material: { name: row.materialName, unit: row.materialUnit },
     createdBy: { fullName: row.createdByFullName },
+    telemetryLogs: telemetryByLog.get(row.id) ?? [],
   }));
 
   return NextResponse.json({ data: logs, plans });
