@@ -1,5 +1,6 @@
 import { PrismaClient } from "@prisma/client";
 import { randomBytes, scryptSync } from "node:crypto";
+import { DEFAULT_EQUIPMENT } from "../lib/equipmentConfig";
 
 const prisma = new PrismaClient();
 
@@ -54,6 +55,25 @@ async function main() {
       isActive: true
     }
   });
+
+  for (const equipment of DEFAULT_EQUIPMENT) {
+    await prisma.equipment.upsert({
+      where: { name: equipment.name },
+      update: {
+        type: equipment.type,
+        maxRpm: equipment.maxRpm,
+        department: equipment.department,
+        isActive: true
+      },
+      create: {
+        name: equipment.name,
+        type: equipment.type,
+        maxRpm: equipment.maxRpm,
+        department: equipment.department,
+        isActive: true
+      }
+    });
+  }
 }
 
 main()

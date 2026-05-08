@@ -137,12 +137,52 @@ model ProductionLog {
   note            String?   @db.Text
   createdById     String
   createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @default(now()) @updatedAt
   material        Material  @relation(fields: [materialId], references: [id])
   createdBy       User      @relation(fields: [createdById], references: [id])
+  telemetryLogs   EquipmentTelemetryLog[]
 
   @@index([productionDate])
   @@index([scheduledDate])
   @@index([materialId, productionDate])
+}
+
+model Equipment {
+  id            String                  @id @default(cuid())
+  name          String                  @unique
+  type          String
+  maxRpm        Float
+  department    String
+  isActive      Boolean                 @default(true)
+  createdAt     DateTime                @default(now())
+  updatedAt     DateTime                @updatedAt
+  telemetryLogs EquipmentTelemetryLog[]
+
+  @@index([department, isActive])
+  @@index([type])
+}
+
+model EquipmentTelemetryLog {
+  id              String        @id @default(cuid())
+  productionLogId String
+  equipmentId     String
+  rpm             Float
+  maxRpm          Float
+  loadPercent     Float
+  temperature     Float?
+  pressure        Float?
+  vibration       Float?
+  status          String
+  note            String?       @db.Text
+  recordedAt      DateTime
+  createdAt       DateTime      @default(now())
+  productionLog   ProductionLog @relation(fields: [productionLogId], references: [id], onDelete: Cascade)
+  equipment       Equipment     @relation(fields: [equipmentId], references: [id])
+
+  @@index([recordedAt])
+  @@index([equipmentId, recordedAt])
+  @@index([productionLogId])
+  @@index([status, recordedAt])
 }
 
 model DailyProductionPlan {

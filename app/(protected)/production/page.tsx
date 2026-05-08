@@ -23,6 +23,7 @@ import { AiDecisionCenter, DashboardEmptyState, PriorityStatusBar } from "@/comp
 import { DeptTopbar } from "@/components/DeptTopbar";
 import { KpiCard } from "@/components/KpiCard";
 import { ChartHint, RealtimeBadge, REALTIME_REFRESH_MS } from "@/components/RealtimeBadge";
+import { getSuggestedEquipmentNames } from "@/lib/equipmentConfig";
 import { printReport } from "@/lib/reportPrint";
 
 type ProductionLog = {
@@ -48,6 +49,70 @@ type ProductionPlan = {
   planDate: string;
   targetQuantity: number;
 };
+type EquipmentOption = { id: string; name: string; type: string; maxRpm: number; department: string; isActive: boolean };
+type EquipmentRpmFormRow = {
+  rowId: string;
+  equipmentId: string;
+  equipmentName: string;
+  rpm: string;
+  maxRpm: string;
+  temperature: string;
+  pressure: string;
+  vibration: string;
+  note: string;
+};
+type RpmChartPoint = {
+  id: string;
+  time: string;
+  label: string;
+  productType: string;
+  producedKg: number;
+  equipmentId: string;
+  equipmentName: string;
+  rpm: number;
+  maxRpm: number;
+  loadPercent: number;
+  temperature: number | null;
+  pressure: number | null;
+  vibration: number | null;
+  status: string;
+};
+type EquipmentSummary = {
+  equipmentId: string;
+  equipmentName: string;
+  equipmentType: string;
+  maxRpm: number;
+  latestRpm: number | null;
+  latestLoadPercent: number | null;
+  avgRpm: number | null;
+  avgLoadPercent: number | null;
+  temperature: number | null;
+  pressure: number | null;
+  vibration: number | null;
+  status: string;
+  lastRecordedAt: string | null;
+  healthScore: number | null;
+  trend: { time: string; rpm: number; loadPercent: number }[];
+};
+type RpmSummaryResponse = {
+  data: {
+    latestRpm: number | null;
+    avgRpm: number | null;
+    maxRpm: number | null;
+    minRpm: number | null;
+    avgLoadPercent: number | null;
+    warningCount: number;
+    criticalCount: number;
+    chartData: RpmChartPoint[];
+    equipmentSummaries: EquipmentSummary[];
+  };
+  filters: {
+    from: string;
+    to: string;
+    products: string[];
+    equipment: EquipmentOption[];
+  };
+};
 
 const PRODUCTS = [
   "ANDO-V 90MM","ANDO-V 120MM","ANDO-V 60MM",
@@ -59,69 +124,6 @@ const PRODUCT_COLORS: Record<string, string> = {
   "ANDO-EV 32MM": "#A78BFA","ANDO-EV 25MM": "#14B8A6","ANDO-SPLIT 38MM": "#F97316",
 };
 
-const RPM_MACHINES = [
-  {
-    name: "Mono pump",
-    localName: "Моно насос",
-    role: "Feed pump",
-    current: 2200,
-    max: 2950,
-    temperature: 68,
-    pressure: 4.2,
-    vibration: 2.1,
-    runtimeHours: 1280,
-    healthScore: 92,
-    connected: true,
-    maintenanceWindowHours: null,
-    waveform: [42, 56, 39, 62, 47, 58, 45, 54, 44, 57],
-  },
-  {
-    name: "Final mixer",
-    localName: "Финал миксер",
-    role: "Primary mixer",
-    current: 31000,
-    max: 36000,
-    temperature: 82,
-    pressure: 6.4,
-    vibration: 4.8,
-    runtimeHours: 2430,
-    healthScore: 76,
-    connected: true,
-    maintenanceWindowHours: 48,
-    waveform: [50, 68, 46, 76, 57, 82, 61, 79, 58, 73],
-  },
-  {
-    name: "Solution pump",
-    localName: "Уусмалын насос",
-    role: "Transfer pump",
-    current: 2100,
-    max: 2950,
-    temperature: 64,
-    pressure: 3.9,
-    vibration: 1.9,
-    runtimeHours: 1164,
-    healthScore: 89,
-    connected: true,
-    maintenanceWindowHours: null,
-    waveform: [38, 49, 36, 54, 43, 51, 40, 52, 39, 48],
-  },
-  {
-    name: "Oil mixer",
-    localName: "Тосон холигч",
-    role: "Aux mixer",
-    current: 1200,
-    max: 1800,
-    temperature: 58,
-    pressure: 2.7,
-    vibration: 1.5,
-    runtimeHours: 940,
-    healthScore: 94,
-    connected: true,
-    maintenanceWindowHours: null,
-    waveform: [32, 42, 30, 46, 34, 44, 35, 43, 33, 41],
-  },
-] as const;
-
 const EQUIPMENT_TOPOLOGY = [
   { label: "Tank", sub: "Raw feed" },
   { label: "Pump", sub: "Mono pump" },
@@ -129,27 +131,64 @@ const EQUIPMENT_TOPOLOGY = [
   { label: "Output", sub: "Packing" },
 ] as const;
 
-function rpmLoadPercent(current: number, max: number) {
-  return Math.round((current / max) * 100);
-}
-
 function rpmStatus(percent: number) {
-  if (percent > 95) return { label: "Critical", color: "#EF4444", bg: "rgba(239,68,68,.12)", border: "rgba(239,68,68,.34)" };
+  if (percent >= 95) return { label: "Critical", color: "#EF4444", bg: "rgba(239,68,68,.12)", border: "rgba(239,68,68,.34)" };
   if (percent >= 80) return { label: "Warning", color: "#F59E0B", bg: "rgba(245,158,11,.12)", border: "rgba(245,158,11,.34)" };
   return { label: "Normal", color: "#10B981", bg: "rgba(16,185,129,.12)", border: "rgba(16,185,129,.34)" };
 }
 
-type EquipmentMachine = (typeof RPM_MACHINES)[number];
-
-function equipmentStatus(machine: EquipmentMachine) {
-  const load = rpmLoadPercent(machine.current, machine.max);
-  if (!machine.connected || load > 95 || machine.healthScore < 70 || machine.vibration >= 5.5) {
-    return { label: "Critical", color: "#EF4444", bg: "rgba(239,68,68,.12)", border: "rgba(239,68,68,.34)" };
-  }
-  if (load >= 80 || machine.healthScore < 85 || machine.vibration >= 4) {
-    return { label: "Warning", color: "#F59E0B", bg: "rgba(245,158,11,.12)", border: "rgba(245,158,11,.34)" };
-  }
+function rpmStatusFromLabel(status: string) {
+  if (status === "CRITICAL") return { label: "Critical", color: "#EF4444", bg: "rgba(239,68,68,.12)", border: "rgba(239,68,68,.34)" };
+  if (status === "WARNING") return { label: "Warning", color: "#F59E0B", bg: "rgba(245,158,11,.12)", border: "rgba(245,158,11,.34)" };
+  if (status === "NO_DATA") return { label: "No data", color: "#64748B", bg: "rgba(100,116,139,.12)", border: "rgba(100,116,139,.28)" };
   return { label: "Normal", color: "#10B981", bg: "rgba(16,185,129,.12)", border: "rgba(16,185,129,.34)" };
+}
+
+function toDateTimeInputValue(date = new Date()) {
+  const local = new Date(date.getTime() - date.getTimezoneOffset() * 60000);
+  return local.toISOString().slice(0, 16);
+}
+
+function getTelemetryStatus(loadPercent: number) {
+  if (loadPercent >= 95) return "CRITICAL";
+  if (loadPercent >= 80) return "WARNING";
+  return "NORMAL";
+}
+
+function makeEquipmentRowId() {
+  return globalThis.crypto?.randomUUID?.() ?? `rpm-${Date.now()}`;
+}
+
+function createBlankEquipmentRow(): EquipmentRpmFormRow {
+  return {
+    rowId: makeEquipmentRowId(),
+    equipmentId: "",
+    equipmentName: "",
+    rpm: "",
+    maxRpm: "",
+    temperature: "",
+    pressure: "",
+    vibration: "",
+    note: "",
+  };
+}
+
+function createEquipmentRowFromOption(option: EquipmentOption): EquipmentRpmFormRow {
+  return {
+    ...createBlankEquipmentRow(),
+    equipmentId: option.id,
+    equipmentName: option.name,
+    maxRpm: String(option.maxRpm),
+  };
+}
+
+function getSuggestedEquipmentRows(product: string, equipment: EquipmentOption[]) {
+  const names = getSuggestedEquipmentNames(product);
+  const rows = names
+    .map((name) => equipment.find((item) => item.name === name))
+    .filter((item): item is EquipmentOption => Boolean(item))
+    .map(createEquipmentRowFromOption);
+  return rows.length ? rows : [createBlankEquipmentRow()];
 }
 const MINE_OPTIONS = ["Оюутолгой","Эрдэнэт","Тавантолгой","Нарийнсухайт","Цагаан суварга"];
 const PAGE_SIZE = 20;
@@ -304,11 +343,27 @@ function ProdTooltip({ active, payload, label }: { active?: boolean; payload?: C
   );
 }
 
-function SemiCircleRpmGauge({ percent, rpm, max, color, animate }: { percent: number; rpm: number; max: number; color: string; animate: boolean }) {
+function RpmTrendTooltip({ active, payload, label }: { active?: boolean; payload?: { payload?: RpmChartPoint }[]; label?: string | number }) {
+  if (!active || !payload?.length || !payload[0]?.payload) return null;
+  const row = payload[0].payload;
+  const status = rpmStatusFromLabel(row.status);
+  return (
+    <div style={{ background:"var(--panel)", border:"1px solid var(--border)", borderRadius:10, padding:"10px 12px", fontSize:11, boxShadow:"0 8px 24px rgba(0,0,0,.22)" }}>
+      <div style={{ color:"var(--text)", fontWeight:800, marginBottom:6 }}>{label}</div>
+      <div style={{ color:"var(--muted)", marginBottom:3 }}>Бүтээгдэхүүн: <strong style={{ color:"var(--text)" }}>{row.productType}</strong></div>
+      <div style={{ color:"var(--muted)", marginBottom:3 }}>Гарц: <strong style={{ color:"#10B981" }}>{fmtDisplay(row.producedKg)}</strong></div>
+      <div style={{ color:"var(--muted)", marginBottom:3 }}>Тоног төхөөрөмж: <strong style={{ color:"var(--text)" }}>{row.equipmentName}</strong></div>
+      <div style={{ color:"var(--muted)", marginBottom:3 }}>RPM: <strong style={{ color:status.color }}>{row.rpm.toLocaleString("mn-MN")} / {row.maxRpm.toLocaleString("mn-MN")}</strong></div>
+      <div style={{ color:"var(--muted)" }}>Load: <strong style={{ color:status.color }}>{row.loadPercent}% · {row.status}</strong></div>
+    </div>
+  );
+}
+
+function SemiCircleRpmGauge({ percent, rpm, max, color, animate }: { percent: number; rpm: number | null; max: number; color: string; animate: boolean }) {
   const gaugeValue = animate ? Math.min(100, Math.max(0, percent)) : 0;
 
   return (
-    <div className="scada-gauge" aria-label={`${rpm} rpm, ${percent}% load`}>
+    <div className="scada-gauge" aria-label={`${rpm ?? 0} rpm, ${percent}% load`}>
       <svg viewBox="0 0 120 74" role="img">
         <path className="scada-gauge__track" pathLength={100} d="M12 62 A48 48 0 0 1 108 62" />
         <path
@@ -318,7 +373,7 @@ function SemiCircleRpmGauge({ percent, rpm, max, color, animate }: { percent: nu
           stroke={color}
           style={{ strokeDashoffset: 100 - gaugeValue }}
         />
-        <text x="60" y="45" textAnchor="middle" className="scada-gauge__rpm">{rpm.toLocaleString("mn-MN")}</text>
+        <text x="60" y="45" textAnchor="middle" className="scada-gauge__rpm">{rpm === null ? "--" : rpm.toLocaleString("mn-MN")}</text>
         <text x="60" y="59" textAnchor="middle" className="scada-gauge__meta">/{max.toLocaleString("mn-MN")} rpm</text>
       </svg>
       <div className="scada-gauge__load" style={{ color }}>{percent}% LOAD</div>
@@ -336,7 +391,7 @@ function WaveformTrace({ values, color, delay = 0 }: { values: readonly number[]
     .join(" ");
 
   return (
-    <svg className="scada-waveform" viewBox="0 0 120 34" preserveAspectRatio="none" aria-label="Realtime vibration waveform">
+    <svg className="scada-waveform" viewBox="0 0 120 34" preserveAspectRatio="none" aria-label="Saved RPM load trace">
       <polyline className="scada-waveform__base" points={points} />
       <polyline className="scada-waveform__line" points={points} stroke={color} style={{ animationDelay: `${delay}s` }} />
     </svg>
@@ -360,107 +415,210 @@ function EquipmentTopologyView() {
   );
 }
 
-function EquipmentMachineCard({ machine, animate, index }: { machine: EquipmentMachine; animate: boolean; index: number }) {
-  const load = rpmLoadPercent(machine.current, machine.max);
+function EquipmentMachineCard({ summary, animate, index }: { summary: EquipmentSummary; animate: boolean; index: number }) {
+  const load = Math.round(summary.latestLoadPercent ?? 0);
   const loadStatus = rpmStatus(load);
-  const status = equipmentStatus(machine);
-  const maintenanceLabel = machine.maintenanceWindowHours ? `MNT ${machine.maintenanceWindowHours}h` : "MNT OK";
+  const status = rpmStatusFromLabel(summary.status);
+  const maintenanceLabel = summary.status === "WARNING" || summary.status === "CRITICAL" ? "CHECK" : "MNT OK";
+  const trendValues = summary.trend.length ? summary.trend.map((point) => point.loadPercent) : [0, 0, 0, 0];
+  const isConnected = summary.status !== "NO_DATA";
 
   return (
     <div className="scada-machine-card" style={{ borderColor: status.border }}>
       <div className="scada-machine-card__head">
         <div className="scada-machine-card__identity">
-          <span className={`scada-status-light ${machine.connected ? "is-online" : "is-offline"}`} />
+          <span className={`scada-status-light ${isConnected ? "is-online" : "is-offline"}`} />
           <div>
-            <div className="scada-machine-card__name">{machine.localName}</div>
-            <div className="scada-machine-card__role">{machine.name} · {machine.role}</div>
+            <div className="scada-machine-card__name">{summary.equipmentName}</div>
+            <div className="scada-machine-card__role">
+              {summary.equipmentType} · {summary.lastRecordedAt ? new Date(summary.lastRecordedAt).toLocaleString("mn-MN") : "RPM бүртгэлгүй"}
+            </div>
           </div>
         </div>
         <div className="scada-machine-card__badges">
-          <span className={`scada-link-badge ${machine.connected ? "is-connected" : "is-disconnected"}`}>
-            {machine.connected ? "CONNECTED" : "OFFLINE"}
+          <span className={`scada-link-badge ${isConnected ? "is-connected" : "is-disconnected"}`}>
+            {isConnected ? "RECORDED" : "NO DATA"}
           </span>
           <span className="scada-status-badge" style={{ color: status.color, borderColor: status.border, background: status.bg }}>
             {status.label}
           </span>
-          <span className={`scada-maint-badge ${machine.maintenanceWindowHours ? "is-warning" : ""}`}>
+          <span className={`scada-maint-badge ${maintenanceLabel === "CHECK" ? "is-warning" : ""}`}>
             {maintenanceLabel}
           </span>
         </div>
       </div>
 
       <div className="scada-machine-card__body">
-        <SemiCircleRpmGauge percent={load} rpm={machine.current} max={machine.max} color={loadStatus.color} animate={animate} />
+        <SemiCircleRpmGauge percent={load} rpm={summary.latestRpm} max={summary.maxRpm} color={loadStatus.color} animate={animate} />
         <div className="scada-metrics-grid">
-          <div><span>Temp</span><strong>{machine.temperature}°C</strong></div>
-          <div><span>Press</span><strong>{machine.pressure.toFixed(1)} bar</strong></div>
-          <div><span>Vib</span><strong>{machine.vibration.toFixed(1)} mm/s</strong></div>
-          <div><span>Run</span><strong>{machine.runtimeHours.toLocaleString("mn-MN")}h</strong></div>
+          <div><span>Avg RPM</span><strong>{summary.avgRpm === null ? "-" : Math.round(summary.avgRpm).toLocaleString("mn-MN")}</strong></div>
+          <div><span>Temp</span><strong>{summary.temperature === null ? "-" : `${summary.temperature}°C`}</strong></div>
+          <div><span>Press</span><strong>{summary.pressure === null ? "-" : `${summary.pressure.toFixed(1)} bar`}</strong></div>
+          <div><span>Vib</span><strong>{summary.vibration === null ? "-" : `${summary.vibration.toFixed(1)} mm/s`}</strong></div>
         </div>
       </div>
 
       <div className="scada-health-row">
         <span>Health score</span>
-        <strong style={{ color: status.color }}>{machine.healthScore}%</strong>
+        <strong style={{ color: status.color }}>{summary.healthScore === null ? "-" : `${summary.healthScore}%`}</strong>
       </div>
       <div className="scada-health-meter">
-        <div style={{ width: `${machine.healthScore}%`, background: status.color }} />
+        <div style={{ width: `${summary.healthScore ?? 0}%`, background: status.color }} />
       </div>
 
       <div className="scada-wave-row">
-        <span className="scada-wave-label">Vibration waveform</span>
+        <span className="scada-wave-label">RPM load trend</span>
         <span className="scada-pulse" style={{ borderColor: loadStatus.color }} />
-        <WaveformTrace values={machine.waveform} color={loadStatus.color} delay={index * -0.3} />
+        <WaveformTrace values={trendValues} color={loadStatus.color} delay={index * -0.3} />
       </div>
     </div>
   );
 }
 
-function RpmMonitoringCard() {
+function RpmMonitoringCard({
+  summary,
+  equipment,
+  productFilter,
+  equipmentFilter,
+  fromDate,
+  toDate,
+  onProductFilterChange,
+  onEquipmentFilterChange,
+  onFromDateChange,
+  onToDateChange,
+  onCreate,
+}: {
+  summary?: RpmSummaryResponse;
+  equipment: EquipmentOption[];
+  productFilter: string;
+  equipmentFilter: string;
+  fromDate: string;
+  toDate: string;
+  onProductFilterChange: (value: string) => void;
+  onEquipmentFilterChange: (value: string) => void;
+  onFromDateChange: (value: string) => void;
+  onToDateChange: (value: string) => void;
+  onCreate: () => void;
+}) {
   const [animateGauges, setAnimateGauges] = useState(false);
-  const rpmRows = RPM_MACHINES.map((machine) => {
-    const load = rpmLoadPercent(machine.current, machine.max);
-    const status = equipmentStatus(machine);
-    return { ...machine, load, status };
-  });
-  const averageHealth = Math.round(rpmRows.reduce((sum, machine) => sum + machine.healthScore, 0) / rpmRows.length);
-  const warningCount = rpmRows.filter((machine) => machine.status.label !== "Normal").length;
+  const data = summary?.data;
+  const chartData = data?.chartData ?? [];
+  const equipmentSummaries = data?.equipmentSummaries ?? equipment.map((item) => ({
+    equipmentId: item.id,
+    equipmentName: item.name,
+    equipmentType: item.type,
+    maxRpm: item.maxRpm,
+    latestRpm: null,
+    latestLoadPercent: null,
+    avgRpm: null,
+    avgLoadPercent: null,
+    temperature: null,
+    pressure: null,
+    vibration: null,
+    status: "NO_DATA",
+    lastRecordedAt: null,
+    healthScore: null,
+    trend: [],
+  } satisfies EquipmentSummary));
+  const averageRpm = data?.avgRpm === null || data?.avgRpm === undefined ? "-" : Math.round(data.avgRpm).toLocaleString("mn-MN");
+  const averageLoad = data?.avgLoadPercent === null || data?.avgLoadPercent === undefined ? "-" : `${Math.round(data.avgLoadPercent)}%`;
+  const warningTotal = (data?.warningCount ?? 0) + (data?.criticalCount ?? 0);
 
   useEffect(() => {
     const timer = window.setTimeout(() => setAnimateGauges(true), 80);
     return () => window.clearTimeout(timer);
-  }, []);
+  }, [chartData.length]);
 
   return (
     <div className="panel scada-monitor-panel">
       <div className="scada-monitor-panel__header">
         <div>
           <div className="panel-title">Тоног төхөөрөмжийн эргэлт / RPM</div>
-          <div className="panel-sub" style={{ marginTop: 4 }}>SCADA telemetry · realtime status</div>
+          <div className="panel-sub" style={{ marginTop: 4 }}>Production record telemetry · database source</div>
         </div>
         <div className="scada-live-badge">
           <span className="scada-status-light is-online" />
-          ONLINE
+          SAVED DATA
         </div>
       </div>
 
+      <div className="rpm-filter-row">
+        <label>
+          <span>Product</span>
+          <select value={productFilter} onChange={(event) => onProductFilterChange(event.target.value)}>
+            <option value="">Бүгд</option>
+            {PRODUCTS.map((product) => <option key={product} value={product}>{product}</option>)}
+          </select>
+        </label>
+        <label>
+          <span>Equipment</span>
+          <select value={equipmentFilter} onChange={(event) => onEquipmentFilterChange(event.target.value)}>
+            <option value="">Бүгд</option>
+            {equipment.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
+          </select>
+        </label>
+        <label>
+          <span>From</span>
+          <input type="date" value={fromDate} onChange={(event) => onFromDateChange(event.target.value)} />
+        </label>
+        <label>
+          <span>To</span>
+          <input type="date" value={toDate} onChange={(event) => onToDateChange(event.target.value)} />
+        </label>
+      </div>
+
       <div className="scada-summary-strip">
-        <div><span>AVG HEALTH</span><strong>{averageHealth}%</strong></div>
-        <div><span>WARNINGS</span><strong>{warningCount}</strong></div>
-        <div><span>LINK</span><strong>4/4</strong></div>
+        <div><span>AVG RPM</span><strong>{averageRpm}</strong></div>
+        <div><span>AVG LOAD</span><strong>{averageLoad}</strong></div>
+        <div><span>WARN / CRIT</span><strong>{warningTotal}</strong></div>
       </div>
 
       <EquipmentTopologyView />
 
+      {chartData.length ? (
+        <div className="rpm-trend-chart">
+          <ResponsiveContainer width="100%" height="100%">
+            <AreaChart data={chartData} margin={{ top: 8, right: 12, left: -18, bottom: 0 }}>
+              <defs>
+                <linearGradient id="rpmTrendGrad" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor="#10B981" stopOpacity={0.2}/>
+                  <stop offset="95%" stopColor="#10B981" stopOpacity={0}/>
+                </linearGradient>
+                <linearGradient id="rpmLoadGrad" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor="#3B82F6" stopOpacity={0.12}/>
+                  <stop offset="95%" stopColor="#3B82F6" stopOpacity={0}/>
+                </linearGradient>
+              </defs>
+              <CartesianGrid stroke="var(--border)" vertical={false}/>
+              <XAxis dataKey="label" axisLine={false} tickLine={false} tick={{ fill: "var(--muted)", fontSize: 10 }} />
+              <YAxis yAxisId="rpm" axisLine={false} tickLine={false} tick={{ fill: "var(--muted)", fontSize: 10 }} />
+              <YAxis yAxisId="load" orientation="right" domain={[0, 100]} axisLine={false} tickLine={false} tick={{ fill: "var(--muted)", fontSize: 10 }} />
+              <Tooltip content={<RpmTrendTooltip />} />
+              <Area yAxisId="rpm" type="monotone" dataKey="rpm" name="RPM" stroke="#10B981" strokeWidth={2} fill="url(#rpmTrendGrad)" dot={{ r: 2, fill: "#10B981" }} isAnimationActive={false}/>
+              <Area yAxisId="load" type="monotone" dataKey="loadPercent" name="Load %" stroke="#3B82F6" strokeWidth={1.5} fill="url(#rpmLoadGrad)" dot={false} isAnimationActive={false}/>
+            </AreaChart>
+          </ResponsiveContainer>
+        </div>
+      ) : (
+        <DashboardEmptyState
+          icon="RPM"
+          title="RPM бүртгэл байхгүй"
+          message="Үйлдвэрлэл бүртгэх үед тоног төхөөрөмжийн RPM утгыг хамт хадгалсны дараа график гарна."
+          actionLabel="+ Үйлдвэрлэл бүртгэх"
+          onAction={onCreate}
+          tone="normal"
+          compact
+        />
+      )}
+
       <div className="scada-machine-list">
-        {RPM_MACHINES.map((machine, index) => (
-          <EquipmentMachineCard key={machine.name} machine={machine} animate={animateGauges} index={index} />
+        {equipmentSummaries.map((item, index) => (
+          <EquipmentMachineCard key={item.equipmentId} summary={item} animate={animateGauges} index={index} />
         ))}
       </div>
     </div>
   );
 }
-
 function ProductionSkeleton() {
   return (
     <div className="department-production">
@@ -520,7 +678,7 @@ export default function ProductionPage() {
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
 
   const [productName, setProductName] = useState<(typeof PRODUCTS)[number]>("ANDO-V 90MM");
-  const [productionDate, setProductionDate] = useState(toDateInputValue());
+  const [productionDate, setProductionDate] = useState(toDateTimeInputValue());
   const [amount, setAmount] = useState("");
   const [amountUnit, setAmountUnit] = useState<"kg"|"ton">("kg");
   const [destinationMine, setDestinationMine] = useState(MINE_OPTIONS[0]);
@@ -530,6 +688,16 @@ export default function ProductionPage() {
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [selectedMaterialId, setSelectedMaterialId] = useState("");
+  const [equipmentRows, setEquipmentRows] = useState<EquipmentRpmFormRow[]>(() => [createBlankEquipmentRow()]);
+  const [rpmProductFilter, setRpmProductFilter] = useState("");
+  const [rpmEquipmentFilter, setRpmEquipmentFilter] = useState("");
+  const [rpmFromDate, setRpmFromDate] = useState(() => {
+    const date = new Date();
+    date.setDate(date.getDate() - 14);
+    return toDateInputValue(date);
+  });
+  const [rpmToDate, setRpmToDate] = useState(() => toDateInputValue());
+  const [toastMessage, setToastMessage] = useState("");
 
   const { data: logsData, isLoading: logsLoading, mutate: mutateLogs } = useSWR(
     "/api/production-logs?limit=180",
@@ -541,10 +709,29 @@ export default function ProductionPage() {
     fetcher,
     { refreshInterval: REALTIME_REFRESH_MS, revalidateOnFocus: false }
   );
+  const { data: equipmentData, mutate: mutateEquipment } = useSWR<{ data: EquipmentOption[] }>(
+    "/api/equipment",
+    fetcher,
+    { refreshInterval: REALTIME_REFRESH_MS, revalidateOnFocus: false }
+  );
+  const rpmSummaryUrl = useMemo(() => {
+    const params = new URLSearchParams();
+    if (rpmProductFilter) params.set("productType", rpmProductFilter);
+    if (rpmEquipmentFilter) params.set("equipmentId", rpmEquipmentFilter);
+    if (rpmFromDate) params.set("from", rpmFromDate);
+    if (rpmToDate) params.set("to", rpmToDate);
+    return `/api/equipment/rpm-summary?${params.toString()}`;
+  }, [rpmEquipmentFilter, rpmFromDate, rpmProductFilter, rpmToDate]);
+  const { data: rpmSummaryData, mutate: mutateRpmSummary } = useSWR<RpmSummaryResponse>(
+    rpmSummaryUrl,
+    fetcher,
+    { refreshInterval: REALTIME_REFRESH_MS, revalidateOnFocus: false }
+  );
 
   const logs: ProductionLog[] = useMemo(() => logsData?.data ?? [], [logsData]);
   const productionPlans: ProductionPlan[] = useMemo(() => logsData?.plans ?? [], [logsData]);
   const materials: Material[] = useMemo(() => materialsData?.data ?? [], [materialsData]);
+  const equipmentOptions: EquipmentOption[] = useMemo(() => equipmentData?.data ?? [], [equipmentData]);
   const loading = logsLoading || materialsLoading;
 
   function closeShipmentModal() {
@@ -597,9 +784,65 @@ export default function ProductionPage() {
     return () => window.clearInterval(intervalId);
   }, [mutateLogs, mutateMaterials, reportModal]);
 
+  useEffect(() => {
+    if (!modal || !equipmentOptions.length) return;
+    const hasConfiguredRow = equipmentRows.some((row) => row.equipmentId || row.equipmentName.trim());
+    if (!hasConfiguredRow) {
+      const timeout = window.setTimeout(() => {
+        const suggestedRows = getSuggestedEquipmentRows(productName, equipmentOptions);
+        if (suggestedRows.some((row) => row.equipmentId || row.equipmentName.trim())) {
+          setEquipmentRows(suggestedRows);
+        }
+      }, 0);
+      return () => window.clearTimeout(timeout);
+    }
+  }, [equipmentOptions, equipmentRows, modal, productName]);
+
+  useEffect(() => {
+    if (!toastMessage) return;
+    const timeout = window.setTimeout(() => setToastMessage(""), 4500);
+    return () => window.clearTimeout(timeout);
+  }, [toastMessage]);
+
+  function resetEquipmentRows(product: string, options = equipmentOptions) {
+    setEquipmentRows(getSuggestedEquipmentRows(product, options));
+  }
+
+  function updateEquipmentRow(rowId: string, patch: Partial<EquipmentRpmFormRow>) {
+    setEquipmentRows((rows) => rows.map((row) => row.rowId === rowId ? { ...row, ...patch } : row));
+  }
+
+  function selectEquipmentForRow(rowId: string, equipmentId: string) {
+    const selectedEquipment = equipmentOptions.find((item) => item.id === equipmentId);
+    updateEquipmentRow(rowId, selectedEquipment ? {
+      equipmentId: selectedEquipment.id,
+      equipmentName: selectedEquipment.name,
+      maxRpm: String(selectedEquipment.maxRpm),
+    } : {
+      equipmentId: "",
+      equipmentName: "",
+      maxRpm: "",
+    });
+  }
+
+  function addEquipmentRow() {
+    setEquipmentRows((rows) => [...rows, createBlankEquipmentRow()]);
+  }
+
+  function removeEquipmentRow(rowId: string) {
+    setEquipmentRows((rows) => rows.length > 1 ? rows.filter((row) => row.rowId !== rowId) : [createBlankEquipmentRow()]);
+  }
+
+  function getEquipmentRowPreview(row: EquipmentRpmFormRow) {
+    const rpm = Number(row.rpm);
+    const maxRpm = Number(row.maxRpm);
+    const loadPercent = rpm > 0 && maxRpm > 0 ? Math.round((rpm / maxRpm) * 1000) / 10 : 0;
+    return { loadPercent, status: getTelemetryStatus(loadPercent) };
+  }
+
   function openCreateModal(product: (typeof PRODUCTS)[number] = "ANDO-V 90MM") {
     setProductName(product);
-    setProductionDate(toDateInputValue());
+    setProductionDate(toDateTimeInputValue());
     setAmount("");
     setAmountUnit("kg");
     setDestinationMine(MINE_OPTIONS[0]);
@@ -607,6 +850,7 @@ export default function ProductionPage() {
     setDensity("");
     setNote("");
     setSelectedMaterialId((current) => current || materials[0]?.id || "");
+    resetEquipmentRows(product);
     setError("");
     setModal(true);
   }
@@ -621,19 +865,48 @@ export default function ProductionPage() {
     const qty = toKg(amount, amountUnit);
     const densityValue = density.trim() ? Number(density) : null;
     if (!qty) { setError("Үйлдвэрлэсэн хэмжээг зөв оруулна уу"); return; }
-    if (densityValue === null || !Number.isFinite(densityValue) || densityValue <= 0) { setError("Нягтын утгыг заавал зөв оруулна уу"); return; }
+    if (densityValue !== null && (!Number.isFinite(densityValue) || densityValue <= 0)) { setError("Нягтын утгыг зөв оруулна уу"); return; }
+    const telemetry = equipmentRows.map((row) => ({
+      equipmentId: row.equipmentId || undefined,
+      equipmentName: row.equipmentName.trim(),
+      rpm: Number(row.rpm),
+      maxRpm: Number(row.maxRpm),
+      temperature: row.temperature.trim() ? Number(row.temperature) : null,
+      pressure: row.pressure.trim() ? Number(row.pressure) : null,
+      vibration: row.vibration.trim() ? Number(row.vibration) : null,
+      note: row.note.trim() || null,
+    })).filter((row) => row.equipmentName || row.equipmentId || row.rpm || row.maxRpm);
+    if (!telemetry.length) { setError("Тоног төхөөрөмжийн RPM бүртгэл нэмнэ үү"); return; }
+    for (const row of telemetry) {
+      if (!row.equipmentName && !row.equipmentId) { setError("Тоног төхөөрөмж сонгоно уу"); return; }
+      if (!Number.isFinite(row.rpm) || row.rpm <= 0) { setError("RPM утгыг зөв оруулна уу"); return; }
+      if (!Number.isFinite(row.maxRpm) || row.maxRpm <= 0) { setError("Max RPM утгыг зөв оруулна уу"); return; }
+      if (row.rpm > row.maxRpm * 1.2) { setError("RPM утга max RPM-ээс хэт өндөр байна"); return; }
+    }
     const effectiveMaterialId = selectedMaterialId || materials[0]?.id || "";
     setSubmitting(true); setError("");
-    const res = await fetch("/api/production-logs", {
+    const res = await fetch("/api/production/logs", {
       method:"POST", headers:{"Content-Type":"application/json"},
-      body: JSON.stringify({ lotNumber:makeLotNumber(), productionDate, productName, outputQuantity:qty, destinationMine, materialId:effectiveMaterialId || null, workerInfo:workerInfo.trim()||null, density:densityValue, note:note||null }),
+      body: JSON.stringify({
+        lotNumber: makeLotNumber(),
+        productionDateTime: productionDate,
+        productType: productName,
+        producedKg: qty,
+        destinationMine,
+        materialId: effectiveMaterialId || null,
+        operator: workerInfo.trim() || null,
+        density: densityValue,
+        note: note || null,
+        equipmentTelemetry: telemetry,
+      }),
     });
     const data = await res.json();
     if (!res.ok) { setError(data.error??"Алдаа гарлаа"); setSubmitting(false); return; }
-    setModal(false); setSubmitting(false); setAmount(""); setWorkerInfo(""); setDensity(""); setNote("");
-    await Promise.all([mutateLogs(), mutateMaterials()]);
+    const firstTelemetry = data?.data?.telemetryLogs?.[0];
+    setToastMessage(`${productName.replace("ANDO-", "")} үйлдвэрлэл бүртгэгдлээ — ${firstTelemetry?.equipment?.name ?? telemetry[0].equipmentName} ${firstTelemetry?.rpm ?? telemetry[0].rpm} rpm`);
+    setModal(false); setSubmitting(false); setAmount(""); setWorkerInfo(""); setDensity(""); setNote(""); resetEquipmentRows(productName);
+    await Promise.all([mutateLogs(), mutateMaterials(), mutateEquipment(), mutateRpmSummary()]);
   }
-
   async function deleteSelectedLog() {
     if (!selectedLog) return;
     const ok = window.confirm(`${selectedLog.productName} (${selectedLog.productionDate.slice(0,10)}) бүртгэлийг устгах уу?`);
@@ -1189,7 +1462,19 @@ export default function ProductionPage() {
         </div>
 
         <div className="production-equipment-row">
-          <RpmMonitoringCard />
+          <RpmMonitoringCard
+            summary={rpmSummaryData}
+            equipment={equipmentOptions}
+            productFilter={rpmProductFilter}
+            equipmentFilter={rpmEquipmentFilter}
+            fromDate={rpmFromDate}
+            toDate={rpmToDate}
+            onProductFilterChange={setRpmProductFilter}
+            onEquipmentFilterChange={setRpmEquipmentFilter}
+            onFromDateChange={setRpmFromDate}
+            onToDateChange={setRpmToDate}
+            onCreate={() => openCreateModal()}
+          />
         </div>
 
         {/* Bottom: Table + Right panel */}
@@ -1362,6 +1647,8 @@ export default function ProductionPage() {
           </div>
         </div>
       </div>
+
+      {toastMessage && <div className="production-toast">{toastMessage}</div>}
 
       {/* Live Report Modal */}
       {reportModal ? (
@@ -1579,7 +1866,7 @@ export default function ProductionPage() {
             <form onSubmit={submitLog}>
               <div style={{display:"grid",gridTemplateColumns:"repeat(3,minmax(0,1fr))",gap:12}}>
                 <div className="fg"><label>Бүтээгдэхүүн</label>
-                  <select value={productName} onChange={e=>setProductName(e.target.value as (typeof PRODUCTS)[number])}>
+                  <select value={productName} onChange={e=>{ const next = e.target.value as (typeof PRODUCTS)[number]; setProductName(next); resetEquipmentRows(next); }}>
                     {PRODUCTS.map(p=><option key={p} value={p}>{p}</option>)}
                   </select>
                 </div>
@@ -1593,7 +1880,7 @@ export default function ProductionPage() {
                   )}
                 </div>
                 <div className="fg"><label>Үйлдвэрлэсэн өдөр</label>
-                  <input type="date" value={productionDate} onChange={e=>setProductionDate(e.target.value)}/>
+                  <input type="datetime-local" value={productionDate} onChange={e=>setProductionDate(e.target.value)}/>
                 </div>
                 <div className="fg"><label>Үйлдвэрлэсэн хэмжээ</label>
                   <input type="number" min="0" step="0.1" value={amount} onChange={e=>setAmount(e.target.value)} placeholder="Жишээ: 1500"/>
@@ -1621,6 +1908,61 @@ export default function ProductionPage() {
                 </div>
                 <div className="fg"><label>Тэмдэглэл</label>
                   <textarea style={{height:112,minHeight:112,maxHeight:112,overflow:"hidden",resize:"none"}} value={note} onChange={e=>setNote(e.target.value)} placeholder="Нэмэлт тайлбар"/>
+                </div>
+              </div>
+              <div className="equipment-rpm-editor">
+                <div className="equipment-rpm-editor__head">
+                  <div>
+                    <strong>Equipment RPM records</strong>
+                    <span>Бүтээгдэхүүн бүртгэхэд ашигласан тоног төхөөрөмжийн бодит RPM-ийг хадгална.</span>
+                  </div>
+                  <button type="button" onClick={addEquipmentRow}>+ RPM мөр</button>
+                </div>
+                <div className="equipment-rpm-list">
+                  {equipmentRows.map((row) => {
+                    const preview = getEquipmentRowPreview(row);
+                    const previewStatus = rpmStatusFromLabel(preview.status);
+                    return (
+                      <div className="equipment-rpm-row" key={row.rowId}>
+                        <label>
+                          <span>Equipment</span>
+                          <select value={row.equipmentId} onChange={(event) => selectEquipmentForRow(row.rowId, event.target.value)}>
+                            <option value="">Сонгох</option>
+                            {equipmentOptions.map((item) => <option key={item.id} value={item.id}>{item.name} · max {item.maxRpm.toLocaleString("mn-MN")} rpm</option>)}
+                          </select>
+                        </label>
+                        <label>
+                          <span>RPM</span>
+                          <input type="number" min="0" step="1" value={row.rpm} onChange={(event) => updateEquipmentRow(row.rowId, { rpm: event.target.value })} placeholder="2100" />
+                        </label>
+                        <label>
+                          <span>Max RPM</span>
+                          <input type="number" min="1" step="1" value={row.maxRpm} onChange={(event) => updateEquipmentRow(row.rowId, { maxRpm: event.target.value })} placeholder="2950" />
+                        </label>
+                        <label>
+                          <span>Temp</span>
+                          <input type="number" step="0.1" value={row.temperature} onChange={(event) => updateEquipmentRow(row.rowId, { temperature: event.target.value })} placeholder="optional" />
+                        </label>
+                        <label>
+                          <span>Pressure</span>
+                          <input type="number" step="0.1" value={row.pressure} onChange={(event) => updateEquipmentRow(row.rowId, { pressure: event.target.value })} placeholder="optional" />
+                        </label>
+                        <label>
+                          <span>Vibration</span>
+                          <input type="number" step="0.1" value={row.vibration} onChange={(event) => updateEquipmentRow(row.rowId, { vibration: event.target.value })} placeholder="optional" />
+                        </label>
+                        <label className="equipment-rpm-row__note">
+                          <span>Note</span>
+                          <input type="text" value={row.note} onChange={(event) => updateEquipmentRow(row.rowId, { note: event.target.value })} placeholder="optional" />
+                        </label>
+                        <div className="equipment-rpm-preview">
+                          <span style={{ color: previewStatus.color, borderColor: previewStatus.border, background: previewStatus.bg }}>{preview.loadPercent ? `${preview.loadPercent}%` : "0%"}</span>
+                          <strong style={{ color: previewStatus.color }}>{previewStatus.label}</strong>
+                        </div>
+                        <button className="equipment-rpm-remove" type="button" onClick={() => removeEquipmentRow(row.rowId)} aria-label="Remove RPM row">×</button>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
               {error && <div style={{color:"#f87171",fontSize:12,marginBottom:8}}>{error}</div>}
