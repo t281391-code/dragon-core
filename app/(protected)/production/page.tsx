@@ -60,10 +60,78 @@ const PRODUCT_COLORS: Record<string, string> = {
 };
 
 const RPM_MACHINES = [
-  { name: "Mono pump", current: 2200, max: 2950 },
-  { name: "Final mixer", current: 31000, max: 36000 },
-  { name: "Solution pump", current: 2100, max: 2950 },
-  { name: "Oil mixer", current: 1200, max: 1800 },
+  {
+    name: "Mono pump",
+    localName: "Моно насос",
+    role: "Feed pump",
+    current: 2200,
+    max: 2950,
+    temperature: 68,
+    pressure: 4.2,
+    vibration: 2.1,
+    runtimeHours: 1280,
+    healthScore: 92,
+    connected: true,
+    maintenanceWindowHours: null,
+    waveform: [42, 56, 39, 62, 47, 58, 45, 54, 44, 57],
+  },
+  {
+    name: "Final mixer",
+    localName: "Финал миксер",
+    role: "Primary mixer",
+    current: 31000,
+    max: 36000,
+    temperature: 82,
+    pressure: 6.4,
+    vibration: 4.8,
+    runtimeHours: 2430,
+    healthScore: 76,
+    connected: true,
+    maintenanceWindowHours: 48,
+    waveform: [50, 68, 46, 76, 57, 82, 61, 79, 58, 73],
+  },
+  {
+    name: "Solution pump",
+    localName: "Уусмалын насос",
+    role: "Transfer pump",
+    current: 2100,
+    max: 2950,
+    temperature: 64,
+    pressure: 3.9,
+    vibration: 1.9,
+    runtimeHours: 1164,
+    healthScore: 89,
+    connected: true,
+    maintenanceWindowHours: null,
+    waveform: [38, 49, 36, 54, 43, 51, 40, 52, 39, 48],
+  },
+  {
+    name: "Oil mixer",
+    localName: "Тосон холигч",
+    role: "Aux mixer",
+    current: 1200,
+    max: 1800,
+    temperature: 58,
+    pressure: 2.7,
+    vibration: 1.5,
+    runtimeHours: 940,
+    healthScore: 94,
+    connected: true,
+    maintenanceWindowHours: null,
+    waveform: [32, 42, 30, 46, 34, 44, 35, 43, 33, 41],
+  },
+] as const;
+
+const EQUIPMENT_TOPOLOGY = [
+  { label: "Tank", sub: "Raw feed" },
+  { label: "Pump", sub: "Mono pump" },
+  { label: "Mixer", sub: "Final mixer" },
+  { label: "Output", sub: "Packing" },
+] as const;
+
+const PREDICTIVE_ALERTS = [
+  { tone: "warning", title: "Final mixer vibration increased by 12%", detail: "Maintenance recommended within 48h" },
+  { tone: "normal", title: "Pump train pressure stable", detail: "No cavitation pattern detected" },
 ] as const;
 
 const DIAMETER_GROUPS = [
@@ -78,6 +146,19 @@ function rpmLoadPercent(current: number, max: number) {
 function rpmStatus(percent: number) {
   if (percent > 95) return { label: "Critical", color: "#EF4444", bg: "rgba(239,68,68,.12)", border: "rgba(239,68,68,.34)" };
   if (percent >= 80) return { label: "Warning", color: "#F59E0B", bg: "rgba(245,158,11,.12)", border: "rgba(245,158,11,.34)" };
+  return { label: "Normal", color: "#10B981", bg: "rgba(16,185,129,.12)", border: "rgba(16,185,129,.34)" };
+}
+
+type EquipmentMachine = (typeof RPM_MACHINES)[number];
+
+function equipmentStatus(machine: EquipmentMachine) {
+  const load = rpmLoadPercent(machine.current, machine.max);
+  if (!machine.connected || load > 95 || machine.healthScore < 70 || machine.vibration >= 5.5) {
+    return { label: "Critical", color: "#EF4444", bg: "rgba(239,68,68,.12)", border: "rgba(239,68,68,.34)" };
+  }
+  if (load >= 80 || machine.healthScore < 85 || machine.vibration >= 4) {
+    return { label: "Warning", color: "#F59E0B", bg: "rgba(245,158,11,.12)", border: "rgba(245,158,11,.34)" };
+  }
   return { label: "Normal", color: "#10B981", bg: "rgba(16,185,129,.12)", border: "rgba(16,185,129,.34)" };
 }
 const MINE_OPTIONS = ["Оюутолгой","Эрдэнэт","Тавантолгой","Нарийнсухайт","Цагаан суварга"];
@@ -233,142 +314,168 @@ function ProdTooltip({ active, payload, label }: { active?: boolean; payload?: C
   );
 }
 
-function RpmDonut({ percent, color }: { percent: number; color: string }) {
-  const clamped = Math.min(100, Math.max(0, percent));
-  const radius = 18;
-  const circumference = 2 * Math.PI * radius;
-  const dash = (clamped / 100) * circumference;
+function SemiCircleRpmGauge({ percent, rpm, max, color, animate }: { percent: number; rpm: number; max: number; color: string; animate: boolean }) {
+  const gaugeValue = animate ? Math.min(100, Math.max(0, percent)) : 0;
 
   return (
-    <svg width="74" height="74" viewBox="0 0 48 48" aria-label={`${percent}% RPM load`} style={{ flexShrink: 0 }}>
-      <circle cx="24" cy="24" r={radius} fill="none" stroke="rgba(148,163,184,.16)" strokeWidth="6" />
-      <circle
-        cx="24"
-        cy="24"
-        r={radius}
-        fill="none"
-        stroke={color}
-        strokeWidth="6"
-        strokeLinecap="round"
-        strokeDasharray={`${dash} ${circumference - dash}`}
-        transform="rotate(-90 24 24)"
-      />
-      <text x="24" y="24" textAnchor="middle" dominantBaseline="middle" fill="var(--text)" fontSize="10" fontWeight="800">
-        {percent}%
-      </text>
+    <div className="scada-gauge" aria-label={`${rpm} rpm, ${percent}% load`}>
+      <svg viewBox="0 0 120 74" role="img">
+        <path className="scada-gauge__track" pathLength={100} d="M12 62 A48 48 0 0 1 108 62" />
+        <path
+          className="scada-gauge__value"
+          pathLength={100}
+          d="M12 62 A48 48 0 0 1 108 62"
+          stroke={color}
+          style={{ strokeDashoffset: 100 - gaugeValue }}
+        />
+        <text x="60" y="45" textAnchor="middle" className="scada-gauge__rpm">{rpm.toLocaleString("mn-MN")}</text>
+        <text x="60" y="59" textAnchor="middle" className="scada-gauge__meta">/{max.toLocaleString("mn-MN")} rpm</text>
+      </svg>
+      <div className="scada-gauge__load" style={{ color }}>{percent}% LOAD</div>
+    </div>
+  );
+}
+
+function WaveformTrace({ values, color, delay = 0 }: { values: readonly number[]; color: string; delay?: number }) {
+  const points = values
+    .map((value, index) => {
+      const x = (index / Math.max(values.length - 1, 1)) * 120;
+      const y = 30 - (Math.min(100, Math.max(0, value)) / 100) * 22;
+      return `${x.toFixed(1)},${y.toFixed(1)}`;
+    })
+    .join(" ");
+
+  return (
+    <svg className="scada-waveform" viewBox="0 0 120 34" preserveAspectRatio="none" aria-label="Realtime vibration waveform">
+      <polyline className="scada-waveform__base" points={points} />
+      <polyline className="scada-waveform__line" points={points} stroke={color} style={{ animationDelay: `${delay}s` }} />
     </svg>
   );
 }
 
-function RpmMonitoringCard() {
-  const rpmRows = RPM_MACHINES.map((machine) => {
-    const percent = rpmLoadPercent(machine.current, machine.max);
-    const status = rpmStatus(percent);
-    return { ...machine, percent, status };
-  });
-  const averageLoad = Math.round(rpmRows.reduce((sum, machine) => sum + machine.percent, 0) / rpmRows.length);
-  const averageStatus = rpmStatus(averageLoad);
-  const finalMixerLoad = rpmRows.find((machine) => machine.name === "Final mixer")?.percent ?? 0;
-  const statusCounts = rpmRows.reduce<Record<string, number>>((acc, machine) => {
-    acc[machine.status.label] = (acc[machine.status.label] ?? 0) + 1;
-    return acc;
-  }, {});
+function EquipmentTopologyView() {
+  return (
+    <div className="scada-topology" aria-label="Tank to pump to mixer to output topology">
+      {EQUIPMENT_TOPOLOGY.map((node, index) => (
+        <div key={node.label} className="scada-topology__item">
+          <div className="scada-topology__node">
+            <span className="scada-status-light is-online" />
+            <strong>{node.label}</strong>
+            <span>{node.sub}</span>
+          </div>
+          {index < EQUIPMENT_TOPOLOGY.length - 1 && <div className="scada-topology__line" />}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function EquipmentMachineCard({ machine, animate, index }: { machine: EquipmentMachine; animate: boolean; index: number }) {
+  const load = rpmLoadPercent(machine.current, machine.max);
+  const loadStatus = rpmStatus(load);
+  const status = equipmentStatus(machine);
+  const maintenanceLabel = machine.maintenanceWindowHours ? `MNT ${machine.maintenanceWindowHours}h` : "MNT OK";
 
   return (
-    <div className="panel" style={{ padding: 16 }}>
-      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12, marginBottom: 12 }}>
-        <div>
-          <div className="panel-title">Тоног төхөөрөмжийн эргэлт / RPM</div>
-          <div className="panel-sub" style={{ marginTop: 4 }}>Одоогийн эргэлтийн ачаалал</div>
+    <div className="scada-machine-card" style={{ borderColor: status.border }}>
+      <div className="scada-machine-card__head">
+        <div className="scada-machine-card__identity">
+          <span className={`scada-status-light ${machine.connected ? "is-online" : "is-offline"}`} />
+          <div>
+            <div className="scada-machine-card__name">{machine.localName}</div>
+            <div className="scada-machine-card__role">{machine.name} · {machine.role}</div>
+          </div>
         </div>
-        <span style={{
-          border: "1px solid rgba(16,185,129,.28)",
-          background: "rgba(16,185,129,.1)",
-          color: "#10B981",
-          borderRadius: 999,
-          padding: "4px 7px",
-          fontSize: 10,
-          fontWeight: 800,
-          whiteSpace: "nowrap",
-        }}>
-          AI
-        </span>
+        <div className="scada-machine-card__badges">
+          <span className={`scada-link-badge ${machine.connected ? "is-connected" : "is-disconnected"}`}>
+            {machine.connected ? "CONNECTED" : "OFFLINE"}
+          </span>
+          <span className="scada-status-badge" style={{ color: status.color, borderColor: status.border, background: status.bg }}>
+            {status.label}
+          </span>
+          <span className={`scada-maint-badge ${machine.maintenanceWindowHours ? "is-warning" : ""}`}>
+            {maintenanceLabel}
+          </span>
+        </div>
       </div>
 
-      <div style={{ display: "flex", flexDirection: "column", gap: 11 }}>
-        {rpmRows.map((machine) => (
-          <div key={machine.name}>
-            <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 10, marginBottom: 5 }}>
-              <div style={{ minWidth: 0 }}>
-                <div style={{ color: "var(--text)", fontSize: 11, fontWeight: 800, lineHeight: 1.25 }}>
-                  {machine.name}
-                </div>
-                <div style={{ color: "var(--muted)", fontSize: 10, lineHeight: 1.35 }}>
-                  {machine.current.toLocaleString("mn-MN")} / {machine.max.toLocaleString("mn-MN")} rpm
-                </div>
-              </div>
-              <div style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
-                <span style={{ color: "var(--text)", fontSize: 10, fontWeight: 800, minWidth: 28, textAlign: "right" }}>{machine.percent}%</span>
-                <span style={{
-                  border: `1px solid ${machine.status.border}`,
-                  background: machine.status.bg,
-                  color: machine.status.color,
-                  borderRadius: 7,
-                  padding: "5px 9px",
-                  fontSize: 9,
-                  fontWeight: 800,
-                  lineHeight: 1,
-                  minWidth: 58,
-                  textAlign: "center",
-                }}>
-                  {machine.status.label}
-                </span>
-              </div>
-            </div>
-            <div style={{ height: 7, borderRadius: 999, background: "rgba(15,23,42,.72)", overflow: "hidden", border: "1px solid rgba(148,163,184,.1)" }}>
-              <div style={{
-                width: `${Math.min(100, machine.percent)}%`,
-                height: "100%",
-                background: machine.status.color,
-                borderRadius: 999,
-                boxShadow: `0 0 14px ${machine.status.color}55`,
-              }} />
-            </div>
-          </div>
+      <div className="scada-machine-card__body">
+        <SemiCircleRpmGauge percent={load} rpm={machine.current} max={machine.max} color={loadStatus.color} animate={animate} />
+        <div className="scada-metrics-grid">
+          <div><span>Temp</span><strong>{machine.temperature}°C</strong></div>
+          <div><span>Press</span><strong>{machine.pressure.toFixed(1)} bar</strong></div>
+          <div><span>Vib</span><strong>{machine.vibration.toFixed(1)} mm/s</strong></div>
+          <div><span>Run</span><strong>{machine.runtimeHours.toLocaleString("mn-MN")}h</strong></div>
+        </div>
+      </div>
+
+      <div className="scada-health-row">
+        <span>Health score</span>
+        <strong style={{ color: status.color }}>{machine.healthScore}%</strong>
+      </div>
+      <div className="scada-health-meter">
+        <div style={{ width: `${machine.healthScore}%`, background: status.color }} />
+      </div>
+
+      <div className="scada-wave-row">
+        <span className="scada-wave-label">Vibration waveform</span>
+        <span className="scada-pulse" style={{ borderColor: loadStatus.color }} />
+        <WaveformTrace values={machine.waveform} color={loadStatus.color} delay={index * -0.3} />
+      </div>
+    </div>
+  );
+}
+
+function RpmMonitoringCard() {
+  const [animateGauges, setAnimateGauges] = useState(false);
+  const rpmRows = RPM_MACHINES.map((machine) => {
+    const load = rpmLoadPercent(machine.current, machine.max);
+    const status = equipmentStatus(machine);
+    return { ...machine, load, status };
+  });
+  const averageHealth = Math.round(rpmRows.reduce((sum, machine) => sum + machine.healthScore, 0) / rpmRows.length);
+  const warningCount = rpmRows.filter((machine) => machine.status.label !== "Normal").length;
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => setAnimateGauges(true), 80);
+    return () => window.clearTimeout(timer);
+  }, []);
+
+  return (
+    <div className="panel scada-monitor-panel">
+      <div className="scada-monitor-panel__header">
+        <div>
+          <div className="panel-title">Тоног төхөөрөмжийн эргэлт / RPM</div>
+          <div className="panel-sub" style={{ marginTop: 4 }}>SCADA telemetry · realtime status</div>
+        </div>
+        <div className="scada-live-badge">
+          <span className="scada-status-light is-online" />
+          ONLINE
+        </div>
+      </div>
+
+      <div className="scada-summary-strip">
+        <div><span>AVG HEALTH</span><strong>{averageHealth}%</strong></div>
+        <div><span>WARNINGS</span><strong>{warningCount}</strong></div>
+        <div><span>LINK</span><strong>4/4</strong></div>
+      </div>
+
+      <EquipmentTopologyView />
+
+      <div className="scada-machine-list">
+        {RPM_MACHINES.map((machine, index) => (
+          <EquipmentMachineCard key={machine.name} machine={machine} animate={animateGauges} index={index} />
         ))}
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "86px 1fr", gap: 12, alignItems: "center", marginTop: 16 }}>
-        <RpmDonut percent={averageLoad} color={averageStatus.color} />
-        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-          {[
-            { label: "Normal (0-80%)", color: "#10B981", value: statusCounts.Normal ?? 0 },
-            { label: "Warning (80-95%)", color: "#F59E0B", value: statusCounts.Warning ?? 0 },
-            { label: "Critical (95%+)", color: "#EF4444", value: statusCounts.Critical ?? 0 },
-          ].map((item) => (
-            <div key={item.label} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, fontSize: 10 }}>
-              <span style={{ display: "flex", alignItems: "center", gap: 6, color: "var(--muted)", minWidth: 0 }}>
-                <span style={{ width: 7, height: 7, borderRadius: "50%", background: item.color, flexShrink: 0 }} />
-                <span style={{ whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{item.label}</span>
-              </span>
-              <strong style={{ color: item.color, fontSize: 10 }}>{item.value}</strong>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      <div style={{
-        marginTop: 12,
-        border: "1px solid rgba(245,158,11,.24)",
-        background: "rgba(245,158,11,.08)",
-        color: "#FBBF24",
-        borderRadius: 9,
-        padding: "9px 10px",
-        fontSize: 10,
-        lineHeight: 1.45,
-        fontWeight: 700,
-      }}>
-        Final mixer {finalMixerLoad}% load дээр ажиллаж байна — хэт ачааллаас сэргийлж шалгах шаардлагатай.
+      <div className="scada-predictive-panel">
+        <div className="scada-predictive-panel__title">Predictive maintenance</div>
+        {PREDICTIVE_ALERTS.map((alert) => (
+          <div key={alert.title} className={`scada-predictive-alert ${alert.tone === "warning" ? "is-warning" : ""}`}>
+            <strong>{alert.title}</strong>
+            <span>{alert.detail}</span>
+          </div>
+        ))}
       </div>
     </div>
   );
