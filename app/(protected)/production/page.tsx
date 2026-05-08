@@ -23,7 +23,7 @@ import { AiDecisionCenter, DashboardEmptyState, PriorityStatusBar } from "@/comp
 import { DeptTopbar } from "@/components/DeptTopbar";
 import { KpiCard } from "@/components/KpiCard";
 import { ChartHint, RealtimeBadge, REALTIME_REFRESH_MS } from "@/components/RealtimeBadge";
-import { getSuggestedEquipmentNames } from "@/lib/equipmentConfig";
+import { getDefaultEquipmentRpm, getSuggestedEquipmentNames } from "@/lib/equipmentConfig";
 import { printReport } from "@/lib/reportPrint";
 
 type ProductionLog = {
@@ -188,10 +188,12 @@ function createBlankEquipmentRow(): EquipmentRpmFormRow {
 }
 
 function createEquipmentRowFromOption(option: EquipmentOption): EquipmentRpmFormRow {
+  const defaultRpm = getDefaultEquipmentRpm(option.name);
   return {
     ...createBlankEquipmentRow(),
     equipmentId: option.id,
     equipmentName: option.name,
+    rpm: defaultRpm === null ? "" : String(defaultRpm),
     maxRpm: String(option.maxRpm),
   };
 }
@@ -216,6 +218,10 @@ function toKg(amount: string, unit: "kg" | "ton") {
   return (!n || n <= 0) ? 0 : unit === "ton" ? n * 1000 : n;
 }
 function fmtKg(v: number) { return `${v.toLocaleString("mn-MN")} кг`; }
+function getAverage(values: number[]) {
+  if (!values.length) return 0;
+  return values.reduce((sum, value) => sum + value, 0) / values.length;
+}
 
 // Always show tons when >= 1000 kg for unit consistency
 function fmtDisplay(v: number) {
@@ -508,6 +514,153 @@ function RpmMonitoringCard({
     </div>
   );
 }
+
+function emptyEquipmentSummary(item: EquipmentOption): EquipmentSummary {
+  return {
+    equipmentId: item.id,
+    equipmentName: item.name,
+    equipmentType: item.type,
+    maxRpm: item.maxRpm,
+    latestRpm: null,
+    latestLoadPercent: null,
+    avgRpm: null,
+    avgLoadPercent: null,
+    temperature: null,
+    pressure: null,
+    vibration: null,
+    status: "NO_DATA",
+    lastRecordedAt: null,
+    healthScore: null,
+    trend: [],
+  };
+}
+
+function calculateHealthScore(loadPercent: number, vibration: number | null) {
+  return Math.max(0, Math.round(100 - Math.max(0, loadPercent - 75) * 1.2 - Math.max(0, (vibration ?? 0) - 3) * 4));
+}
+
+function mergeSavedTelemetryIntoSummary(
+  current: RpmSummaryResponse | undefined,
+  savedLog: ProductionLog,
+  equipmentOptions: EquipmentOption[],
+): RpmSummaryResponse {
+  const savedTelemetry = savedLog.telemetryLogs ?? [];
+  if (!savedTelemetry.length) {
+    return current ?? {
+      data: {
+        latestRpm: null,
+        avgRpm: null,
+        maxRpm: null,
+        minRpm: null,
+        avgLoadPercent: null,
+        warningCount: 0,
+        criticalCount: 0,
+        chartData: [],
+        equipmentSummaries: equipmentOptions.map(emptyEquipmentSummary),
+      },
+      filters: {
+        from: new Date(Date.now() - 14 * 24 * 3600 * 1000).toISOString(),
+        to: new Date().toISOString(),
+        products: [],
+        equipment: equipmentOptions,
+      },
+    };
+  }
+
+  const savedPoints: RpmChartPoint[] = savedTelemetry.map((telemetry) => ({
+    id: telemetry.id,
+    time: telemetry.recordedAt,
+    label: new Date(telemetry.recordedAt).toLocaleString("mn-MN", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" }),
+    productType: savedLog.productName,
+    producedKg: savedLog.outputQuantity,
+    equipmentId: telemetry.equipment.id,
+    equipmentName: telemetry.equipment.name,
+    rpm: telemetry.rpm,
+    maxRpm: telemetry.maxRpm,
+    loadPercent: telemetry.loadPercent,
+    temperature: telemetry.temperature,
+    pressure: telemetry.pressure,
+    vibration: telemetry.vibration,
+    status: telemetry.status,
+  }));
+
+  const existingPoints = current?.data.chartData ?? [];
+  const savedIds = new Set(savedPoints.map((point) => point.id));
+  const chartData = [...existingPoints.filter((point) => !savedIds.has(point.id)), ...savedPoints]
+    .sort((a, b) => new Date(a.time).getTime() - new Date(b.time).getTime())
+    .slice(-1000);
+
+  const equipmentById = new Map<string, EquipmentOption>();
+  for (const item of current?.filters.equipment ?? []) equipmentById.set(item.id, item);
+  for (const item of equipmentOptions) equipmentById.set(item.id, item);
+  for (const telemetry of savedTelemetry) {
+    equipmentById.set(telemetry.equipment.id, {
+      id: telemetry.equipment.id,
+      name: telemetry.equipment.name,
+      type: telemetry.equipment.type,
+      maxRpm: telemetry.equipment.maxRpm,
+      department: "PRODUCTION",
+      isActive: true,
+    });
+  }
+
+  const summaryById = new Map<string, EquipmentSummary>();
+  for (const item of equipmentById.values()) summaryById.set(item.id, emptyEquipmentSummary(item));
+  for (const item of current?.data.equipmentSummaries ?? []) summaryById.set(item.equipmentId, item);
+
+  for (const item of equipmentById.values()) {
+    const rows = chartData.filter((point) => point.equipmentId === item.id);
+    if (!rows.length) continue;
+    const latest = rows.at(-1)!;
+    const rpmValues = rows.map((row) => row.rpm);
+    const loadValues = rows.map((row) => row.loadPercent);
+    summaryById.set(item.id, {
+      equipmentId: item.id,
+      equipmentName: item.name,
+      equipmentType: item.type,
+      maxRpm: item.maxRpm,
+      latestRpm: latest.rpm,
+      latestLoadPercent: latest.loadPercent,
+      avgRpm: Math.round(getAverage(rpmValues) * 10) / 10,
+      avgLoadPercent: Math.round(getAverage(loadValues) * 10) / 10,
+      temperature: latest.temperature,
+      pressure: latest.pressure,
+      vibration: latest.vibration,
+      status: latest.status,
+      lastRecordedAt: latest.time,
+      healthScore: calculateHealthScore(latest.loadPercent, latest.vibration),
+      trend: rows.slice(-12).map((row) => ({
+        time: row.time,
+        rpm: row.rpm,
+        loadPercent: row.loadPercent,
+      })),
+    });
+  }
+
+  const rpmValues = chartData.map((point) => point.rpm);
+  const loadValues = chartData.map((point) => point.loadPercent);
+  const latest = chartData.at(-1) ?? null;
+
+  return {
+    data: {
+      latestRpm: latest?.rpm ?? null,
+      avgRpm: rpmValues.length ? Math.round(getAverage(rpmValues) * 10) / 10 : null,
+      maxRpm: rpmValues.length ? Math.max(...rpmValues) : null,
+      minRpm: rpmValues.length ? Math.min(...rpmValues) : null,
+      avgLoadPercent: loadValues.length ? Math.round(getAverage(loadValues) * 10) / 10 : null,
+      warningCount: chartData.filter((point) => point.status === "WARNING").length,
+      criticalCount: chartData.filter((point) => point.status === "CRITICAL").length,
+      chartData,
+      equipmentSummaries: Array.from(summaryById.values()),
+    },
+    filters: {
+      from: current?.filters.from ?? new Date(Date.now() - 14 * 24 * 3600 * 1000).toISOString(),
+      to: new Date().toISOString(),
+      products: Array.from(new Set([...(current?.filters.products ?? []), savedLog.productName])).filter(Boolean).sort(),
+      equipment: Array.from(equipmentById.values()),
+    },
+  };
+}
 function ProductionSkeleton() {
   return (
     <div className="department-production">
@@ -687,13 +840,16 @@ export default function ProductionPage() {
 
   function selectEquipmentForRow(rowId: string, equipmentId: string) {
     const selectedEquipment = equipmentOptions.find((item) => item.id === equipmentId);
+    const defaultRpm = selectedEquipment ? getDefaultEquipmentRpm(selectedEquipment.name) : null;
     updateEquipmentRow(rowId, selectedEquipment ? {
       equipmentId: selectedEquipment.id,
       equipmentName: selectedEquipment.name,
+      rpm: defaultRpm === null ? "" : String(defaultRpm),
       maxRpm: String(selectedEquipment.maxRpm),
     } : {
       equipmentId: "",
       equipmentName: "",
+      rpm: "",
       maxRpm: "",
     });
   }
@@ -775,10 +931,15 @@ export default function ProductionPage() {
     });
     const data = await res.json();
     if (!res.ok) { setError(data.error??"Алдаа гарлаа"); setSubmitting(false); return; }
-    const firstTelemetry = data?.data?.telemetryLogs?.[0];
+    const savedLog = data?.data as ProductionLog | undefined;
+    if (savedLog?.telemetryLogs?.length) {
+      await mutateRpmSummary((current) => mergeSavedTelemetryIntoSummary(current, savedLog, equipmentOptions), { revalidate: false });
+      setLastUpdated(new Date());
+    }
+    const firstTelemetry = savedLog?.telemetryLogs?.[0];
     setToastMessage(`${productName.replace("ANDO-", "")} үйлдвэрлэл бүртгэгдлээ — ${firstTelemetry?.equipment?.name ?? telemetry[0].equipmentName} ${firstTelemetry?.rpm ?? telemetry[0].rpm} rpm`);
     setModal(false); setSubmitting(false); setAmount(""); setWorkerInfo(""); setDensity(""); setNote(""); resetEquipmentRows(productName);
-    await Promise.all([mutateLogs(), mutateMaterials(), mutateEquipment(), mutateRpmSummary()]);
+    await Promise.all([mutateLogs(), mutateMaterials(), mutateEquipment()]);
   }
   async function deleteSelectedLog() {
     if (!selectedLog) return;
@@ -1861,7 +2022,7 @@ export default function ProductionPage() {
                         </label>
                         <label>
                           <span>RPM</span>
-                          <input type="number" min="0" step="1" value={row.rpm} onChange={(event) => updateEquipmentRow(row.rowId, { rpm: event.target.value })} placeholder="2100" />
+                          <input type="number" min="0" step="1" value={row.rpm} onChange={(event) => updateEquipmentRow(row.rowId, { rpm: event.target.value })} placeholder={row.equipmentName ? String(getDefaultEquipmentRpm(row.equipmentName) ?? "RPM") : "RPM"} />
                         </label>
                         <label>
                           <span>Max RPM</span>

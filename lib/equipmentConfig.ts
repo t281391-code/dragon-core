@@ -12,6 +12,13 @@ export const DEFAULT_EQUIPMENT: EquipmentSeed[] = [
   { name: "Oil mixer", type: "MIXER", maxRpm: 1800, department: "PRODUCTION" },
 ];
 
+export const DEFAULT_EQUIPMENT_RPM: Record<string, number> = {
+  "Mono pump": 2200,
+  "Final mixer": 31000,
+  "Solution pump": 2100,
+  "Oil mixer": 1200,
+};
+
 export const PRODUCT_EQUIPMENT_MAP: Record<string, string[]> = {
   "ANDO-EV 25MM": ["Solution pump"],
   "ANDO-EV 32MM": ["Solution pump"],
@@ -34,4 +41,8 @@ export function normalizeProductType(value: string) {
 
 export function getSuggestedEquipmentNames(productType: string) {
   return PRODUCT_EQUIPMENT_MAP[normalizeProductType(productType)] ?? [];
+}
+
+export function getDefaultEquipmentRpm(equipmentName: string) {
+  return DEFAULT_EQUIPMENT_RPM[equipmentName] ?? null;
 }
