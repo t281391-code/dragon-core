@@ -124,13 +124,6 @@ const PRODUCT_COLORS: Record<string, string> = {
   "ANDO-EV 32MM": "#A78BFA","ANDO-EV 25MM": "#14B8A6","ANDO-SPLIT 38MM": "#F97316",
 };
 
-const EQUIPMENT_TOPOLOGY = [
-  { label: "Tank", sub: "Raw feed" },
-  { label: "Pump", sub: "Mono pump" },
-  { label: "Mixer", sub: "Final mixer" },
-  { label: "Output", sub: "Packing" },
-] as const;
-
 function rpmStatus(percent: number) {
   if (percent >= 95) return { label: "Critical", color: "#EF4444", bg: "rgba(239,68,68,.12)", border: "rgba(239,68,68,.34)" };
   if (percent >= 80) return { label: "Warning", color: "#F59E0B", bg: "rgba(245,158,11,.12)", border: "rgba(245,158,11,.34)" };
@@ -343,22 +336,6 @@ function ProdTooltip({ active, payload, label }: { active?: boolean; payload?: C
   );
 }
 
-function RpmTrendTooltip({ active, payload, label }: { active?: boolean; payload?: { payload?: RpmChartPoint }[]; label?: string | number }) {
-  if (!active || !payload?.length || !payload[0]?.payload) return null;
-  const row = payload[0].payload;
-  const status = rpmStatusFromLabel(row.status);
-  return (
-    <div style={{ background:"var(--panel)", border:"1px solid var(--border)", borderRadius:10, padding:"10px 12px", fontSize:11, boxShadow:"0 8px 24px rgba(0,0,0,.22)" }}>
-      <div style={{ color:"var(--text)", fontWeight:800, marginBottom:6 }}>{label}</div>
-      <div style={{ color:"var(--muted)", marginBottom:3 }}>Бүтээгдэхүүн: <strong style={{ color:"var(--text)" }}>{row.productType}</strong></div>
-      <div style={{ color:"var(--muted)", marginBottom:3 }}>Гарц: <strong style={{ color:"#10B981" }}>{fmtDisplay(row.producedKg)}</strong></div>
-      <div style={{ color:"var(--muted)", marginBottom:3 }}>Тоног төхөөрөмж: <strong style={{ color:"var(--text)" }}>{row.equipmentName}</strong></div>
-      <div style={{ color:"var(--muted)", marginBottom:3 }}>RPM: <strong style={{ color:status.color }}>{row.rpm.toLocaleString("mn-MN")} / {row.maxRpm.toLocaleString("mn-MN")}</strong></div>
-      <div style={{ color:"var(--muted)" }}>Load: <strong style={{ color:status.color }}>{row.loadPercent}% · {row.status}</strong></div>
-    </div>
-  );
-}
-
 function SemiCircleRpmGauge({ percent, rpm, max, color, animate }: { percent: number; rpm: number | null; max: number; color: string; animate: boolean }) {
   const gaugeValue = animate ? Math.min(100, Math.max(0, percent)) : 0;
 
@@ -395,23 +372,6 @@ function WaveformTrace({ values, color, delay = 0 }: { values: readonly number[]
       <polyline className="scada-waveform__base" points={points} />
       <polyline className="scada-waveform__line" points={points} stroke={color} style={{ animationDelay: `${delay}s` }} />
     </svg>
-  );
-}
-
-function EquipmentTopologyView() {
-  return (
-    <div className="scada-topology" aria-label="Tank to pump to mixer to output topology">
-      {EQUIPMENT_TOPOLOGY.map((node, index) => (
-        <div key={node.label} className="scada-topology__item">
-          <div className="scada-topology__node">
-            <span className="scada-status-light is-online" />
-            <strong>{node.label}</strong>
-            <span>{node.sub}</span>
-          </div>
-          {index < EQUIPMENT_TOPOLOGY.length - 1 && <div className="scada-topology__line" />}
-        </div>
-      ))}
-    </div>
   );
 }
 
@@ -478,31 +438,12 @@ function EquipmentMachineCard({ summary, animate, index }: { summary: EquipmentS
 function RpmMonitoringCard({
   summary,
   equipment,
-  productFilter,
-  equipmentFilter,
-  fromDate,
-  toDate,
-  onProductFilterChange,
-  onEquipmentFilterChange,
-  onFromDateChange,
-  onToDateChange,
-  onCreate,
 }: {
   summary?: RpmSummaryResponse;
   equipment: EquipmentOption[];
-  productFilter: string;
-  equipmentFilter: string;
-  fromDate: string;
-  toDate: string;
-  onProductFilterChange: (value: string) => void;
-  onEquipmentFilterChange: (value: string) => void;
-  onFromDateChange: (value: string) => void;
-  onToDateChange: (value: string) => void;
-  onCreate: () => void;
 }) {
   const [animateGauges, setAnimateGauges] = useState(false);
   const data = summary?.data;
-  const chartData = data?.chartData ?? [];
   const equipmentSummaries = data?.equipmentSummaries ?? equipment.map((item) => ({
     equipmentId: item.id,
     equipmentName: item.name,
@@ -520,96 +461,23 @@ function RpmMonitoringCard({
     healthScore: null,
     trend: [],
   } satisfies EquipmentSummary));
-  const averageRpm = data?.avgRpm === null || data?.avgRpm === undefined ? "-" : Math.round(data.avgRpm).toLocaleString("mn-MN");
-  const averageLoad = data?.avgLoadPercent === null || data?.avgLoadPercent === undefined ? "-" : `${Math.round(data.avgLoadPercent)}%`;
-  const warningTotal = (data?.warningCount ?? 0) + (data?.criticalCount ?? 0);
 
   useEffect(() => {
     const timer = window.setTimeout(() => setAnimateGauges(true), 80);
     return () => window.clearTimeout(timer);
-  }, [chartData.length]);
+  }, [equipmentSummaries.length]);
 
   return (
     <div className="panel scada-monitor-panel">
       <div className="scada-monitor-panel__header">
         <div>
           <div className="panel-title">Тоног төхөөрөмжийн эргэлт / RPM</div>
-          <div className="panel-sub" style={{ marginTop: 4 }}>Production record telemetry · database source</div>
         </div>
         <div className="scada-live-badge">
           <span className="scada-status-light is-online" />
           SAVED DATA
         </div>
       </div>
-
-      <div className="rpm-filter-row">
-        <label>
-          <span>Product</span>
-          <select value={productFilter} onChange={(event) => onProductFilterChange(event.target.value)}>
-            <option value="">Бүгд</option>
-            {PRODUCTS.map((product) => <option key={product} value={product}>{product}</option>)}
-          </select>
-        </label>
-        <label>
-          <span>Equipment</span>
-          <select value={equipmentFilter} onChange={(event) => onEquipmentFilterChange(event.target.value)}>
-            <option value="">Бүгд</option>
-            {equipment.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
-          </select>
-        </label>
-        <label>
-          <span>From</span>
-          <input type="date" value={fromDate} onChange={(event) => onFromDateChange(event.target.value)} />
-        </label>
-        <label>
-          <span>To</span>
-          <input type="date" value={toDate} onChange={(event) => onToDateChange(event.target.value)} />
-        </label>
-      </div>
-
-      <div className="scada-summary-strip">
-        <div><span>AVG RPM</span><strong>{averageRpm}</strong></div>
-        <div><span>AVG LOAD</span><strong>{averageLoad}</strong></div>
-        <div><span>WARN / CRIT</span><strong>{warningTotal}</strong></div>
-      </div>
-
-      <EquipmentTopologyView />
-
-      {chartData.length ? (
-        <div className="rpm-trend-chart">
-          <ResponsiveContainer width="100%" height="100%">
-            <AreaChart data={chartData} margin={{ top: 8, right: 12, left: -18, bottom: 0 }}>
-              <defs>
-                <linearGradient id="rpmTrendGrad" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#10B981" stopOpacity={0.2}/>
-                  <stop offset="95%" stopColor="#10B981" stopOpacity={0}/>
-                </linearGradient>
-                <linearGradient id="rpmLoadGrad" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#3B82F6" stopOpacity={0.12}/>
-                  <stop offset="95%" stopColor="#3B82F6" stopOpacity={0}/>
-                </linearGradient>
-              </defs>
-              <CartesianGrid stroke="var(--border)" vertical={false}/>
-              <XAxis dataKey="label" axisLine={false} tickLine={false} tick={{ fill: "var(--muted)", fontSize: 10 }} />
-              <YAxis yAxisId="rpm" axisLine={false} tickLine={false} tick={{ fill: "var(--muted)", fontSize: 10 }} />
-              <YAxis yAxisId="load" orientation="right" domain={[0, 100]} axisLine={false} tickLine={false} tick={{ fill: "var(--muted)", fontSize: 10 }} />
-              <Tooltip content={<RpmTrendTooltip />} />
-              <Area yAxisId="rpm" type="monotone" dataKey="rpm" name="RPM" stroke="#10B981" strokeWidth={2} fill="url(#rpmTrendGrad)" dot={{ r: 2, fill: "#10B981" }} isAnimationActive={false}/>
-              <Area yAxisId="load" type="monotone" dataKey="loadPercent" name="Load %" stroke="#3B82F6" strokeWidth={1.5} fill="url(#rpmLoadGrad)" dot={false} isAnimationActive={false}/>
-            </AreaChart>
-          </ResponsiveContainer>
-        </div>
-      ) : (
-        <DashboardEmptyState
-          icon="RPM"
-          title="RPM бүртгэл байхгүй"
-          message="Үйлдвэрлэл бүртгэх үед тоног төхөөрөмжийн RPM утгыг хамт хадгалсны дараа график гарна."
-          actionLabel="+ Үйлдвэрлэл бүртгэх"
-          onAction={onCreate}
-          tone="normal"
-          compact
-        />
-      )}
 
       <div className="scada-machine-list">
         {equipmentSummaries.map((item, index) => (
@@ -689,14 +557,6 @@ export default function ProductionPage() {
   const [submitting, setSubmitting] = useState(false);
   const [selectedMaterialId, setSelectedMaterialId] = useState("");
   const [equipmentRows, setEquipmentRows] = useState<EquipmentRpmFormRow[]>(() => [createBlankEquipmentRow()]);
-  const [rpmProductFilter, setRpmProductFilter] = useState("");
-  const [rpmEquipmentFilter, setRpmEquipmentFilter] = useState("");
-  const [rpmFromDate, setRpmFromDate] = useState(() => {
-    const date = new Date();
-    date.setDate(date.getDate() - 14);
-    return toDateInputValue(date);
-  });
-  const [rpmToDate, setRpmToDate] = useState(() => toDateInputValue());
   const [toastMessage, setToastMessage] = useState("");
 
   const { data: logsData, isLoading: logsLoading, mutate: mutateLogs } = useSWR(
@@ -714,16 +574,8 @@ export default function ProductionPage() {
     fetcher,
     { refreshInterval: REALTIME_REFRESH_MS, revalidateOnFocus: false }
   );
-  const rpmSummaryUrl = useMemo(() => {
-    const params = new URLSearchParams();
-    if (rpmProductFilter) params.set("productType", rpmProductFilter);
-    if (rpmEquipmentFilter) params.set("equipmentId", rpmEquipmentFilter);
-    if (rpmFromDate) params.set("from", rpmFromDate);
-    if (rpmToDate) params.set("to", rpmToDate);
-    return `/api/equipment/rpm-summary?${params.toString()}`;
-  }, [rpmEquipmentFilter, rpmFromDate, rpmProductFilter, rpmToDate]);
   const { data: rpmSummaryData, mutate: mutateRpmSummary } = useSWR<RpmSummaryResponse>(
-    rpmSummaryUrl,
+    "/api/equipment/rpm-summary",
     fetcher,
     { refreshInterval: REALTIME_REFRESH_MS, revalidateOnFocus: false }
   );
@@ -1465,15 +1317,6 @@ export default function ProductionPage() {
           <RpmMonitoringCard
             summary={rpmSummaryData}
             equipment={equipmentOptions}
-            productFilter={rpmProductFilter}
-            equipmentFilter={rpmEquipmentFilter}
-            fromDate={rpmFromDate}
-            toDate={rpmToDate}
-            onProductFilterChange={setRpmProductFilter}
-            onEquipmentFilterChange={setRpmEquipmentFilter}
-            onFromDateChange={setRpmFromDate}
-            onToDateChange={setRpmToDate}
-            onCreate={() => openCreateModal()}
           />
         </div>
 
