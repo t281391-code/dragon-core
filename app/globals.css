@@ -2482,7 +2482,7 @@ body.theme-light .empty-row td {
   margin-bottom: 20px;
 }
 
-.production-monitor-grid {
+.production-equipment-row {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 300px;
   gap: 14px;
@@ -2490,15 +2490,8 @@ body.theme-light .empty-row td {
   margin-bottom: 14px;
 }
 
-.production-chart-stack,
-.production-monitor-sidebar {
+.production-equipment-row > * {
   min-width: 0;
-}
-
-.production-monitor-sidebar {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
 }
 
 .scada-monitor-panel {
@@ -2672,8 +2665,8 @@ body.theme-light .empty-row td {
 }
 
 .scada-machine-list {
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 10px;
 }
 
@@ -2983,6 +2976,12 @@ body.theme-light .empty-row td {
   }
 }
 
+@media (max-width: 1500px) {
+  .scada-machine-list {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
 .wh-tr-hover {
   transition: background 0.15s;
 }
@@ -3017,10 +3016,14 @@ body.theme-light .empty-row td {
   .g2,
   .prod-list,
   .mat-grid,
-  .production-monitor-grid,
+  .production-equipment-row,
   .wh-main-grid,
   .wh-chart-row {
     grid-template-columns: 1fr;
+  }
+
+  .scada-machine-list {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .wh-bottom-grid {
@@ -3036,6 +3039,17 @@ body.theme-light .empty-row td {
   .priority-status__brief,
   .priority-status__metrics {
     grid-template-columns: 1fr;
+  }
+
+  .scada-machine-list,
+  .scada-machine-card__body,
+  .scada-summary-strip,
+  .scada-topology {
+    grid-template-columns: 1fr;
+  }
+
+  .scada-topology__line {
+    display: none;
   }
 
   .sidebar-mobile-backdrop {

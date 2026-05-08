@@ -1089,8 +1089,6 @@ export default function ProductionPage() {
             sparklineColor="#F59E0B" />
         </div>
 
-        <div className="production-monitor-grid">
-          <div className="production-chart-stack">
         {/* Main Charts Row */}
         <div className="wh-main-grid">
           <div className="panel">
@@ -1247,11 +1245,10 @@ export default function ProductionPage() {
             </div>
           </div>
         </div>
-          </div>
-          <div className="production-monitor-sidebar">
-            <RpmMonitoringCard />
-            <DiameterCard />
-          </div>
+
+        <div className="production-equipment-row">
+          <RpmMonitoringCard />
+          <DiameterCard />
         </div>
 
         {/* Bottom: Table + Right panel */}
