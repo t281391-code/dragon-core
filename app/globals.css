@@ -1901,18 +1901,21 @@ input[type="date"] {
 .production-log-table-wrap {
   max-width: 100%;
   overflow-x: hidden;
+  contain: inline-size;
 }
 
 .production-log-table {
-  width: 100%;
+  width: calc(100% - 1px);
   min-width: 0;
   table-layout: fixed;
+  box-sizing: border-box;
 }
 
 .production-log-table th,
 .production-log-table td {
-  padding-left: 8px;
-  padding-right: 8px;
+  box-sizing: border-box;
+  padding-left: 6px;
+  padding-right: 6px;
   overflow-wrap: anywhere;
 }
 
@@ -1923,12 +1926,12 @@ input[type="date"] {
 
 .production-log-table th:nth-child(2),
 .production-log-table td:nth-child(2) {
-  width: 38px !important;
+  width: 32px !important;
 }
 
 .production-log-table th:nth-child(3),
 .production-log-table td:nth-child(3) {
-  width: 22%;
+  width: 21%;
 }
 
 .production-log-table th:nth-child(4),
@@ -1937,22 +1940,22 @@ input[type="date"] {
 .production-log-table td:nth-child(5),
 .production-log-table th:nth-child(6),
 .production-log-table td:nth-child(6) {
-  width: 13%;
+  width: 12%;
 }
 
 .production-log-table th:nth-child(7),
 .production-log-table td:nth-child(7) {
-  width: 12%;
+  width: 11%;
 }
 
 .production-log-table th:nth-child(8),
 .production-log-table td:nth-child(8) {
-  width: 13%;
+  width: 11%;
 }
 
 .production-log-table th:nth-child(9),
 .production-log-table td:nth-child(9) {
-  width: 94px;
+  width: 76px;
 }
 
 .production-log-table td:nth-child(3) strong,

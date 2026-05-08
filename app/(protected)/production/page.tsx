@@ -1654,7 +1654,7 @@ export default function ProductionPage() {
                         <td style={{fontSize:12}}>{l.destinationMine ?? "—"}</td>
                         <td style={{color:"var(--muted)",fontSize:11}}>{l.createdBy.fullName}</td>
                         <td>
-                          <button type="button" onClick={()=>openLogDetails(l)} style={{padding:"4px 10px",borderRadius:7,border:"1px solid var(--border)",background:"transparent",color:"var(--muted)",fontSize:10,fontWeight:700,cursor:"pointer",whiteSpace:"nowrap"}}>
+                          <button type="button" onClick={()=>openLogDetails(l)} style={{padding:"4px 6px",borderRadius:7,border:"1px solid var(--border)",background:"transparent",color:"var(--muted)",fontSize:10,fontWeight:700,cursor:"pointer",whiteSpace:"nowrap",maxWidth:"100%"}}>
                             Дэлгэрэнгүй
                           </button>
                         </td>
