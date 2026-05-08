@@ -104,34 +104,41 @@ export async function GET(request: Request) {
     }),
   ]);
 
-  const telemetryRows = logRows.length
-    ? await prisma.equipmentTelemetryLog.findMany({
-        where: { productionLogId: { in: logRows.map((row) => row.id) } },
-        orderBy: [{ recordedAt: "asc" }, { createdAt: "asc" }],
-        select: {
-          id: true,
-          productionLogId: true,
-          rpm: true,
-          maxRpm: true,
-          loadPercent: true,
-          temperature: true,
-          pressure: true,
-          vibration: true,
-          status: true,
-          note: true,
-          recordedAt: true,
-          createdAt: true,
-          equipment: {
-            select: {
-              id: true,
-              name: true,
-              type: true,
-              maxRpm: true,
-            },
+  async function readTelemetryRows(productionLogIds: string[]) {
+    if (!productionLogIds.length) return [];
+
+    return prisma.equipmentTelemetryLog.findMany({
+      where: { productionLogId: { in: productionLogIds } },
+      orderBy: [{ recordedAt: "asc" }, { createdAt: "asc" }],
+      select: {
+        id: true,
+        productionLogId: true,
+        rpm: true,
+        maxRpm: true,
+        loadPercent: true,
+        temperature: true,
+        pressure: true,
+        vibration: true,
+        status: true,
+        note: true,
+        recordedAt: true,
+        createdAt: true,
+        equipment: {
+          select: {
+            id: true,
+            name: true,
+            type: true,
+            maxRpm: true,
           },
         },
-      })
-    : [];
+      },
+    });
+  }
+
+  const telemetryRows = await readTelemetryRows(logRows.map((row) => row.id)).catch((error) => {
+    console.error("Production telemetry fetch failed; returning logs without RPM telemetry.", error);
+    return [] as Awaited<ReturnType<typeof readTelemetryRows>>;
+  });
   const telemetryByLog = new Map<string, typeof telemetryRows>();
   for (const row of telemetryRows) {
     const rows = telemetryByLog.get(row.productionLogId) ?? [];

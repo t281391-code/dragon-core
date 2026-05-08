@@ -21,6 +21,9 @@ export async function GET() {
       department: true,
       isActive: true,
     },
+  }).catch((error) => {
+    console.error("Equipment list fetch failed; returning empty equipment list.", error);
+    return [];
   });
 
   return NextResponse.json({ data: equipment });

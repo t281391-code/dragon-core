@@ -39,6 +39,7 @@ export async function GET(request: Request) {
   const productType = searchParams.get("productType")?.trim() || undefined;
   const equipmentId = searchParams.get("equipmentId")?.trim() || undefined;
 
+  try {
   const equipment = await prisma.equipment.findMany({
     where: { isActive: true, department: "PRODUCTION" },
     orderBy: [{ type: "asc" }, { name: "asc" }],
@@ -142,4 +143,26 @@ export async function GET(request: Request) {
       equipment,
     },
   });
+  } catch (error) {
+    console.error("RPM summary fetch failed; returning empty RPM summary.", error);
+    return NextResponse.json({
+      data: {
+        latestRpm: null,
+        avgRpm: null,
+        maxRpm: null,
+        minRpm: null,
+        avgLoadPercent: null,
+        warningCount: 0,
+        criticalCount: 0,
+        chartData: [],
+        equipmentSummaries: [],
+      },
+      filters: {
+        from: from.toISOString(),
+        to: to.toISOString(),
+        products: [],
+        equipment: [],
+      },
+    });
+  }
 }

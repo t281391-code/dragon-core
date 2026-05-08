@@ -13,6 +13,17 @@ export type AuthUser = {
 const ROLE_NAMES = new Set<string>(Object.values(ROLES));
 const DEPARTMENT_NAMES = new Set<string>(Object.values(DEPARTMENTS));
 
+type HeaderReader = {
+  get(name: string): string | null;
+};
+
+type SessionPayload = {
+  id: string;
+  email: string;
+  role: string;
+  department: string;
+};
+
 function isRoleName(value: string | null): value is RoleName {
   return typeof value === "string" && ROLE_NAMES.has(value);
 }
@@ -21,26 +32,25 @@ function isDepartmentName(value: string | null): value is DepartmentName {
   return typeof value === "string" && DEPARTMENT_NAMES.has(value);
 }
 
-export async function getRequestUser(): Promise<AuthUser | null> {
-  const { headers } = await import("next/headers");
-  const requestHeaders = await headers();
+function userFromTrustedHeaders(requestHeaders: HeaderReader): AuthUser | null {
   const id = requestHeaders.get("x-user-id");
   const role = requestHeaders.get("x-user-role");
   const department = requestHeaders.get("x-user-department");
 
-  if (id && isRoleName(role) && isDepartmentName(department)) {
-    return {
-      id,
-      fullName: requestHeaders.get("x-user-full-name") ?? "",
-      email: requestHeaders.get("x-user-email") ?? "",
-      role,
-      department,
-      isActive: true,
-    };
-  }
+  if (!id || !isRoleName(role) || !isDepartmentName(department)) return null;
 
-  const { getSession } = await import("@/lib/session");
-  const session = await getSession();
+  const email = requestHeaders.get("x-user-email") ?? "";
+  return {
+    id,
+    fullName: requestHeaders.get("x-user-full-name") ?? email,
+    email,
+    role,
+    department,
+    isActive: true,
+  };
+}
+
+function userFromSession(session: SessionPayload | null): AuthUser | null {
   if (!session || !isRoleName(session.role) || !isDepartmentName(session.department)) return null;
 
   return {
@@ -53,41 +63,61 @@ export async function getRequestUser(): Promise<AuthUser | null> {
   };
 }
 
+export async function getRequestUser(): Promise<AuthUser | null> {
+  const { headers } = await import("next/headers");
+  const requestHeaders = await headers();
+  const headerUser = userFromTrustedHeaders(requestHeaders);
+  if (headerUser) return headerUser;
+
+  const { getSession } = await import("@/lib/session");
+  const session = await getSession();
+  return userFromSession(session);
+}
+
 export async function getCurrentUser(): Promise<AuthUser | null> {
   const { headers } = await import("next/headers");
   const requestHeaders = await headers();
-  let userId = requestHeaders.get("x-user-id");
+  const headerUser = userFromTrustedHeaders(requestHeaders);
+  let fallbackUser = headerUser;
+  let userId = headerUser?.id ?? null;
 
   if (!userId) {
     const { getSession } = await import("@/lib/session");
     const session = await getSession();
-    if (!session) return null;
-    userId = session.id;
+    fallbackUser = userFromSession(session);
+    if (!fallbackUser) return null;
+    userId = fallbackUser.id;
   }
 
   const { prisma } = await import("@/lib/prisma");
-  const user = await prisma.user.findUnique({
-    where: { id: userId },
-    select: {
-      id: true,
-      fullName: true,
-      email: true,
-      isActive: true,
-      role: { select: { name: true } },
-      department: { select: { name: true } },
-    }
-  });
+  try {
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        id: true,
+        fullName: true,
+        email: true,
+        isActive: true,
+        role: { select: { name: true } },
+        department: { select: { name: true } },
+      }
+    });
 
-  if (!user || !user.isActive) return null;
+    if (!user || !user.isActive) return null;
+    if (!isRoleName(user.role.name) || !isDepartmentName(user.department.name)) return fallbackUser;
 
-  return {
-    id: user.id,
-    fullName: user.fullName,
-    email: user.email,
-    role: user.role.name as RoleName,
-    department: user.department.name as DepartmentName,
-    isActive: user.isActive
-  };
+    return {
+      id: user.id,
+      fullName: user.fullName,
+      email: user.email,
+      role: user.role.name,
+      department: user.department.name,
+      isActive: user.isActive
+    };
+  } catch (error) {
+    console.error("Current user lookup failed; using session header fallback.", error);
+    return fallbackUser;
+  }
 }
 
 export async function requireCurrentUser(): Promise<AuthUser> {

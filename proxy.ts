@@ -26,6 +26,7 @@ function homeFor(department: string) {
 
 type VerifiedSession = {
   id: string;
+  email?: string;
   role: string;
   department: string;
 };
@@ -72,6 +73,7 @@ async function verifySessionToken(token: string): Promise<VerifiedSession | null
 
   return {
     id: payload.id,
+    email: typeof payload.email === "string" ? payload.email : undefined,
     role: payload.role,
     department: payload.department,
   };
@@ -86,11 +88,14 @@ async function getVerifiedSession(request: NextRequest) {
 function nextWithSessionHeaders(request: NextRequest, session: VerifiedSession | null) {
   const requestHeaders = new Headers(request.headers);
   requestHeaders.delete("x-user-id");
+  requestHeaders.delete("x-user-email");
   requestHeaders.delete("x-user-role");
   requestHeaders.delete("x-user-department");
+  requestHeaders.delete("x-user-full-name");
 
   if (session) {
     requestHeaders.set("x-user-id", session.id);
+    if (session.email) requestHeaders.set("x-user-email", session.email);
     requestHeaders.set("x-user-role", session.role);
     requestHeaders.set("x-user-department", session.department);
   }
