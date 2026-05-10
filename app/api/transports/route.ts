@@ -4,6 +4,11 @@ import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { getRequestUser } from "@/lib/auth";
 import { checkRateLimit, forbidden, normalizePageLimit, requireDepartmentRead, requireDepartmentWrite } from "@/lib/security/api";
+import {
+  applyTransportStockFlow,
+  reverseTransportStockFlow,
+  StockFlowError,
+} from "@/lib/productionFlow.server";
 
 export const preferredRegion = "sin1";
 
@@ -168,7 +173,18 @@ export async function POST(request: Request) {
       }
     }
 
-    return tx.transport.create({
+    const activeHighSafetyCount = await tx.safetyIncident.count({
+      where: {
+        severity: "high",
+        status: { in: ["open", "investigating"] },
+      },
+    });
+    const safetyNote = activeHighSafetyCount > 0
+      ? `ХЭАБО анхааруулга: ${activeHighSafetyCount} өндөр эрсдэлтэй incident нээлттэй байна.`
+      : "";
+    const transportNote = [body.note?.trim(), safetyNote].filter(Boolean).join("\n");
+
+    const transport = await tx.transport.create({
       data: {
         materialId,
         quantity: body.quantity,
@@ -178,15 +194,39 @@ export async function POST(request: Request) {
         transportDate: new Date(body.transportDate),
         deliveryDate: body.deliveryDate ? new Date(body.deliveryDate) : null,
         status: body.status,
-        note: body.note || null,
+        note: transportNote || null,
         assignedUserId: assignedUser.id,
       },
       select: transportSelect,
     });
+    const stockQuantity = await applyTransportStockFlow(tx, {
+      transportId: transport.id,
+      materialId,
+      quantity: body.quantity,
+      inputUnit: body.materialUnit,
+      destinationSite: body.destinationSite,
+      transportDate: new Date(body.transportDate),
+      userId: user.id,
+    });
+
+    if (stockQuantity !== body.quantity) {
+      return tx.transport.update({
+        where: { id: transport.id },
+        data: { quantity: stockQuantity },
+        select: transportSelect,
+      });
+    }
+
+    return transport;
   }).catch((error) => {
     if (error instanceof Error && error.message === "MATERIAL_NOT_FOUND") return null;
+    if (error instanceof StockFlowError) return error;
     throw error;
   });
+
+  if (transport instanceof StockFlowError) {
+    return NextResponse.json({ error: transport.message }, { status: transport.status });
+  }
 
   if (!transport) {
     return NextResponse.json({ error: "Material not found" }, { status: 404 });
@@ -250,10 +290,21 @@ export async function DELETE(request: Request) {
     return NextResponse.json({ error: "Transport not found" }, { status: 404 });
   }
 
-  await prisma.transport.delete({
-    where: { id: transport.id },
-    select: { id: true },
+  const deleted = await prisma.$transaction(async (tx) => {
+    await reverseTransportStockFlow(tx, transport.id);
+    await tx.transport.delete({
+      where: { id: transport.id },
+      select: { id: true },
+    });
+    return true;
+  }).catch((error) => {
+    if (error instanceof StockFlowError) return error;
+    throw error;
   });
+
+  if (deleted instanceof StockFlowError) {
+    return NextResponse.json({ error: deleted.message }, { status: deleted.status });
+  }
 
   return NextResponse.json({ ok: true, id: transport.id });
 }

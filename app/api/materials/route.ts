@@ -3,22 +3,12 @@ import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { getRequestUser } from "@/lib/auth";
 import { checkRateLimit, forbidden, requireDepartmentRead, requireDepartmentWrite } from "@/lib/security/api";
+import { RAW_MATERIAL_CATEGORY, RAW_MATERIAL_LIMITS, STOCK_UNIT_KG } from "@/lib/productionFlowConfig";
 
 export const preferredRegion = "sin1";
 
-const WAREHOUSE_MATERIAL_LIMITS = [
-  { name: "АМИАКИЙН ШҮҮ", maximumStock: 500_000 },
-  { name: "ЦУУНЫ ХҮЧИЛ", maximumStock: 2_000 },
-  { name: "ХҮХРИЙН ХҮЧИЛ", maximumStock: 100 },
-  { name: "ШИЛЭН БӨМБӨЛӨГ", maximumStock: 8_000 },
-  { name: "ТҮЛШ", maximumStock: 800_000 },
-  { name: "НИТРИТ НАТРИ", maximumStock: 7_000 },
-  { name: "ЭМУЛЬГАТОР", maximumStock: 100_000 },
-  { name: "ХАТУУРУУЛАГЧ", maximumStock: 300_000 },
-  { name: "ГИДРОКСИД", maximumStock: 200 },
-  { name: "ЦАГААН ТОС", maximumStock: 400_000 },
-];
-const WAREHOUSE_MATERIALS = WAREHOUSE_MATERIAL_LIMITS.map((material) => material.name);
+const WAREHOUSE_MATERIAL_LIMITS = [...RAW_MATERIAL_LIMITS];
+const WAREHOUSE_MATERIALS: string[] = WAREHOUSE_MATERIAL_LIMITS.map((material) => material.name);
 
 const materialSchema = z.object({
   name: z.string().trim().min(1).max(160),
@@ -33,7 +23,7 @@ const materialSchema = z.object({
 export async function GET() {
   const user = await getRequestUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  if (!requireDepartmentRead(user, "WAREHOUSE") && !requireDepartmentRead(user, "PRODUCTION")) {
+  if (!requireDepartmentRead(user, "WAREHOUSE") && !requireDepartmentRead(user, "PRODUCTION") && !requireDepartmentRead(user, "LOGISTICS")) {
     return forbidden("Material catalog access required");
   }
 
@@ -49,12 +39,12 @@ export async function GET() {
     await prisma.material.createMany({
       data: missingMaterials.map((material) => ({
         name: material.name,
-        category: "Агуулах",
-        unit: "КГ",
+        category: RAW_MATERIAL_CATEGORY,
+        unit: STOCK_UNIT_KG,
         currentStock: 0,
         minimumStock: 0,
         maximumStock: material.maximumStock,
-        location: "Агуулах",
+        location: RAW_MATERIAL_CATEGORY,
       })),
     });
   }
@@ -65,17 +55,17 @@ export async function GET() {
         where: {
           name: material.name,
           OR: [
-            { category: { not: "Агуулах" } },
-            { unit: { not: "КГ" } },
+            { category: { not: RAW_MATERIAL_CATEGORY } },
+            { unit: { not: STOCK_UNIT_KG } },
             { maximumStock: { not: material.maximumStock } },
-            { location: { not: "Агуулах" } },
+            { location: { not: RAW_MATERIAL_CATEGORY } },
           ],
         },
         data: {
-          category: "Агуулах",
-          unit: "КГ",
+          category: RAW_MATERIAL_CATEGORY,
+          unit: STOCK_UNIT_KG,
           maximumStock: material.maximumStock,
-          location: "Агуулах",
+          location: RAW_MATERIAL_CATEGORY,
         },
       })
     )

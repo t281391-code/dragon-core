@@ -1,9 +1,13 @@
 import { NextResponse } from "next/server";
-import type { Prisma } from "@prisma/client";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { getRequestUser } from "@/lib/auth";
 import { checkRateLimit, forbidden, requireDepartmentWrite } from "@/lib/security/api";
+import {
+  applyProductionStockFlow,
+  getProductionRelationMaterialId,
+  StockFlowError,
+} from "@/lib/productionFlow.server";
 
 export const preferredRegion = "sin1";
 
@@ -43,30 +47,6 @@ function getLoadStatus(loadPercent: number) {
   return "NORMAL";
 }
 
-async function getProductionMaterialId(tx: Prisma.TransactionClient, materialId?: string | null) {
-  if (materialId) return materialId;
-
-  const fallbackMaterial = await tx.material.findFirst({
-    where: { name: "Үйлдвэрлэлийн ерөнхий материал" },
-    select: { id: true },
-  });
-  if (fallbackMaterial) return fallbackMaterial.id;
-
-  const created = await tx.material.create({
-    data: {
-      name: "Үйлдвэрлэлийн ерөнхий материал",
-      category: "Үйлдвэрлэл",
-      unit: "КГ",
-      currentStock: 0,
-      minimumStock: 0,
-      maximumStock: 0,
-      location: "Үйлдвэрлэл",
-    },
-    select: { id: true },
-  });
-  return created.id;
-}
-
 export async function POST(request: Request) {
   const rateLimited = await checkRateLimit(request, "production-logs-with-equipment:post", 60, 60_000);
   if (rateLimited) return rateLimited;
@@ -90,7 +70,7 @@ export async function POST(request: Request) {
   }
 
   const result = await prisma.$transaction(async (tx) => {
-    const materialId = await getProductionMaterialId(tx, body.materialId);
+    const materialId = await getProductionRelationMaterialId(tx, body.materialId, productName);
     const createdLog = await tx.productionLog.create({
       data: {
         lotNumber: body.lotNumber || `LOT-${Date.now()}`,
@@ -109,6 +89,14 @@ export async function POST(request: Request) {
         note: body.note || null,
         createdById: user.id,
       },
+    });
+
+    await applyProductionStockFlow(tx, {
+      productionLogId: createdLog.id,
+      productName,
+      outputQuantity,
+      productionDate,
+      userId: user.id,
     });
 
     const telemetryRows = [];
@@ -165,7 +153,14 @@ export async function POST(request: Request) {
         },
       },
     });
+  }).catch((error) => {
+    if (error instanceof StockFlowError) return error;
+    throw error;
   });
+
+  if (result instanceof StockFlowError) {
+    return NextResponse.json({ error: result.message }, { status: result.status });
+  }
 
   return NextResponse.json({ data: result }, { status: 201 });
 }

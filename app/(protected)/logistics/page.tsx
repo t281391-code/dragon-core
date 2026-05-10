@@ -27,6 +27,7 @@ import { KpiCard } from "@/components/KpiCard";
 import { ChartHint, RealtimeBadge, REALTIME_REFRESH_MS } from "@/components/RealtimeBadge";
 import TransportMap from "@/components/TransportMap";
 import { useEscapeClose } from "@/hooks/useEscapeClose";
+import { FINISHED_PRODUCT_CATEGORY } from "@/lib/productionFlowConfig";
 import { printReport } from "@/lib/reportPrint";
 
 type Transport = {
@@ -41,6 +42,14 @@ type Transport = {
   note: string | null;
   material: { name: string; unit: string };
   assignedUser: { fullName: string };
+};
+
+type Material = {
+  id: string;
+  name: string;
+  category: string;
+  unit: string;
+  currentStock: number;
 };
 
 type TransportDraft = {
@@ -230,6 +239,7 @@ export default function LogisticsPage() {
   const [reportModal, setReportModal] = useState(false);
   const [reportClock, setReportClock] = useState<Date | null>(null);
   const [modal, setModal] = useState(false);
+  const [materialId, setMaterialId] = useState("");
   const [materialName, setMaterialName] = useState("");
   const [materialUnit, setMaterialUnit] = useState("кг");
   const [quantity, setQuantity] = useState("");
@@ -248,8 +258,24 @@ export default function LogisticsPage() {
     fetcher,
     { refreshInterval: REALTIME_REFRESH_MS, revalidateOnFocus: false, onSuccess: () => setLastUpdated(new Date()) }
   );
+  const { data: materialsData, mutate: mutateMaterials } = useSWR(
+    "/api/materials",
+    fetcher,
+    { refreshInterval: REALTIME_REFRESH_MS, revalidateOnFocus: false }
+  );
 
   const transports: Transport[] = useMemo(() => transportsData?.data ?? [], [transportsData]);
+  const materials: Material[] = useMemo(() => materialsData?.data ?? [], [materialsData]);
+  const shippableMaterials = useMemo(
+    () => materials
+      .filter((material) => material.category === FINISHED_PRODUCT_CATEGORY && material.currentStock > 0)
+      .sort((a, b) => a.name.localeCompare(b.name)),
+    [materials]
+  );
+  const selectedMaterial = useMemo(
+    () => shippableMaterials.find((material) => material.id === materialId) ?? shippableMaterials[0] ?? null,
+    [materialId, shippableMaterials]
+  );
   const loading = transportsLoading;
 
   useEscapeClose(Boolean(calendarPopupDate || reportModal || modal), () => {
@@ -269,7 +295,10 @@ export default function LogisticsPage() {
   async function submitTransport(event: FormEvent) {
     event.preventDefault();
     const numericQuantity = Number(quantity);
-    if (!materialName.trim() || !numericQuantity || numericQuantity <= 0 || !destinationSite || !driverInfo || !vehicleInfo || !transportDate) {
+    const effectiveMaterial = selectedMaterial;
+    const effectiveMaterialName = effectiveMaterial?.name ?? materialName.trim();
+    const effectiveMaterialUnit = effectiveMaterial?.unit ?? materialUnit;
+    if (!effectiveMaterialName || !numericQuantity || numericQuantity <= 0 || !destinationSite || !driverInfo || !vehicleInfo || !transportDate) {
       setError("Материал, хэмжээ, очих газар, жолооч, машин, огноог зөв оруулна уу");
       return;
     }
@@ -278,7 +307,19 @@ export default function LogisticsPage() {
     const response = await fetch("/api/transports", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ materialName: materialName.trim(), materialUnit, quantity: numericQuantity, destinationSite, driverInfo, vehicleInfo, transportDate, deliveryDate: deliveryDate || null, status, note: note || null }),
+      body: JSON.stringify({
+        materialId: effectiveMaterial?.id,
+        materialName: effectiveMaterialName,
+        materialUnit: effectiveMaterialUnit,
+        quantity: numericQuantity,
+        destinationSite,
+        driverInfo,
+        vehicleInfo,
+        transportDate,
+        deliveryDate: deliveryDate || null,
+        status,
+        note: note || null,
+      }),
     });
     const data = await response.json();
     if (!response.ok) {
@@ -288,9 +329,9 @@ export default function LogisticsPage() {
     }
     setModal(false);
     setSubmitting(false);
-    setMaterialName(""); setMaterialUnit("кг"); setQuantity(""); setDestinationSite(""); setDriverInfo(""); setVehicleInfo(""); setDeliveryDate("");
+    setMaterialId(""); setMaterialName(""); setMaterialUnit("кг"); setQuantity(""); setDestinationSite(""); setDriverInfo(""); setVehicleInfo(""); setDeliveryDate("");
     setStatus("pending"); setNote("");
-    await mutateTransports();
+    await Promise.all([mutateTransports(), mutateMaterials()]);
   }
 
   const canEdit = user?.role === "ADMIN" || (user?.role === "MODERATOR" && user.department === "LOGISTICS");
@@ -389,7 +430,7 @@ export default function LogisticsPage() {
       return nextDrafts;
     });
     setDeletingTransportId(null);
-    await mutateTransports();
+    await Promise.all([mutateTransports(), mutateMaterials()]);
   }
 
   const activeTrips = useMemo(() => transports.filter((t) => t.status === "in_transit").length, [transports]);
@@ -1301,7 +1342,22 @@ export default function LogisticsPage() {
               <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 12 }}>
                 <div className="fg">
                   <label>Материалын нэр</label>
-                  <input value={materialName} onChange={(event) => setMaterialName(event.target.value)} placeholder="Жишээ: ANFO / Эмульс" />
+                  {shippableMaterials.length > 0 ? (
+                    <>
+                      <select value={selectedMaterial?.id ?? ""} onChange={(event) => setMaterialId(event.target.value)}>
+                        {shippableMaterials.map((material) => (
+                          <option key={material.id} value={material.id}>
+                            {material.name} · {material.currentStock.toLocaleString("mn-MN")} {material.unit}
+                          </option>
+                        ))}
+                      </select>
+                      <div className="panel-sub" style={{ marginTop: 6 }}>
+                        Үйлдвэрлэлээс бэлэн болсон үлдэгдлээс ачина.
+                      </div>
+                    </>
+                  ) : (
+                    <input value={materialName} onChange={(event) => setMaterialName(event.target.value)} placeholder="Жишээ: ANDO-V 90MM" />
+                  )}
                 </div>
                 <div className="fg">
                   <label>Хэмжээ</label>
@@ -1309,12 +1365,16 @@ export default function LogisticsPage() {
                 </div>
                 <div className="fg">
                   <label>Нэгж</label>
-                  <select value={materialUnit} onChange={(event) => setMaterialUnit(event.target.value)}>
-                    <option value="кг">кг</option>
-                    <option value="тн">тн</option>
-                    <option value="л">л</option>
-                    <option value="ш">ш</option>
-                  </select>
+                  {selectedMaterial ? (
+                    <input value={selectedMaterial.unit} readOnly />
+                  ) : (
+                    <select value={materialUnit} onChange={(event) => setMaterialUnit(event.target.value)}>
+                      <option value="кг">кг</option>
+                      <option value="тн">тн</option>
+                      <option value="л">л</option>
+                      <option value="ш">ш</option>
+                    </select>
+                  )}
                 </div>
                 <div className="fg">
                   <label>Очих газар</label>

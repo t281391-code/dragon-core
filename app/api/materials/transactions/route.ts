@@ -4,22 +4,12 @@ import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { getRequestUser } from "@/lib/auth";
 import { checkRateLimit, forbidden, normalizePageLimit, requireDepartmentRead, requireDepartmentWrite } from "@/lib/security/api";
+import { RAW_MATERIAL_CATEGORY, RAW_MATERIAL_LIMITS, STOCK_UNIT_KG } from "@/lib/productionFlowConfig";
 
 export const preferredRegion = "sin1";
 
 const dateInput = z.string().trim().min(1).max(64).refine((value) => !Number.isNaN(Date.parse(value)), "Invalid date");
-const WAREHOUSE_MATERIAL_LIMITS = new Map([
-  ["АМИАКИЙН ШҮҮ", 500_000],
-  ["ЦУУНЫ ХҮЧИЛ", 2_000],
-  ["ХҮХРИЙН ХҮЧИЛ", 100],
-  ["ШИЛЭН БӨМБӨЛӨГ", 8_000],
-  ["ТҮЛШ", 800_000],
-  ["НИТРИТ НАТРИ", 7_000],
-  ["ЭМУЛЬГАТОР", 100_000],
-  ["ХАТУУРУУЛАГЧ", 300_000],
-  ["ГИДРОКСИД", 200],
-  ["ЦАГААН ТОС", 400_000],
-]);
+const WAREHOUSE_MATERIAL_LIMITS: Map<string, number> = new Map(RAW_MATERIAL_LIMITS.map((material) => [material.name, material.maximumStock]));
 
 const transactionSchema = z.object({
   materialId: z.string().min(1).max(128).optional(),
@@ -121,12 +111,12 @@ export async function POST(request: Request) {
     material = await prisma.material.create({
       data: {
         name: materialName,
-        category: "Агуулах",
-        unit: "КГ",
+        category: RAW_MATERIAL_CATEGORY,
+        unit: STOCK_UNIT_KG,
         currentStock: 0,
         minimumStock: 0,
         maximumStock: WAREHOUSE_MATERIAL_LIMITS.get(materialName) ?? 0,
-        location: "Агуулах",
+        location: RAW_MATERIAL_CATEGORY,
       },
     });
   }

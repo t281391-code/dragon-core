@@ -24,6 +24,7 @@ import { DeptTopbar } from "@/components/DeptTopbar";
 import { KpiCard } from "@/components/KpiCard";
 import { ChartHint, RealtimeBadge, REALTIME_REFRESH_MS } from "@/components/RealtimeBadge";
 import { getDefaultEquipmentRpm, getSuggestedEquipmentNames } from "@/lib/equipmentConfig";
+import { getProductRecipe } from "@/lib/productionFlowConfig";
 import { printReport } from "@/lib/reportPrint";
 
 type ProductionLog = {
@@ -44,7 +45,7 @@ type ProductionLog = {
   telemetryLogs: EquipmentTelemetryLog[];
 };
 
-type Material = { id: string; name: string; unit: string };
+type Material = { id: string; name: string; unit: string; category?: string; currentStock?: number };
 type ProductionPlan = {
   id: string;
   planDate: string;
@@ -735,7 +736,6 @@ export default function ProductionPage() {
   const [note, setNote] = useState("");
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
-  const [selectedMaterialId, setSelectedMaterialId] = useState("");
   const [equipmentRows, setEquipmentRows] = useState<EquipmentRpmFormRow[]>(() => [createBlankEquipmentRow()]);
   const [toastMessage, setToastMessage] = useState("");
   const [recentSavedLog, setRecentSavedLog] = useState<ProductionLog | null>(null);
@@ -764,6 +764,19 @@ export default function ProductionPage() {
   const logs: ProductionLog[] = useMemo(() => logsData?.data ?? [], [logsData]);
   const productionPlans: ProductionPlan[] = useMemo(() => logsData?.plans ?? [], [logsData]);
   const materials: Material[] = useMemo(() => materialsData?.data ?? [], [materialsData]);
+  const recipePreview = useMemo(() => {
+    const outputKg = toKg(amount, amountUnit) || 0;
+    return getProductRecipe(productName).map((item) => {
+      const material = materials.find((entry) => entry.name === item.materialName);
+      const required = outputKg > 0 ? Math.round(outputKg * item.quantityPerKg * 1000) / 1000 : 0;
+      return {
+        ...item,
+        required,
+        stock: material?.currentStock ?? 0,
+        unit: material?.unit ?? "кг",
+      };
+    });
+  }, [amount, amountUnit, materials, productName]);
   const equipmentOptions: EquipmentOption[] = useMemo(() => equipmentData?.data ?? [], [equipmentData]);
   const latestLogWithTelemetry = useMemo(
     () => [...logs]
@@ -903,7 +916,6 @@ export default function ProductionPage() {
     setWorkerInfo("");
     setDensity("");
     setNote("");
-    setSelectedMaterialId((current) => current || materials[0]?.id || "");
     resetEquipmentRows(product);
     setError("");
     setModal(true);
@@ -937,7 +949,6 @@ export default function ProductionPage() {
       if (!Number.isFinite(row.maxRpm) || row.maxRpm <= 0) { setError("Max RPM утгыг зөв оруулна уу"); return; }
       if (row.rpm > row.maxRpm * 1.2) { setError("RPM утга max RPM-ээс хэт өндөр байна"); return; }
     }
-    const effectiveMaterialId = selectedMaterialId || materials[0]?.id || "";
     setSubmitting(true); setError("");
     const res = await fetch("/api/production/logs", {
       method:"POST", headers:{"Content-Type":"application/json"},
@@ -947,7 +958,7 @@ export default function ProductionPage() {
         productType: productName,
         producedKg: qty,
         destinationMine,
-        materialId: effectiveMaterialId || null,
+        materialId: null,
         operator: workerInfo.trim() || null,
         density: densityValue,
         note: note || null,
@@ -1994,10 +2005,21 @@ export default function ProductionPage() {
                   </select>
                 </div>
                 <div className="fg"><label>Материал</label>
-                  {materials.length > 0 ? (
-                    <select value={selectedMaterialId || materials[0]?.id || ""} onChange={e=>setSelectedMaterialId(e.target.value)}>
-                      {materials.map((material)=><option key={material.id} value={material.id}>{material.name} ({material.unit})</option>)}
-                    </select>
+                  {recipePreview.length > 0 ? (
+                    <div style={{ display: "grid", gap: 6, padding: "10px 12px", borderRadius: 10, border: "1px solid rgba(34,211,238,0.22)", background: "rgba(8,16,31,0.52)" }}>
+                      {recipePreview.map((item) => {
+                        const enough = item.required <= 0 || item.stock >= item.required;
+                        return (
+                          <div key={item.materialName} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, color: enough ? "var(--text)" : "#F87171", fontSize: 11, fontWeight: 800 }}>
+                            <span>{item.materialName}</span>
+                            <span style={{ color: enough ? "var(--muted)" : "#F87171", whiteSpace: "nowrap" }}>
+                              {item.required > 0 ? `${item.required.toLocaleString("mn-MN")} / ` : ""}
+                              {item.stock.toLocaleString("mn-MN")} {item.unit}
+                            </span>
+                          </div>
+                        );
+                      })}
+                    </div>
                   ) : (
                     <input type="text" value="Автоматаар үүсгэнэ" readOnly/>
                   )}

@@ -4,6 +4,12 @@ import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { getRequestUser } from "@/lib/auth";
 import { checkRateLimit, forbidden, normalizePageLimit, requireDepartmentRead, requireDepartmentWrite } from "@/lib/security/api";
+import {
+  applyProductionStockFlow,
+  getProductionRelationMaterialId,
+  reverseProductionStockFlow,
+  StockFlowError,
+} from "@/lib/productionFlow.server";
 
 export const preferredRegion = "sin1";
 
@@ -183,25 +189,7 @@ export async function POST(request: Request) {
   const productionDate = new Date(body.productionDate);
 
   const log = await prisma.$transaction(async (tx) => {
-    let materialId = body.materialId ?? "";
-    if (!materialId) {
-      const fallbackMaterial = await tx.material.findFirst({
-        where: { name: "Үйлдвэрлэлийн ерөнхий материал" },
-        select: { id: true },
-      });
-      materialId = fallbackMaterial?.id ?? (await tx.material.create({
-        data: {
-          name: "Үйлдвэрлэлийн ерөнхий материал",
-          category: "Үйлдвэрлэл",
-          unit: "КГ",
-          currentStock: 0,
-          minimumStock: 0,
-          maximumStock: 0,
-          location: "Үйлдвэрлэл",
-        },
-        select: { id: true },
-      })).id;
-    }
+    const materialId = await getProductionRelationMaterialId(tx, body.materialId, body.productName);
 
     const created = await tx.productionLog.create({
       data: {
@@ -223,6 +211,14 @@ export async function POST(request: Request) {
       },
     });
 
+    await applyProductionStockFlow(tx, {
+      productionLogId: created.id,
+      productName: body.productName,
+      outputQuantity: body.outputQuantity,
+      productionDate,
+      userId: user.id,
+    });
+
     if (body.dailyTargetQuantity) {
       await tx.dailyProductionPlan.upsert({
         where: { planDate: productionDate },
@@ -239,7 +235,14 @@ export async function POST(request: Request) {
     }
 
     return created;
+  }).catch((error) => {
+    if (error instanceof StockFlowError) return error;
+    throw error;
   });
+
+  if (log instanceof StockFlowError) {
+    return NextResponse.json({ error: log.message }, { status: log.status });
+  }
 
   return NextResponse.json({ data: log }, { status: 201 });
 }
@@ -266,12 +269,18 @@ export async function DELETE(request: Request) {
 
     if (!existing) throw new Error("NOT_FOUND");
 
+    await reverseProductionStockFlow(tx, id.data);
     await tx.productionLog.delete({ where: { id: id.data } });
     return true;
   }).catch((error) => {
     if (error instanceof Error && error.message === "NOT_FOUND") return null;
+    if (error instanceof StockFlowError) return error;
     throw error;
   });
+
+  if (deleted instanceof StockFlowError) {
+    return NextResponse.json({ error: deleted.message }, { status: deleted.status });
+  }
 
   if (!deleted) {
     return NextResponse.json({ error: "Production log not found" }, { status: 404 });
