@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useAuth } from "@/components/AuthProvider";
 import { DashboardEmptyState, PriorityStatusBar } from "@/components/DashboardUX";
 import { DeptTopbar } from "@/components/DeptTopbar";
+import { printReport } from "@/lib/reportPrint";
 
 type ShiftCode = "day" | "night" | "rest" | "leave" | "sick";
 
@@ -129,83 +130,46 @@ function archiveEntryMap(snapshot: ShiftArchiveSnapshot) {
   return new Map(snapshot.entries.map((entry) => [`${entry.userId}:${entry.date}`, entry]));
 }
 
-function escapeHtml(value: unknown) {
-  return String(value ?? "")
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#039;");
+function formatReportDateTime(value?: string | Date) {
+  if (!value) return "-";
+  const date = typeof value === "string" ? new Date(value) : value;
+  if (Number.isNaN(date.getTime())) return "-";
+  return new Intl.DateTimeFormat("mn-MN", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(date);
 }
 
-function printArchivePdf(archive: ShiftArchive) {
-  if (typeof window === "undefined" || !archive.snapshot) return;
-
-  const snapshot = archive.snapshot;
-  const entries = archiveEntryMap(snapshot);
-  const dayHeaders = snapshot.days.map((day) => `<th>${escapeHtml(day.label)}</th>`).join("");
-  const rows = snapshot.users.map((user) => {
-    const cells = snapshot.days.map((day) => {
-      const entry = entries.get(`${user.id}:${day.key}`);
-      const meta = SHIFT_META[(entry?.shiftCode as ShiftCode | undefined) ?? "rest"];
-      const overtime = entry?.overtimeHours ? `<small>+${entry.overtimeHours}ц</small>` : "";
-      return `<td><strong>${escapeHtml(meta.short)}</strong>${overtime}</td>`;
-    }).join("");
-
-    return `
-      <tr>
-        <td class="name">${escapeHtml(user.fullName)}${user.mrCode ? `<small>${escapeHtml(user.mrCode)}</small>` : ""}</td>
-        <td>${escapeHtml(DEPT_LABEL[user.departmentName] ?? user.departmentName)}</td>
-        ${cells}
-        <td class="total">${user.totalHours}ц</td>
-      </tr>
-    `;
-  }).join("");
-
-  const popup = window.open("", "_blank", "width=1200,height=800");
-  if (!popup) return;
-
-  popup.document.write(`
-    <!doctype html>
-    <html>
-      <head>
-        <meta charset="utf-8" />
-        <title>${escapeHtml(archive.title)}</title>
-        <style>
-          @page { size: A4 landscape; margin: 10mm; }
-          body { font-family: Arial, sans-serif; color: #111827; margin: 0; }
-          h1 { font-size: 18px; margin: 0 0 4px; }
-          .meta { color: #64748b; font-size: 11px; margin-bottom: 14px; }
-          table { width: 100%; border-collapse: collapse; table-layout: fixed; }
-          th, td { border: 1px solid #d1d5db; padding: 5px 4px; text-align: center; font-size: 10px; }
-          th { background: #f1f5f9; color: #334155; }
-          .name { text-align: left; width: 130px; font-weight: 700; }
-          .name small { display: block; color: #64748b; font-weight: 400; margin-top: 2px; }
-          .total { font-weight: 800; color: #047857; }
-          td small { display: block; color: #dc2626; font-weight: 800; margin-top: 2px; }
-        </style>
-      </head>
-      <body>
-        <h1>${escapeHtml(archive.title)}</h1>
-        <div class="meta">${escapeHtml(snapshot.startDate)} - ${escapeHtml(snapshot.endDate)} · PDF хэвлэх</div>
-        <table>
-          <thead>
-            <tr>
-              <th class="name">Ажилтан</th>
-              <th>Хэлтэс</th>
-              ${dayHeaders}
-              <th>Цаг</th>
-            </tr>
-          </thead>
-          <tbody>${rows}</tbody>
-        </table>
-        <script>
-          window.onload = () => setTimeout(() => window.print(), 120);
-        </script>
-      </body>
-    </html>
-  `);
-  popup.document.close();
+function buildShiftSnapshot(days: DayWindow[], users: DbUser[], schedule: Schedule, generatedAt: Date): ShiftArchiveSnapshot {
+  return {
+    version: 1,
+    startDate: days[0]?.key ?? "",
+    endDate: days[days.length - 1]?.key ?? "",
+    archivedAt: generatedAt.toISOString(),
+    days: days.map((day) => ({ key: day.key, label: day.label })),
+    users: users.map((user) => ({
+      id: user.id,
+      fullName: user.fullName,
+      mrCode: user.mrCode,
+      roleName: user.role.name,
+      departmentName: user.department.name,
+      totalHours: userTotalHours(user.id, days, schedule),
+    })),
+    entries: users.flatMap((user) =>
+      days.map((day) => {
+        const entry = schedule[user.id]?.[day.key] ?? { code: "rest" as ShiftCode, ot: 0 };
+        return {
+          userId: user.id,
+          date: day.key,
+          shiftCode: entry.code,
+          overtimeHours: entry.ot,
+        };
+      }),
+    ),
+  };
 }
 
 // ── DonutChart ────────────────────────────────────────────────────────────────
@@ -390,6 +354,7 @@ function AddParticipantModal({
 
   return (
     <div
+      className="mo open"
       onClick={onClose}
       style={{
         position: "fixed", inset: 0, zIndex: 1000,
@@ -468,6 +433,235 @@ function AddParticipantModal({
   );
 }
 
+function ShiftReportContent({
+  title,
+  snapshot,
+  preparedBy,
+  preparedAt,
+  onPrint,
+  onClose,
+}: {
+  title: string;
+  snapshot: ShiftArchiveSnapshot;
+  preparedBy?: string;
+  preparedAt?: string;
+  onPrint?: () => void;
+  onClose?: () => void;
+}) {
+  const entries = archiveEntryMap(snapshot);
+  const shiftCounts = SHIFT_ORDER.reduce((acc, code) => {
+    acc[code] = snapshot.entries.filter((entry) => entry.shiftCode === code).length;
+    return acc;
+  }, {} as Record<ShiftCode, number>);
+  const totalHours = snapshot.users.reduce((sum, user) => sum + user.totalHours, 0);
+  const overtimeHours = snapshot.entries.reduce((sum, entry) => sum + entry.overtimeHours, 0);
+  const activeShiftCount = shiftCounts.day + shiftCounts.night;
+  const absentCount = shiftCounts.leave + shiftCounts.sick;
+  const departmentRows = DB_DEPTS.map((dept) => {
+    const deptUsers = snapshot.users.filter((user) => user.departmentName === dept);
+    const deptUserIds = new Set(deptUsers.map((user) => user.id));
+    const deptEntries = snapshot.entries.filter((entry) => deptUserIds.has(entry.userId));
+    return {
+      dept,
+      users: deptUsers.length,
+      totalHours: deptUsers.reduce((sum, user) => sum + user.totalHours, 0),
+      day: deptEntries.filter((entry) => entry.shiftCode === "day").length,
+      night: deptEntries.filter((entry) => entry.shiftCode === "night").length,
+      absent: deptEntries.filter((entry) => entry.shiftCode === "leave" || entry.shiftCode === "sick").length,
+    };
+  }).filter((row) => row.users > 0);
+  const dailyRows = snapshot.days.map((day) => {
+    const dayEntries = snapshot.entries.filter((entry) => entry.date === day.key);
+    return {
+      day,
+      dayCount: dayEntries.filter((entry) => entry.shiftCode === "day").length,
+      nightCount: dayEntries.filter((entry) => entry.shiftCode === "night").length,
+      restCount: dayEntries.filter((entry) => entry.shiftCode === "rest").length,
+      absentCount: dayEntries.filter((entry) => entry.shiftCode === "leave" || entry.shiftCode === "sick").length,
+      overtime: dayEntries.reduce((sum, entry) => sum + entry.overtimeHours, 0),
+    };
+  });
+  const generatedAt = preparedAt ?? snapshot.archivedAt;
+
+  return (
+    <div className="report-print-root shift-report-print">
+      <div className="mh shift-report-head">
+        <div>
+          <div className="bg bg-b">⛏ Ээлжийн бүртгэл</div>
+          <h3>{title}</h3>
+          <div className="panel-sub">
+            Тайлангийн хугацаа: <strong>{snapshot.startDate}</strong> - <strong>{snapshot.endDate}</strong>
+            {" · "}Бэлтгэсэн: <strong>{formatReportDateTime(generatedAt)}</strong>
+            {" · "}Ажилтан: <strong>{preparedBy ?? "System"}</strong>
+          </div>
+        </div>
+        <div className="report-print-actions" style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          {onPrint ? (
+            <button type="button" className="btn bp" onClick={onPrint}>
+              📄 PDF татах
+            </button>
+          ) : null}
+          {onClose ? (
+            <button type="button" className="btn bo2" onClick={onClose}>
+              Хаах
+            </button>
+          ) : null}
+        </div>
+      </div>
+
+      <div className="shift-report-print__body">
+        <div className="shift-report-kpis">
+          <div className="panel">
+            <div className="panel-sub">Нийт ажилтан</div>
+            <div className="shift-report-metric">{snapshot.users.length}</div>
+          </div>
+          <div className="panel">
+            <div className="panel-sub">Нийт цаг</div>
+            <div className="shift-report-metric">{totalHours}ц</div>
+          </div>
+          <div className="panel">
+            <div className="panel-sub">Илүү цаг</div>
+            <div className="shift-report-metric">{overtimeHours}ц</div>
+          </div>
+          <div className="panel">
+            <div className="panel-sub">Өдөр / Шөнө</div>
+            <div className="shift-report-metric">{shiftCounts.day} / {shiftCounts.night}</div>
+          </div>
+          <div className="panel">
+            <div className="panel-sub">Амралт</div>
+            <div className="shift-report-metric">{shiftCounts.rest}</div>
+          </div>
+          <div className="panel">
+            <div className="panel-sub">Чөлөө / Өвчтэй</div>
+            <div className="shift-report-metric">{absentCount}</div>
+          </div>
+        </div>
+
+        <div className="shift-report-summary-grid">
+          <div className="panel">
+            <div className="panel-title">Хэлтсийн нэгтгэл</div>
+            <div className="shift-report-table-wrap">
+              <table className="safety-table shift-report-table compact-report-table">
+                <thead>
+                  <tr>
+                    <th>Хэлтэс</th>
+                    <th>Ажилтан</th>
+                    <th>Өдөр</th>
+                    <th>Шөнө</th>
+                    <th>Чөлөө/өвчтэй</th>
+                    <th>Цаг</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {departmentRows.length === 0 ? (
+                    <tr><td colSpan={6}>Бүртгэл байхгүй</td></tr>
+                  ) : departmentRows.map((row) => (
+                    <tr key={row.dept}>
+                      <td><strong>{DEPT_LABEL[row.dept] ?? row.dept}</strong></td>
+                      <td>{row.users}</td>
+                      <td>{row.day}</td>
+                      <td>{row.night}</td>
+                      <td>{row.absent}</td>
+                      <td><strong>{row.totalHours}ц</strong></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div className="panel">
+            <div className="panel-title">Өдрийн нэгтгэл</div>
+            <div className="shift-report-table-wrap">
+              <table className="safety-table shift-report-table compact-report-table">
+                <thead>
+                  <tr>
+                    <th>Огноо</th>
+                    <th>Өдөр</th>
+                    <th>Шөнө</th>
+                    <th>Амралт</th>
+                    <th>Чөлөө/өвчтэй</th>
+                    <th>Илүү цаг</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {dailyRows.map((row) => (
+                    <tr key={row.day.key}>
+                      <td><strong>{row.day.label}</strong></td>
+                      <td>{row.dayCount}</td>
+                      <td>{row.nightCount}</td>
+                      <td>{row.restCount}</td>
+                      <td>{row.absentCount}</td>
+                      <td>{row.overtime}ц</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <div className="panel">
+          <div className="panel-title">Ажилтны ээлжийн дэлгэрэнгүй</div>
+          <div className="panel-sub">Өдөр/шөнийн тэмдэглэгээ болон илүү цагийн мэдээлэл</div>
+          <div className="shift-report-table-wrap">
+            <table className="safety-table shift-table shift-report-table">
+              <thead>
+                <tr>
+                  <th className="shift-col-worker">Ажилтан</th>
+                  <th className="shift-col-dept">Хэлтэс</th>
+                  {snapshot.days.map((day) => (
+                    <th key={day.key} className="shift-col-day">{day.label}</th>
+                  ))}
+                  <th className="shift-col-total">Цаг</th>
+                </tr>
+              </thead>
+              <tbody>
+                {snapshot.users.length === 0 ? (
+                  <tr><td colSpan={snapshot.days.length + 3}>Бүртгэлтэй ажилтан байхгүй</td></tr>
+                ) : snapshot.users.map((archiveUser) => (
+                  <tr key={archiveUser.id}>
+                    <td className="shift-col-worker">
+                      <strong>{archiveUser.fullName}</strong>
+                      {archiveUser.mrCode ? <div style={{ color: "var(--muted)", fontSize: 11 }}>{archiveUser.mrCode}</div> : null}
+                    </td>
+                    <td className="shift-col-dept">
+                      <span className="shift-dept-chip">
+                        {DEPT_LABEL[archiveUser.departmentName] ?? archiveUser.departmentName}
+                      </span>
+                    </td>
+                    {snapshot.days.map((day) => {
+                      const entry = entries.get(`${archiveUser.id}:${day.key}`);
+                      const code = (entry?.shiftCode ?? "rest") as ShiftCode;
+                      const meta = SHIFT_META[code];
+                      return (
+                        <td key={day.key} className="shift-col-day">
+                          <span className={`shift-cell ${meta.className}`} style={{ cursor: "default" }}>
+                            <span>{meta.short}</span>
+                            <small>{entry?.overtimeHours ? `+${entry.overtimeHours}ц` : ""}</small>
+                          </span>
+                        </td>
+                      );
+                    })}
+                    <td className="shift-col-total">
+                      <strong>{archiveUser.totalHours}ц</strong>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div className="shift-report-foot">
+          <span>Идэвхтэй ээлж: {activeShiftCount}</span>
+          <span>Тайлангийн эх сурвалж: ээлжийн бүртгэлийн өгөгдөл</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function ArchiveModal({
   archives,
   selected,
@@ -485,10 +679,9 @@ function ArchiveModal({
   onClose: () => void;
   onSelect: (id: string) => void;
   onRefresh: () => void;
-  onPrint: (archive: ShiftArchive) => void;
+  onPrint: () => void;
 }) {
   const snapshot = selected?.snapshot;
-  const entries = snapshot ? archiveEntryMap(snapshot) : null;
 
   return (
     <div
@@ -561,7 +754,7 @@ function ArchiveModal({
               {selected?.snapshot ? (
                 <button
                   type="button"
-                  onClick={() => onPrint(selected)}
+                  onClick={onPrint}
                   style={{
                     border: "1px solid rgba(239,68,68,.45)",
                     background: "rgba(239,68,68,.12)", color: "#f87171",
@@ -588,52 +781,14 @@ function ArchiveModal({
             </div>
           ) : null}
 
-          {snapshot && entries ? (
-            <div className="shift-grid-wrap" style={{ border: "1px solid var(--border)", borderRadius: 10 }}>
-              <table className="safety-table shift-table">
-                <thead>
-                  <tr>
-                    <th className="shift-col-worker">Ажилтан</th>
-                    <th className="shift-col-dept">Хэлтэс</th>
-                    {snapshot.days.map((day) => (
-                      <th key={day.key} className="shift-col-day">{day.label}</th>
-                    ))}
-                    <th className="shift-col-total">Цаг</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {snapshot.users.map((archiveUser) => (
-                    <tr key={archiveUser.id}>
-                      <td className="shift-col-worker">
-                        <strong>{archiveUser.fullName}</strong>
-                        {archiveUser.mrCode ? <div style={{ color: "var(--muted)", fontSize: 11 }}>{archiveUser.mrCode}</div> : null}
-                      </td>
-                      <td className="shift-col-dept">
-                        <span className="shift-dept-chip">
-                          {DEPT_LABEL[archiveUser.departmentName] ?? archiveUser.departmentName}
-                        </span>
-                      </td>
-                      {snapshot.days.map((day) => {
-                        const entry = entries.get(`${archiveUser.id}:${day.key}`);
-                        const code = (entry?.shiftCode ?? "rest") as ShiftCode;
-                        const meta = SHIFT_META[code];
-                        return (
-                          <td key={day.key} className="shift-col-day">
-                            <span className={`shift-cell ${meta.className}`} style={{ cursor: "default" }}>
-                              <span>{meta.short}</span>
-                              <small>{entry?.overtimeHours ? `+${entry.overtimeHours}ц` : ""}</small>
-                            </span>
-                          </td>
-                        );
-                      })}
-                      <td className="shift-col-total">
-                        <strong style={{ color: "#22C55E" }}>{archiveUser.totalHours}ц</strong>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+          {snapshot ? (
+            <ShiftReportContent
+              title={selected?.title ?? "Ээлжийн архив"}
+              snapshot={snapshot}
+              preparedBy={selected?.createdBy?.fullName ?? selected?.createdBy?.email ?? "System"}
+              preparedAt={selected?.updatedAt ?? selected?.createdAt}
+              onPrint={onPrint}
+            />
           ) : (
             <DashboardEmptyState
               icon="⛏"
@@ -662,6 +817,8 @@ export default function ShiftsPage() {
   const [search, setSearch]       = useState("");
   const [showAddModal, setShowAddModal] = useState(false);
   const [overtimeEditor, setOvertimeEditor] = useState<OvertimeEditor | null>(null);
+  const [showReportModal, setShowReportModal] = useState(false);
+  const [reportGeneratedAt, setReportGeneratedAt] = useState<Date | null>(null);
   const [showArchiveModal, setShowArchiveModal] = useState(false);
   const [archives, setArchives] = useState<ShiftArchive[]>([]);
   const [selectedArchive, setSelectedArchive] = useState<ShiftArchive | null>(null);
@@ -848,6 +1005,11 @@ export default function ShiftsPage() {
     void fetchArchives(true);
   }
 
+  function openReportModal() {
+    setReportGeneratedAt(new Date());
+    setShowReportModal(true);
+  }
+
   const filteredUsers = useMemo(() => {
     const query = search.trim().toLowerCase();
     return users.filter((u) => {
@@ -875,6 +1037,10 @@ export default function ShiftsPage() {
         : "Өнөөдрийн ээлж хэвийн бүртгэгдсэн байна.";
 
   const existingIds = useMemo(() => new Set(users.map((u) => u.id)), [users]);
+  const currentReportSnapshot = useMemo(
+    () => buildShiftSnapshot(days, users, schedule, reportGeneratedAt ?? new Date()),
+    [days, users, schedule, reportGeneratedAt],
+  );
 
   return (
     <div className="department-shifts">
@@ -943,6 +1109,19 @@ export default function ShiftsPage() {
               <div style={{ fontSize: 11, color: "var(--muted)" }}>
                 Нийт <strong style={{ color: "var(--text)" }}>{users.length}</strong> ажилтан
               </div>
+              <button
+                type="button"
+                onClick={openReportModal}
+                style={{
+                  padding: "6px 12px", borderRadius: 8, border: "1px solid rgba(34,211,238,.42)",
+                  background: "rgba(34,211,238,.1)", color: "#22d3ee",
+                  fontSize: 12, fontWeight: 800, cursor: "pointer",
+                  display: "flex", alignItems: "center", gap: 6,
+                }}
+              >
+                <span aria-hidden="true">📄</span>
+                Тайлан харах
+              </button>
               <button
                 type="button"
                 onClick={openArchiveModal}
@@ -1129,6 +1308,27 @@ export default function ShiftsPage() {
         />
       )}
 
+      {showReportModal && (
+        <div
+          className="mo open"
+          onClick={() => setShowReportModal(false)}
+        >
+          <div
+            className="mc shift-report-modal"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <ShiftReportContent
+              title="Ээлжийн 14 хоногийн тайлан"
+              snapshot={currentReportSnapshot}
+              preparedBy={me?.fullName ?? me?.email ?? "System"}
+              preparedAt={reportGeneratedAt?.toISOString() ?? currentReportSnapshot.archivedAt}
+              onPrint={printReport}
+              onClose={() => setShowReportModal(false)}
+            />
+          </div>
+        </div>
+      )}
+
       {showArchiveModal && (
         <ArchiveModal
           archives={archives}
@@ -1138,7 +1338,7 @@ export default function ShiftsPage() {
           onClose={() => setShowArchiveModal(false)}
           onRefresh={() => { void fetchArchives(true); }}
           onSelect={(id) => { void loadArchive(id); }}
-          onPrint={printArchivePdf}
+          onPrint={printReport}
         />
       )}
 
