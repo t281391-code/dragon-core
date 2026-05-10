@@ -8,6 +8,7 @@ import {
   getProductionRelationMaterialId,
   StockFlowError,
 } from "@/lib/productionFlow.server";
+import { INTERMEDIATE_EXPLOSIVE_INPUTS, isIntermediateExplosiveProduct } from "@/lib/productionFlowConfig";
 
 export const preferredRegion = "sin1";
 
@@ -24,6 +25,11 @@ const equipmentTelemetrySchema = z.object({
   note: z.string().trim().max(2000).nullable().optional(),
 });
 
+const materialUsageSchema = z.object({
+  materialName: z.string().trim().min(1).max(160),
+  quantity: z.coerce.number().positive().max(1_000_000_000),
+});
+
 const productionLogSchema = z.object({
   lotNumber: z.string().trim().max(80).optional(),
   productType: z.string().trim().min(1).max(160).optional(),
@@ -38,6 +44,7 @@ const productionLogSchema = z.object({
   materialId: z.string().min(1).max(128).nullable().optional(),
   destinationMine: z.string().trim().max(160).nullable().optional(),
   density: z.coerce.number().positive().max(1000).nullable().optional(),
+  materialUsage: z.array(materialUsageSchema).max(12).optional(),
   equipmentTelemetry: z.array(equipmentTelemetrySchema).min(1).max(12),
 });
 
@@ -68,6 +75,15 @@ export async function POST(request: Request) {
   if (!productName || !outputQuantity) {
     return NextResponse.json({ error: "Product and produced amount are required" }, { status: 400 });
   }
+  const materialUsage = body.materialUsage ?? [];
+  if (isIntermediateExplosiveProduct(productName)) {
+    const requiredMaterials = new Set(INTERMEDIATE_EXPLOSIVE_INPUTS);
+    const usageMap = new Map(materialUsage.map((item) => [item.materialName, item.quantity]));
+    const missingMaterial = [...requiredMaterials].find((materialName) => !usageMap.has(materialName));
+    if (missingMaterial) {
+      return NextResponse.json({ error: `${missingMaterial} зарцуулалтыг оруулна уу` }, { status: 400 });
+    }
+  }
 
   const result = await prisma.$transaction(async (tx) => {
     const materialId = await getProductionRelationMaterialId(tx, body.materialId, productName);
@@ -97,6 +113,7 @@ export async function POST(request: Request) {
       outputQuantity,
       productionDate,
       userId: user.id,
+      materialUsage,
     });
 
     const telemetryRows = [];

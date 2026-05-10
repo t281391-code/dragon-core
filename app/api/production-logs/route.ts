@@ -10,6 +10,7 @@ import {
   reverseProductionStockFlow,
   StockFlowError,
 } from "@/lib/productionFlow.server";
+import { INTERMEDIATE_EXPLOSIVE_INPUTS, isIntermediateExplosiveProduct } from "@/lib/productionFlowConfig";
 
 export const preferredRegion = "sin1";
 
@@ -31,6 +32,10 @@ const productionLogSchema = z.object({
   downtimeMinutes: z.coerce.number().int().min(0).max(1440).optional(),
   workerInfo: z.string().trim().max(4000).nullable().optional(),
   density: z.coerce.number().positive().max(1000),
+  materialUsage: z.array(z.object({
+    materialName: z.string().trim().min(1).max(160),
+    quantity: z.coerce.number().positive().max(1_000_000_000),
+  })).max(12).optional(),
   note: z.string().trim().max(4000).nullable().optional(),
 });
 
@@ -187,6 +192,14 @@ export async function POST(request: Request) {
   }
   const body = parsed.data;
   const productionDate = new Date(body.productionDate);
+  const materialUsage = body.materialUsage ?? [];
+  if (isIntermediateExplosiveProduct(body.productName)) {
+    const usageMap = new Map(materialUsage.map((item) => [item.materialName, item.quantity]));
+    const missingMaterial = INTERMEDIATE_EXPLOSIVE_INPUTS.find((materialName) => !usageMap.has(materialName));
+    if (missingMaterial) {
+      return NextResponse.json({ error: `${missingMaterial} зарцуулалтыг оруулна уу` }, { status: 400 });
+    }
+  }
 
   const log = await prisma.$transaction(async (tx) => {
     const materialId = await getProductionRelationMaterialId(tx, body.materialId, body.productName);
@@ -217,6 +230,7 @@ export async function POST(request: Request) {
       outputQuantity: body.outputQuantity,
       productionDate,
       userId: user.id,
+      materialUsage,
     });
 
     if (body.dailyTargetQuantity) {

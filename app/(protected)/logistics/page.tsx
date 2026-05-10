@@ -268,7 +268,7 @@ export default function LogisticsPage() {
   const materials: Material[] = useMemo(() => materialsData?.data ?? [], [materialsData]);
   const shippableMaterials = useMemo(
     () => materials
-      .filter((material) => material.category === FINISHED_PRODUCT_CATEGORY && material.currentStock > 0)
+      .filter((material) => material.category === FINISHED_PRODUCT_CATEGORY && material.name.startsWith("ANDO-") && material.currentStock > 0)
       .sort((a, b) => a.name.localeCompare(b.name)),
     [materials]
   );

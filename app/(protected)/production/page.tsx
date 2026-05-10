@@ -24,7 +24,12 @@ import { DeptTopbar } from "@/components/DeptTopbar";
 import { KpiCard } from "@/components/KpiCard";
 import { ChartHint, RealtimeBadge, REALTIME_REFRESH_MS } from "@/components/RealtimeBadge";
 import { getDefaultEquipmentRpm, getSuggestedEquipmentNames } from "@/lib/equipmentConfig";
-import { getProductRecipe } from "@/lib/productionFlowConfig";
+import {
+  getProductRecipe,
+  INTERMEDIATE_EXPLOSIVE_INPUTS,
+  INTERMEDIATE_EXPLOSIVE_PRODUCT,
+  isIntermediateExplosiveProduct,
+} from "@/lib/productionFlowConfig";
 import { printReport } from "@/lib/reportPrint";
 
 type ProductionLog = {
@@ -141,11 +146,13 @@ type RpmSummaryResponse = {
 };
 
 const PRODUCTS = [
+  INTERMEDIATE_EXPLOSIVE_PRODUCT,
   "ANDO-V 90MM","ANDO-V 120MM","ANDO-V 60MM",
   "ANDO-EV 32MM","ANDO-EV 25MM","ANDO-SPLIT 38MM",
 ] as const;
 
 const PRODUCT_COLORS: Record<string, string> = {
+  [INTERMEDIATE_EXPLOSIVE_PRODUCT]: "#22D3EE",
   "ANDO-V 90MM": "#10B981","ANDO-V 120MM": "#3B82F6","ANDO-V 60MM": "#F59E0B",
   "ANDO-EV 32MM": "#A78BFA","ANDO-EV 25MM": "#14B8A6","ANDO-SPLIT 38MM": "#F97316",
 };
@@ -730,6 +737,9 @@ export default function ProductionPage() {
   const [productionDate, setProductionDate] = useState(toDateTimeInputValue());
   const [amount, setAmount] = useState("");
   const [amountUnit, setAmountUnit] = useState<"kg"|"ton">("kg");
+  const [intermediateMaterialUsage, setIntermediateMaterialUsage] = useState<Record<string, string>>(() =>
+    Object.fromEntries(INTERMEDIATE_EXPLOSIVE_INPUTS.map((materialName) => [materialName, ""]))
+  );
   const [destinationMine, setDestinationMine] = useState(MINE_OPTIONS[0]);
   const [workerInfo, setWorkerInfo] = useState("");
   const [density, setDensity] = useState("");
@@ -777,6 +787,16 @@ export default function ProductionPage() {
       };
     });
   }, [amount, amountUnit, materials, productName]);
+  const intermediateUsagePreview = useMemo(() => INTERMEDIATE_EXPLOSIVE_INPUTS.map((materialName) => {
+    const material = materials.find((entry) => entry.name === materialName);
+    const required = Number(intermediateMaterialUsage[materialName] ?? "");
+    return {
+      materialName,
+      required: Number.isFinite(required) && required > 0 ? required : 0,
+      stock: material?.currentStock ?? 0,
+      unit: material?.unit ?? "кг",
+    };
+  }), [intermediateMaterialUsage, materials]);
   const equipmentOptions: EquipmentOption[] = useMemo(() => equipmentData?.data ?? [], [equipmentData]);
   const latestLogWithTelemetry = useMemo(
     () => [...logs]
@@ -900,6 +920,10 @@ export default function ProductionPage() {
     setEquipmentRows((rows) => rows.length > 1 ? rows.filter((row) => row.rowId !== rowId) : [createBlankEquipmentRow()]);
   }
 
+  function updateIntermediateMaterialUsage(materialName: string, value: string) {
+    setIntermediateMaterialUsage((current) => ({ ...current, [materialName]: value }));
+  }
+
   function getEquipmentRowPreview(row: EquipmentRpmFormRow) {
     const rpm = Number(row.rpm);
     const maxRpm = Number(row.maxRpm);
@@ -916,6 +940,7 @@ export default function ProductionPage() {
     setWorkerInfo("");
     setDensity("");
     setNote("");
+    setIntermediateMaterialUsage(Object.fromEntries(INTERMEDIATE_EXPLOSIVE_INPUTS.map((materialName) => [materialName, ""])));
     resetEquipmentRows(product);
     setError("");
     setModal(true);
@@ -949,6 +974,18 @@ export default function ProductionPage() {
       if (!Number.isFinite(row.maxRpm) || row.maxRpm <= 0) { setError("Max RPM утгыг зөв оруулна уу"); return; }
       if (row.rpm > row.maxRpm * 1.2) { setError("RPM утга max RPM-ээс хэт өндөр байна"); return; }
     }
+    const materialUsage = isIntermediateExplosiveProduct(productName)
+      ? intermediateUsagePreview.map((item) => ({ materialName: item.materialName, quantity: item.required }))
+      : [];
+    if (isIntermediateExplosiveProduct(productName)) {
+      const invalidUsage = materialUsage.find((item) => !Number.isFinite(item.quantity) || item.quantity <= 0);
+      if (invalidUsage) { setError(`${invalidUsage.materialName} зарцуулалтыг оруулна уу`); return; }
+      const shortStock = intermediateUsagePreview.find((item) => item.required > item.stock);
+      if (shortStock) {
+        setError(`${shortStock.materialName} үлдэгдэл хүрэлцэхгүй. Байгаа: ${shortStock.stock.toLocaleString("mn-MN")} ${shortStock.unit}`);
+        return;
+      }
+    }
     setSubmitting(true); setError("");
     const res = await fetch("/api/production/logs", {
       method:"POST", headers:{"Content-Type":"application/json"},
@@ -962,6 +999,7 @@ export default function ProductionPage() {
         operator: workerInfo.trim() || null,
         density: densityValue,
         note: note || null,
+        materialUsage,
         equipmentTelemetry: telemetry,
       }),
     });
@@ -975,7 +1013,9 @@ export default function ProductionPage() {
     }
     const firstTelemetry = savedLog?.telemetryLogs?.[0];
     setToastMessage(`${productName.replace("ANDO-", "")} үйлдвэрлэл бүртгэгдлээ — ${firstTelemetry?.equipment?.name ?? telemetry[0].equipmentName} ${firstTelemetry?.rpm ?? telemetry[0].rpm} rpm`);
-    setModal(false); setSubmitting(false); setAmount(""); setWorkerInfo(""); setDensity(""); setNote(""); resetEquipmentRows(productName);
+    setModal(false); setSubmitting(false); setAmount(""); setWorkerInfo(""); setDensity(""); setNote("");
+    setIntermediateMaterialUsage(Object.fromEntries(INTERMEDIATE_EXPLOSIVE_INPUTS.map((materialName) => [materialName, ""])));
+    resetEquipmentRows(productName);
     if (savedLog) {
       await mutateLogs((current) => ({
         ...(current ?? {}),
@@ -2000,12 +2040,37 @@ export default function ProductionPage() {
             <form onSubmit={submitLog}>
               <div className="production-log-form-grid">
                 <div className="fg"><label>Бүтээгдэхүүн</label>
-                  <select value={productName} onChange={e=>{ const next = e.target.value as (typeof PRODUCTS)[number]; setProductName(next); resetEquipmentRows(next); }}>
+                  <select value={productName} onChange={e=>{ const next = e.target.value as (typeof PRODUCTS)[number]; setProductName(next); setIntermediateMaterialUsage(Object.fromEntries(INTERMEDIATE_EXPLOSIVE_INPUTS.map((materialName) => [materialName, ""]))); resetEquipmentRows(next); }}>
                     {PRODUCTS.map(p=><option key={p} value={p}>{p}</option>)}
                   </select>
                 </div>
                 <div className="fg"><label>Материал</label>
-                  {recipePreview.length > 0 ? (
+                  {isIntermediateExplosiveProduct(productName) ? (
+                    <div style={{ display: "grid", gap: 8, padding: "10px 12px", borderRadius: 10, border: "1px solid rgba(34,211,238,0.22)", background: "rgba(8,16,31,0.52)" }}>
+                      {intermediateUsagePreview.map((item) => {
+                        const enough = item.required <= 0 || item.stock >= item.required;
+                        return (
+                          <label key={item.materialName} style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) 112px", alignItems: "center", gap: 8 }}>
+                            <span style={{ display: "grid", gap: 2 }}>
+                              <strong style={{ color: "var(--text)", fontSize: 11 }}>{item.materialName}</strong>
+                              <small style={{ color: enough ? "var(--muted)" : "#F87171", fontSize: 10 }}>
+                                Үлдэгдэл: {item.stock.toLocaleString("mn-MN")} {item.unit}
+                              </small>
+                            </span>
+                            <input
+                              type="number"
+                              min="0"
+                              step="0.1"
+                              value={intermediateMaterialUsage[item.materialName] ?? ""}
+                              onChange={(event) => updateIntermediateMaterialUsage(item.materialName, event.target.value)}
+                              placeholder="кг"
+                              style={{ minWidth: 0 }}
+                            />
+                          </label>
+                        );
+                      })}
+                    </div>
+                  ) : recipePreview.length > 0 ? (
                     <div style={{ display: "grid", gap: 6, padding: "10px 12px", borderRadius: 10, border: "1px solid rgba(34,211,238,0.22)", background: "rgba(8,16,31,0.52)" }}>
                       {recipePreview.map((item) => {
                         const enough = item.required <= 0 || item.stock >= item.required;

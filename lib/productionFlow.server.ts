@@ -3,7 +3,11 @@ import {
   FINISHED_PRODUCT_CATEGORY,
   FINISHED_PRODUCT_LOCATION,
   getProductRecipe,
+  INTERMEDIATE_EXPLOSIVE_INPUTS,
+  INTERMEDIATE_EXPLOSIVE_PRODUCT,
   isFinishedProduct,
+  isIntermediateExplosiveProduct,
+  normalizeProductName,
   RAW_MATERIAL_CATEGORY,
   RAW_MATERIAL_LIMITS,
   STOCK_UNIT_KG,
@@ -29,6 +33,16 @@ function flowMarker(kind: "production" | "transport", id: string) {
 
 function limitForMaterial(materialName: string) {
   return RAW_MATERIAL_LIMITS.find((material) => material.name === materialName)?.maximumStock ?? 0;
+}
+
+function sourceDefaults(materialName: string) {
+  const isIntermediateSource = normalizeProductName(materialName) === normalizeProductName(INTERMEDIATE_EXPLOSIVE_PRODUCT);
+  return {
+    category: isIntermediateSource ? FINISHED_PRODUCT_CATEGORY : RAW_MATERIAL_CATEGORY,
+    unit: STOCK_UNIT_KG,
+    location: isIntermediateSource ? FINISHED_PRODUCT_LOCATION : RAW_MATERIAL_CATEGORY,
+    maximumStock: isIntermediateSource ? 0 : limitForMaterial(materialName),
+  };
 }
 
 async function ensureMaterial(
@@ -64,14 +78,14 @@ export async function getProductionRelationMaterialId(
 ) {
   if (materialId) return materialId;
 
+  if (productName && isIntermediateExplosiveProduct(productName)) {
+    const material = await ensureMaterial(tx, INTERMEDIATE_EXPLOSIVE_INPUTS[0], sourceDefaults(INTERMEDIATE_EXPLOSIVE_INPUTS[0]));
+    return material.id;
+  }
+
   const firstRecipeItem = productName ? getProductRecipe(productName)[0] : null;
   if (firstRecipeItem) {
-    const material = await ensureMaterial(tx, firstRecipeItem.materialName, {
-      category: RAW_MATERIAL_CATEGORY,
-      unit: STOCK_UNIT_KG,
-      maximumStock: limitForMaterial(firstRecipeItem.materialName),
-      location: RAW_MATERIAL_CATEGORY,
-    });
+    const material = await ensureMaterial(tx, firstRecipeItem.materialName, sourceDefaults(firstRecipeItem.materialName));
     return material.id;
   }
 
@@ -92,21 +106,22 @@ export async function applyProductionStockFlow(
     outputQuantity: number;
     productionDate: Date;
     userId: string;
+    materialUsage?: Array<{ materialName: string; quantity: number }>;
   }
 ) {
   const marker = flowMarker("production", input.productionLogId);
-  const recipe = getProductRecipe(input.productName);
+  const recipe = input.materialUsage?.length
+    ? input.materialUsage.map((item) => ({ materialName: item.materialName, requiredQuantity: roundStock(item.quantity) }))
+    : getProductRecipe(input.productName).map((item) => ({
+        materialName: item.materialName,
+        requiredQuantity: roundStock(input.outputQuantity * item.quantityPerKg),
+      }));
 
   for (const item of recipe) {
-    const requiredQuantity = roundStock(input.outputQuantity * item.quantityPerKg);
+    const requiredQuantity = item.requiredQuantity;
     if (requiredQuantity <= 0) continue;
 
-    const material = await ensureMaterial(tx, item.materialName, {
-      category: RAW_MATERIAL_CATEGORY,
-      unit: STOCK_UNIT_KG,
-      maximumStock: limitForMaterial(item.materialName),
-      location: RAW_MATERIAL_CATEGORY,
-    });
+    const material = await ensureMaterial(tx, item.materialName, sourceDefaults(item.materialName));
 
     if (material.currentStock < requiredQuantity) {
       throw new StockFlowError(

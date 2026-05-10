@@ -26,6 +26,7 @@ export const PRODUCT_EQUIPMENT_MAP: Record<string, string[]> = {
   "ANDO-V 60MM": ["Mono pump", "Final mixer"],
   "ANDO-V 90MM": ["Mono pump", "Final mixer"],
   "ANDO-V 120MM": ["Mono pump", "Final mixer"],
+  "ҮЙЛ ТЭСРЭХ": ["Solution pump", "Oil mixer"],
   "EV 25MM": ["Solution pump"],
   "EV 32MM": ["Solution pump"],
   "SPLIT 38MM": ["Solution pump", "Final mixer"],

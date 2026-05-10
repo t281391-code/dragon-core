@@ -2,6 +2,7 @@ export const RAW_MATERIAL_CATEGORY = "Агуулах";
 export const FINISHED_PRODUCT_CATEGORY = "Бэлэн бүтээгдэхүүн";
 export const FINISHED_PRODUCT_LOCATION = "Үйлдвэрийн бэлэн бүтээгдэхүүн";
 export const STOCK_UNIT_KG = "кг";
+export const INTERMEDIATE_EXPLOSIVE_PRODUCT = "ҮЙЛ ТЭСРЭХ";
 
 export const RAW_MATERIAL_LIMITS = [
   { name: "АМИАКИЙН ШҮҮ", maximumStock: 500_000 },
@@ -22,17 +23,11 @@ export type ProductRecipeItem = {
 };
 
 const V_RECIPE: ProductRecipeItem[] = [
-  { materialName: "АМИАКИЙН ШҮҮ", quantityPerKg: 0.88 },
-  { materialName: "ТҮЛШ", quantityPerKg: 0.06 },
-  { materialName: "ЦАГААН ТОС", quantityPerKg: 0.04 },
-  { materialName: "ЭМУЛЬГАТОР", quantityPerKg: 0.02 },
+  { materialName: INTERMEDIATE_EXPLOSIVE_PRODUCT, quantityPerKg: 1 },
 ];
 
 const EV_RECIPE: ProductRecipeItem[] = [
-  { materialName: "АМИАКИЙН ШҮҮ", quantityPerKg: 0.82 },
-  { materialName: "ЭМУЛЬГАТОР", quantityPerKg: 0.08 },
-  { materialName: "ЦАГААН ТОС", quantityPerKg: 0.06 },
-  { materialName: "ХАТУУРУУЛАГЧ", quantityPerKg: 0.04 },
+  { materialName: INTERMEDIATE_EXPLOSIVE_PRODUCT, quantityPerKg: 1 },
 ];
 
 const SPLIT_RECIPE: ProductRecipeItem[] = [
@@ -50,6 +45,16 @@ export const PRODUCT_RECIPES: Record<string, ProductRecipeItem[]> = {
   "ANDO-EV 32MM": EV_RECIPE,
   "ANDO-SPLIT 38MM": SPLIT_RECIPE,
 };
+
+export const INTERMEDIATE_EXPLOSIVE_INPUTS = [
+  "АМИАКИЙН ШҮҮ",
+  "ЦАГААН ТОС",
+  "ЭМУЛЬГАТОР",
+] as const;
+
+export function isIntermediateExplosiveProduct(productName: string) {
+  return normalizeProductName(productName) === normalizeProductName(INTERMEDIATE_EXPLOSIVE_PRODUCT);
+}
 
 export function normalizeProductName(productName: string) {
   return productName.trim().toUpperCase().replace(/\s+/g, " ");
