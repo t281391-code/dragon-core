@@ -24,12 +24,19 @@ function homeFor(role: string, department: string): string {
 export default function LoginPage() {
   const router = useRouter();
   const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
   const [loginErr, setLoginErr] = useState("");
   const [loginLoading, setLoginLoading] = useState(false);
 
   async function submitLogin(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    const form = event.currentTarget;
+    const formData = new FormData(form);
+    const submittedEmail = String(formData.get("email") ?? "").trim();
+    const submittedPassword = String(formData.get("password") ?? "");
+    const website = String(formData.get("website") ?? "");
+    const passwordInput = form.elements.namedItem("password") as HTMLInputElement | null;
+    if (passwordInput) passwordInput.value = "";
+
     setLoginErr("");
     setLoginLoading(true);
 
@@ -38,9 +45,9 @@ export default function LoginPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          email,
-          password,
-          website: String(new FormData(event.currentTarget).get("website") ?? ""),
+          email: submittedEmail,
+          password: submittedPassword,
+          website,
         }),
       });
       const data = await response.json();
@@ -84,6 +91,7 @@ export default function LoginPage() {
                 <span>И-мэйл</span>
                 <input
                   type="email"
+                  name="email"
                   value={email}
                   onChange={(event) => setEmail(event.target.value)}
                   placeholder="name@company.com"
@@ -96,11 +104,12 @@ export default function LoginPage() {
                 <span>Нууц үг</span>
                 <input
                   type="password"
-                  value={password}
-                  onChange={(event) => setPassword(event.target.value)}
+                  name="password"
                   placeholder="Нууц үгээ оруулна уу"
                   required
                   autoComplete="current-password"
+                  autoCorrect="off"
+                  spellCheck={false}
                 />
               </label>
 

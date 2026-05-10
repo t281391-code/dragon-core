@@ -953,7 +953,7 @@ export default function Home() {
                 enableMouseParallax
                 enableManualRotation
                 enableHoverRotation
-                enableManualZoom
+                enableManualZoom={false}
                 ambientIntensity={0.6}
                 keyLightIntensity={2.2}
                 fillLightIntensity={0.58}
