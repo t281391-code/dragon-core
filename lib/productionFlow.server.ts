@@ -3,11 +3,7 @@ import {
   FINISHED_PRODUCT_CATEGORY,
   FINISHED_PRODUCT_LOCATION,
   getProductRecipe,
-  INTERMEDIATE_EXPLOSIVE_INPUTS,
-  INTERMEDIATE_EXPLOSIVE_PRODUCT,
   isFinishedProduct,
-  isIntermediateExplosiveProduct,
-  normalizeProductName,
   RAW_MATERIAL_CATEGORY,
   RAW_MATERIAL_LIMITS,
   STOCK_UNIT_KG,
@@ -36,12 +32,11 @@ function limitForMaterial(materialName: string) {
 }
 
 function sourceDefaults(materialName: string) {
-  const isIntermediateSource = normalizeProductName(materialName) === normalizeProductName(INTERMEDIATE_EXPLOSIVE_PRODUCT);
   return {
-    category: isIntermediateSource ? FINISHED_PRODUCT_CATEGORY : RAW_MATERIAL_CATEGORY,
+    category: RAW_MATERIAL_CATEGORY,
     unit: STOCK_UNIT_KG,
-    location: isIntermediateSource ? FINISHED_PRODUCT_LOCATION : RAW_MATERIAL_CATEGORY,
-    maximumStock: isIntermediateSource ? 0 : limitForMaterial(materialName),
+    location: RAW_MATERIAL_CATEGORY,
+    maximumStock: limitForMaterial(materialName),
   };
 }
 
@@ -77,11 +72,6 @@ export async function getProductionRelationMaterialId(
   productName?: string
 ) {
   if (materialId) return materialId;
-
-  if (productName && isIntermediateExplosiveProduct(productName)) {
-    const material = await ensureMaterial(tx, INTERMEDIATE_EXPLOSIVE_INPUTS[0], sourceDefaults(INTERMEDIATE_EXPLOSIVE_INPUTS[0]));
-    return material.id;
-  }
 
   const firstRecipeItem = productName ? getProductRecipe(productName)[0] : null;
   if (firstRecipeItem) {

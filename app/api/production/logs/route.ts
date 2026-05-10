@@ -8,7 +8,7 @@ import {
   getProductionRelationMaterialId,
   StockFlowError,
 } from "@/lib/productionFlow.server";
-import { INTERMEDIATE_EXPLOSIVE_INPUTS, isIntermediateExplosiveProduct } from "@/lib/productionFlowConfig";
+import { MANUAL_EXPLOSIVE_INPUTS, requiresManualMaterialUsage } from "@/lib/productionFlowConfig";
 
 export const preferredRegion = "sin1";
 
@@ -76,8 +76,8 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Product and produced amount are required" }, { status: 400 });
   }
   const materialUsage = body.materialUsage ?? [];
-  if (isIntermediateExplosiveProduct(productName)) {
-    const requiredMaterials = new Set(INTERMEDIATE_EXPLOSIVE_INPUTS);
+  if (requiresManualMaterialUsage(productName)) {
+    const requiredMaterials = new Set(MANUAL_EXPLOSIVE_INPUTS);
     const usageMap = new Map(materialUsage.map((item) => [item.materialName, item.quantity]));
     const missingMaterial = [...requiredMaterials].find((materialName) => !usageMap.has(materialName));
     if (missingMaterial) {

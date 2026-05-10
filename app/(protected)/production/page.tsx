@@ -26,9 +26,8 @@ import { ChartHint, RealtimeBadge, REALTIME_REFRESH_MS } from "@/components/Real
 import { getDefaultEquipmentRpm, getSuggestedEquipmentNames } from "@/lib/equipmentConfig";
 import {
   getProductRecipe,
-  INTERMEDIATE_EXPLOSIVE_INPUTS,
-  INTERMEDIATE_EXPLOSIVE_PRODUCT,
-  isIntermediateExplosiveProduct,
+  MANUAL_EXPLOSIVE_INPUTS,
+  requiresManualMaterialUsage,
 } from "@/lib/productionFlowConfig";
 import { printReport } from "@/lib/reportPrint";
 
@@ -146,13 +145,11 @@ type RpmSummaryResponse = {
 };
 
 const PRODUCTS = [
-  INTERMEDIATE_EXPLOSIVE_PRODUCT,
   "ANDO-V 90MM","ANDO-V 120MM","ANDO-V 60MM",
   "ANDO-EV 32MM","ANDO-EV 25MM","ANDO-SPLIT 38MM",
 ] as const;
 
 const PRODUCT_COLORS: Record<string, string> = {
-  [INTERMEDIATE_EXPLOSIVE_PRODUCT]: "#22D3EE",
   "ANDO-V 90MM": "#10B981","ANDO-V 120MM": "#3B82F6","ANDO-V 60MM": "#F59E0B",
   "ANDO-EV 32MM": "#A78BFA","ANDO-EV 25MM": "#14B8A6","ANDO-SPLIT 38MM": "#F97316",
 };
@@ -737,8 +734,8 @@ export default function ProductionPage() {
   const [productionDate, setProductionDate] = useState(toDateTimeInputValue());
   const [amount, setAmount] = useState("");
   const [amountUnit, setAmountUnit] = useState<"kg"|"ton">("kg");
-  const [intermediateMaterialUsage, setIntermediateMaterialUsage] = useState<Record<string, string>>(() =>
-    Object.fromEntries(INTERMEDIATE_EXPLOSIVE_INPUTS.map((materialName) => [materialName, ""]))
+  const [manualMaterialUsage, setManualMaterialUsage] = useState<Record<string, string>>(() =>
+    Object.fromEntries(MANUAL_EXPLOSIVE_INPUTS.map((materialName) => [materialName, ""]))
   );
   const [destinationMine, setDestinationMine] = useState(MINE_OPTIONS[0]);
   const [workerInfo, setWorkerInfo] = useState("");
@@ -787,16 +784,16 @@ export default function ProductionPage() {
       };
     });
   }, [amount, amountUnit, materials, productName]);
-  const intermediateUsagePreview = useMemo(() => INTERMEDIATE_EXPLOSIVE_INPUTS.map((materialName) => {
+  const manualUsagePreview = useMemo(() => MANUAL_EXPLOSIVE_INPUTS.map((materialName) => {
     const material = materials.find((entry) => entry.name === materialName);
-    const required = Number(intermediateMaterialUsage[materialName] ?? "");
+    const required = Number(manualMaterialUsage[materialName] ?? "");
     return {
       materialName,
       required: Number.isFinite(required) && required > 0 ? required : 0,
       stock: material?.currentStock ?? 0,
       unit: material?.unit ?? "кг",
     };
-  }), [intermediateMaterialUsage, materials]);
+  }), [manualMaterialUsage, materials]);
   const equipmentOptions: EquipmentOption[] = useMemo(() => equipmentData?.data ?? [], [equipmentData]);
   const latestLogWithTelemetry = useMemo(
     () => [...logs]
@@ -920,8 +917,8 @@ export default function ProductionPage() {
     setEquipmentRows((rows) => rows.length > 1 ? rows.filter((row) => row.rowId !== rowId) : [createBlankEquipmentRow()]);
   }
 
-  function updateIntermediateMaterialUsage(materialName: string, value: string) {
-    setIntermediateMaterialUsage((current) => ({ ...current, [materialName]: value }));
+  function updateManualMaterialUsage(materialName: string, value: string) {
+    setManualMaterialUsage((current) => ({ ...current, [materialName]: value }));
   }
 
   function getEquipmentRowPreview(row: EquipmentRpmFormRow) {
@@ -940,7 +937,7 @@ export default function ProductionPage() {
     setWorkerInfo("");
     setDensity("");
     setNote("");
-    setIntermediateMaterialUsage(Object.fromEntries(INTERMEDIATE_EXPLOSIVE_INPUTS.map((materialName) => [materialName, ""])));
+    setManualMaterialUsage(Object.fromEntries(MANUAL_EXPLOSIVE_INPUTS.map((materialName) => [materialName, ""])));
     resetEquipmentRows(product);
     setError("");
     setModal(true);
@@ -974,13 +971,13 @@ export default function ProductionPage() {
       if (!Number.isFinite(row.maxRpm) || row.maxRpm <= 0) { setError("Max RPM утгыг зөв оруулна уу"); return; }
       if (row.rpm > row.maxRpm * 1.2) { setError("RPM утга max RPM-ээс хэт өндөр байна"); return; }
     }
-    const materialUsage = isIntermediateExplosiveProduct(productName)
-      ? intermediateUsagePreview.map((item) => ({ materialName: item.materialName, quantity: item.required }))
+    const materialUsage = requiresManualMaterialUsage(productName)
+      ? manualUsagePreview.map((item) => ({ materialName: item.materialName, quantity: item.required }))
       : [];
-    if (isIntermediateExplosiveProduct(productName)) {
+    if (requiresManualMaterialUsage(productName)) {
       const invalidUsage = materialUsage.find((item) => !Number.isFinite(item.quantity) || item.quantity <= 0);
       if (invalidUsage) { setError(`${invalidUsage.materialName} зарцуулалтыг оруулна уу`); return; }
-      const shortStock = intermediateUsagePreview.find((item) => item.required > item.stock);
+      const shortStock = manualUsagePreview.find((item) => item.required > item.stock);
       if (shortStock) {
         setError(`${shortStock.materialName} үлдэгдэл хүрэлцэхгүй. Байгаа: ${shortStock.stock.toLocaleString("mn-MN")} ${shortStock.unit}`);
         return;
@@ -1014,7 +1011,7 @@ export default function ProductionPage() {
     const firstTelemetry = savedLog?.telemetryLogs?.[0];
     setToastMessage(`${productName.replace("ANDO-", "")} үйлдвэрлэл бүртгэгдлээ — ${firstTelemetry?.equipment?.name ?? telemetry[0].equipmentName} ${firstTelemetry?.rpm ?? telemetry[0].rpm} rpm`);
     setModal(false); setSubmitting(false); setAmount(""); setWorkerInfo(""); setDensity(""); setNote("");
-    setIntermediateMaterialUsage(Object.fromEntries(INTERMEDIATE_EXPLOSIVE_INPUTS.map((materialName) => [materialName, ""])));
+    setManualMaterialUsage(Object.fromEntries(MANUAL_EXPLOSIVE_INPUTS.map((materialName) => [materialName, ""])));
     resetEquipmentRows(productName);
     if (savedLog) {
       await mutateLogs((current) => ({
@@ -2040,14 +2037,14 @@ export default function ProductionPage() {
             <form onSubmit={submitLog}>
               <div className="production-log-form-grid">
                 <div className="fg"><label>Бүтээгдэхүүн</label>
-                  <select value={productName} onChange={e=>{ const next = e.target.value as (typeof PRODUCTS)[number]; setProductName(next); setIntermediateMaterialUsage(Object.fromEntries(INTERMEDIATE_EXPLOSIVE_INPUTS.map((materialName) => [materialName, ""]))); resetEquipmentRows(next); }}>
+                  <select value={productName} onChange={e=>{ const next = e.target.value as (typeof PRODUCTS)[number]; setProductName(next); setManualMaterialUsage(Object.fromEntries(MANUAL_EXPLOSIVE_INPUTS.map((materialName) => [materialName, ""]))); resetEquipmentRows(next); }}>
                     {PRODUCTS.map(p=><option key={p} value={p}>{p}</option>)}
                   </select>
                 </div>
                 <div className="fg"><label>Материал</label>
-                  {isIntermediateExplosiveProduct(productName) ? (
+                  {requiresManualMaterialUsage(productName) ? (
                     <div style={{ display: "grid", gap: 8, padding: "10px 12px", borderRadius: 10, border: "1px solid rgba(34,211,238,0.22)", background: "rgba(8,16,31,0.52)" }}>
-                      {intermediateUsagePreview.map((item) => {
+                      {manualUsagePreview.map((item) => {
                         const enough = item.required <= 0 || item.stock >= item.required;
                         return (
                           <label key={item.materialName} style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) 112px", alignItems: "center", gap: 8 }}>
@@ -2061,8 +2058,8 @@ export default function ProductionPage() {
                               type="number"
                               min="0"
                               step="0.1"
-                              value={intermediateMaterialUsage[item.materialName] ?? ""}
-                              onChange={(event) => updateIntermediateMaterialUsage(item.materialName, event.target.value)}
+                              value={manualMaterialUsage[item.materialName] ?? ""}
+                              onChange={(event) => updateManualMaterialUsage(item.materialName, event.target.value)}
                               placeholder="кг"
                               style={{ minWidth: 0 }}
                             />
