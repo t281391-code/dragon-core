@@ -53,10 +53,43 @@ type TransportDraft = {
   vehicleInfo: string;
 };
 
+type WaybillHeader = {
+  orgName: string;
+  driverName: string;
+  equipmentModel: string;
+  plateNumber: string;
+  reportDate: string;
+  year: string;
+  month: string;
+  day: string;
+  routeNote: string;
+};
+
+type WaybillRow = {
+  id: string;
+  monthDay: string;
+  operator: string;
+  purpose: string;
+  motoStart: string;
+  motoEnd: string;
+  motoUsed: string;
+  dieselRemain: string;
+  dieselTaken: string;
+  dieselUsed: string;
+  userPosition: string;
+  userName: string;
+  signature: string;
+  note: string;
+};
+
+type WaybillHeaderField = keyof WaybillHeader;
+type WaybillRowField = Exclude<keyof WaybillRow, "id">;
+
 const ACCENT = "#3B82F6";
 const DEST_COLORS = ["#3B82F6", "#F59E0B", "#10B981", "#EF4444", "#8B5CF6"];
 const PAGE_SIZE = 20;
 const REPORT_DAYS = 14;
+const WAYBILL_ROW_COUNT = 14;
 
 const fetcher = (url: string) => fetch(url).then(r => r.json());
 
@@ -118,6 +151,66 @@ function formatShortTime(value: string | null) {
 function transportCode(transport: Transport) {
   const suffix = transport.id.replace(/[^a-z0-9]/gi, "").slice(-4).toUpperCase();
   return `TR-${suffix || "0000"}`;
+}
+
+function extractPlateNumber(vehicleInfo: string | null | undefined) {
+  return vehicleInfo?.split(/[·,|/]/)[0]?.trim() ?? "";
+}
+
+function createWaybillHeader(date: Date): WaybillHeader {
+  return {
+    orgName: "Dragon Core",
+    driverName: "",
+    equipmentModel: "",
+    plateNumber: "",
+    reportDate: toDateKey(date),
+    year: String(date.getFullYear()),
+    month: pad2(date.getMonth() + 1),
+    day: pad2(date.getDate()),
+    routeNote: "",
+  };
+}
+
+function createEmptyWaybillRows(): WaybillRow[] {
+  return Array.from({ length: WAYBILL_ROW_COUNT }, (_, index) => ({
+    id: `waybill-row-${index + 1}`,
+    monthDay: "",
+    operator: "",
+    purpose: "",
+    motoStart: "",
+    motoEnd: "",
+    motoUsed: "",
+    dieselRemain: "",
+    dieselTaken: "",
+    dieselUsed: "",
+    userPosition: "",
+    userName: "",
+    signature: "",
+    note: "",
+  }));
+}
+
+function buildWaybillRows(transports: Transport[]) {
+  const recent = [...transports]
+    .sort((a, b) => new Date(b.transportDate).getTime() - new Date(a.transportDate).getTime())
+    .slice(0, WAYBILL_ROW_COUNT)
+    .reverse();
+  const rows = createEmptyWaybillRows();
+
+  recent.forEach((transport, index) => {
+    const date = new Date(transport.transportDate);
+    rows[index] = {
+      ...rows[index],
+      monthDay: `${pad2(date.getMonth() + 1)}/${pad2(date.getDate())}`,
+      operator: transportDriverName(transport),
+      purpose: transport.destinationSite,
+      userPosition: "Хүлээн авагч",
+      userName: transport.assignedUser.fullName,
+      note: `${transportCode(transport)} · ${STATUS_LABELS[transport.status] ?? transport.status}`,
+    };
+  });
+
+  return rows;
 }
 
 function buildCalendarCells(monthDate: Date, transports: Transport[]) {
@@ -254,6 +347,9 @@ export default function LogisticsPage() {
   const [calendarMonth, setCalendarMonth] = useState(() => monthStart(toDateKey(new Date())));
   const [reportModal, setReportModal] = useState(false);
   const [reportClock, setReportClock] = useState<Date | null>(null);
+  const [waybillModal, setWaybillModal] = useState(false);
+  const [waybillHeader, setWaybillHeader] = useState<WaybillHeader>(() => createWaybillHeader(new Date()));
+  const [waybillRows, setWaybillRows] = useState<WaybillRow[]>(() => createEmptyWaybillRows());
   const [modal, setModal] = useState(false);
   const [materialId, setMaterialId] = useState("");
   const [materialName, setMaterialName] = useState("");
@@ -294,7 +390,7 @@ export default function LogisticsPage() {
   );
   const loading = transportsLoading;
 
-  useEscapeClose(Boolean(calendarPopupDate || reportModal || modal), () => {
+  useEscapeClose(Boolean(calendarPopupDate || reportModal || waybillModal || modal), () => {
     if (calendarPopupDate) {
       setCalendarPopupDate(null);
       return;
@@ -302,6 +398,11 @@ export default function LogisticsPage() {
 
     if (reportModal) {
       setReportModal(false);
+      return;
+    }
+
+    if (waybillModal) {
+      setWaybillModal(false);
       return;
     }
 
@@ -365,6 +466,35 @@ export default function LogisticsPage() {
   function openReportModal() {
     setReportClock(new Date());
     setReportModal(true);
+  }
+
+  function openWaybillModal() {
+    const now = new Date();
+    const latestTransport = [...transports].sort((a, b) => new Date(b.transportDate).getTime() - new Date(a.transportDate).getTime())[0];
+    setWaybillHeader((current) => ({
+      ...current,
+      orgName: current.orgName || "Dragon Core",
+      driverName: latestTransport ? transportDriverName(latestTransport) : current.driverName,
+      equipmentModel: latestTransport?.vehicleInfo ?? current.equipmentModel,
+      plateNumber: extractPlateNumber(latestTransport?.vehicleInfo) || current.plateNumber,
+      routeNote: latestTransport?.destinationSite ?? current.routeNote,
+      reportDate: toDateKey(now),
+      year: String(now.getFullYear()),
+      month: pad2(now.getMonth() + 1),
+      day: pad2(now.getDate()),
+    }));
+    setWaybillRows(buildWaybillRows(transports));
+    setWaybillModal(true);
+  }
+
+  function updateWaybillHeader(field: WaybillHeaderField, value: string) {
+    setWaybillHeader((current) => ({ ...current, [field]: value }));
+  }
+
+  function updateWaybillRow(rowId: string, field: WaybillRowField, value: string) {
+    setWaybillRows((currentRows) => currentRows.map((row) => (
+      row.id === rowId ? { ...row, [field]: value } : row
+    )));
   }
 
   function getTransportDraft(transport: Transport) {
@@ -1066,7 +1196,8 @@ export default function LogisticsPage() {
               <div className="panel-hdr"><div className="panel-title">Үйлдэл</div></div>
               <div style={{ padding: "4px 20px 16px", display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
                 {[
-                  { icon: "🚛", label: "Transport нэмэх" },
+                  { icon: "🚛", label: "Transport нэмэх", onClick: () => setModal(true) },
+                  { icon: "🧾", label: "Замын хуудас", onClick: openWaybillModal },
                   { icon: "📋", label: "Тайлан гаргах", onClick: openReportModal },
                   { icon: "🗺️", label: "Маршрут харах" },
                   { icon: "🔄", label: "Шинэчлэх", onClick: () => { void mutateTransports(); } },
@@ -1104,6 +1235,119 @@ export default function LogisticsPage() {
           </div>
         </div>
       </div>
+
+      {waybillModal ? (
+        <div
+          className="mo open"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="logistics-waybill-title"
+          onClick={(event) => event.target === event.currentTarget && setWaybillModal(false)}
+        >
+          <div className="mc report-print-root logistics-waybill-print" onClick={(event) => event.stopPropagation()}>
+            <div className="waybill-modal-head print-hidden">
+              <div>
+                <div className="panel-sub">Тээвэрлэлтийн замын хуудас</div>
+                <h3 id="logistics-waybill-title">Техник ашиглалтын тооцооны хуудас</h3>
+              </div>
+              <div className="report-print-actions waybill-actions">
+                <button className="btn bp" type="button" onClick={printReport}>PDF татах</button>
+                <button className="btn bo2" type="button" onClick={() => setWaybillRows(createEmptyWaybillRows())}>Хүснэгт цэвэрлэх</button>
+                <button className="mx" type="button" aria-label="Замын хуудас хаах" onClick={() => setWaybillModal(false)}>×</button>
+              </div>
+            </div>
+
+            <div className="waybill-scroll">
+              <section className="waybill-sheet">
+                <table className="waybill-table" aria-label="Техник ашиглалтын тооцооны хуудас">
+                  <thead>
+                    <tr>
+                      <th className="waybill-title" colSpan={14}>ТЕХНИК АШИГЛАЛТЫН ТООЦООНЫ ХУУДАС</th>
+                    </tr>
+                    <tr>
+                      <th colSpan={2}>Байгууллагын нэр</th>
+                      <td colSpan={2}>
+                        <input className="waybill-input" value={waybillHeader.orgName} onChange={(event) => updateWaybillHeader("orgName", event.target.value)} />
+                      </td>
+                      <th colSpan={2}>Жолоочийн нэр</th>
+                      <td colSpan={2}>
+                        <input className="waybill-input" value={waybillHeader.driverName} onChange={(event) => updateWaybillHeader("driverName", event.target.value)} />
+                      </td>
+                      <th>он</th>
+                      <td><input className="waybill-input" value={waybillHeader.year} onChange={(event) => updateWaybillHeader("year", event.target.value)} /></td>
+                      <th>сар</th>
+                      <td><input className="waybill-input" value={waybillHeader.month} onChange={(event) => updateWaybillHeader("month", event.target.value)} /></td>
+                      <th>өдөр</th>
+                      <td><input className="waybill-input" value={waybillHeader.day} onChange={(event) => updateWaybillHeader("day", event.target.value)} /></td>
+                    </tr>
+                    <tr>
+                      <th colSpan={2}>Техникийн марк</th>
+                      <td colSpan={4}>
+                        <input className="waybill-input" value={waybillHeader.equipmentModel} onChange={(event) => updateWaybillHeader("equipmentModel", event.target.value)} />
+                      </td>
+                      <th colSpan={2} rowSpan={2}>Тайлан гаргасан огноо</th>
+                      <td colSpan={2} rowSpan={2}>
+                        <input className="waybill-input" value={waybillHeader.reportDate} onChange={(event) => updateWaybillHeader("reportDate", event.target.value)} />
+                      </td>
+                      <th colSpan={4}>Тайлбар</th>
+                    </tr>
+                    <tr>
+                      <th colSpan={2}>Улсын дугаар</th>
+                      <td colSpan={4}>
+                        <input className="waybill-input" value={waybillHeader.plateNumber} onChange={(event) => updateWaybillHeader("plateNumber", event.target.value)} />
+                      </td>
+                      <td colSpan={4}>
+                        <input className="waybill-input" value={waybillHeader.routeNote} onChange={(event) => updateWaybillHeader("routeNote", event.target.value)} />
+                      </td>
+                    </tr>
+                    <tr>
+                      <th rowSpan={2} className="waybill-col-no">№</th>
+                      <th rowSpan={2}>сар<br />өдөр</th>
+                      <th rowSpan={2}>Оператор</th>
+                      <th rowSpan={2}>Ажлын зорилго</th>
+                      <th colSpan={2}>Мото/Цаг</th>
+                      <th rowSpan={2}>Ашигласан<br />мото цаг</th>
+                      <th colSpan={3}>Дизель түлш</th>
+                      <th colSpan={3}>Хэрэглэгчийн</th>
+                      <th rowSpan={2}>Тайлбар</th>
+                    </tr>
+                    <tr>
+                      <th>эхэлсэн</th>
+                      <th>дууссан</th>
+                      <th>үлдэгдэл</th>
+                      <th>авсан</th>
+                      <th>зарцуулсан</th>
+                      <th>албан тушаал</th>
+                      <th>нэр</th>
+                      <th>гарын үсэг</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {waybillRows.map((row, index) => (
+                      <tr key={row.id}>
+                        <th className="waybill-row-no">{index + 1}</th>
+                        <td><input className="waybill-input" value={row.monthDay} onChange={(event) => updateWaybillRow(row.id, "monthDay", event.target.value)} /></td>
+                        <td><input className="waybill-input" value={row.operator} onChange={(event) => updateWaybillRow(row.id, "operator", event.target.value)} /></td>
+                        <td><input className="waybill-input" value={row.purpose} onChange={(event) => updateWaybillRow(row.id, "purpose", event.target.value)} /></td>
+                        <td><input className="waybill-input" value={row.motoStart} onChange={(event) => updateWaybillRow(row.id, "motoStart", event.target.value)} /></td>
+                        <td><input className="waybill-input" value={row.motoEnd} onChange={(event) => updateWaybillRow(row.id, "motoEnd", event.target.value)} /></td>
+                        <td><input className="waybill-input" value={row.motoUsed} onChange={(event) => updateWaybillRow(row.id, "motoUsed", event.target.value)} /></td>
+                        <td><input className="waybill-input" value={row.dieselRemain} onChange={(event) => updateWaybillRow(row.id, "dieselRemain", event.target.value)} /></td>
+                        <td><input className="waybill-input" value={row.dieselTaken} onChange={(event) => updateWaybillRow(row.id, "dieselTaken", event.target.value)} /></td>
+                        <td><input className="waybill-input" value={row.dieselUsed} onChange={(event) => updateWaybillRow(row.id, "dieselUsed", event.target.value)} /></td>
+                        <td><input className="waybill-input" value={row.userPosition} onChange={(event) => updateWaybillRow(row.id, "userPosition", event.target.value)} /></td>
+                        <td><input className="waybill-input" value={row.userName} onChange={(event) => updateWaybillRow(row.id, "userName", event.target.value)} /></td>
+                        <td><input className="waybill-input" value={row.signature} onChange={(event) => updateWaybillRow(row.id, "signature", event.target.value)} /></td>
+                        <td><input className="waybill-input" value={row.note} onChange={(event) => updateWaybillRow(row.id, "note", event.target.value)} /></td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </section>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       {reportModal ? (
         <div

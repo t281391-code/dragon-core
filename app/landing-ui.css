@@ -264,6 +264,9 @@ html {
   display: grid;
   place-items: center;
   padding: 1.5rem;
+  overflow: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
 }
 
 .login-modal__backdrop {
@@ -283,9 +286,11 @@ html {
   display: grid;
   place-items: center;
   width: min(100%, 33rem);
-  min-height: 40rem;
+  min-height: min(40rem, calc(100dvh - 3rem));
+  max-height: calc(100dvh - 3rem);
   padding: 3rem 2.1rem 2.7rem;
-  overflow: hidden;
+  overflow: auto;
+  overscroll-behavior: contain;
   border: 1px solid rgba(116, 202, 255, 0.2);
   border-radius: 1.6rem;
   background:
@@ -1428,15 +1433,33 @@ html {
 }
 
 .branch-detail-overlay--touch {
-  inset: 0;
+  position: fixed !important;
+  inset: 0 !important;
+  z-index: 160;
+  padding: 1rem;
+  overflow-y: auto;
+  background: rgba(2, 8, 18, 0.64);
+  backdrop-filter: blur(12px);
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
 }
 
 .branch-detail-overlay--touch .branch-detail-frame--overlay {
+  width: min(26rem, 100%) !important;
+  max-height: calc(100dvh - 2rem);
+  margin: auto;
   transform: translate(0, 0.7rem);
 }
 
 .branch-detail-overlay--touch.branch-detail-overlay--open .branch-detail-frame--overlay {
   transform: translate(0, 0);
+}
+
+.branch-detail-overlay--touch .branch-detail-card--overlay {
+  max-height: calc(100dvh - 2rem) !important;
+  overflow-y: auto !important;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
 }
 
 .branch-detail-card--modal {
@@ -2301,6 +2324,9 @@ html {
   display: grid;
   place-items: center;
   padding: 1.1rem;
+  overflow: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
 }
 
 .dashboard-preview-modal__backdrop {
@@ -2315,10 +2341,12 @@ html {
 .dashboard-preview-modal__panel {
   position: relative;
   z-index: 1;
+  box-sizing: border-box;
   width: min(100%, 92rem);
-  max-height: calc(100vh - 2.2rem);
+  max-height: calc(100dvh - 2.2rem);
   padding: 1.35rem;
   overflow: auto;
+  overscroll-behavior: contain;
   border: 1px solid rgba(148, 220, 255, 0.22);
   border-radius: 1.6rem;
   background:
@@ -3062,7 +3090,8 @@ html {
 
   .login-modal__panel {
     width: min(100%, 29rem);
-    min-height: 31rem;
+    min-height: min(31rem, calc(100dvh - 2rem));
+    max-height: calc(100dvh - 2rem);
     padding: 2rem 1.5rem 1.6rem;
   }
 
@@ -3270,7 +3299,7 @@ html {
   }
 
   .dashboard-preview-modal__panel {
-    max-height: calc(100vh - 1.5rem);
+    max-height: calc(100dvh - 1.5rem);
     padding: 0.85rem;
     border-radius: 1rem;
   }
@@ -3450,7 +3479,8 @@ html {
   }
 
   .login-modal__panel {
-    min-height: 32rem;
+    min-height: min(32rem, calc(100dvh - 1.5rem));
+    max-height: calc(100dvh - 1.5rem);
     padding: 2.4rem 1.1rem 1.6rem;
     border-radius: 1.2rem;
   }

@@ -363,6 +363,7 @@ function AddParticipantModal({
       }}
     >
       <div
+        className="mc shift-compact-modal"
         onClick={(e) => e.stopPropagation()}
         style={{
           background: "var(--base2)", border: "1px solid var(--border)",
@@ -685,6 +686,7 @@ function ArchiveModal({
 
   return (
     <div
+      className="mo open"
       onClick={onClose}
       style={{
         position: "fixed", inset: 0, zIndex: 1000,
@@ -693,6 +695,7 @@ function ArchiveModal({
       }}
     >
       <div
+        className="mc shift-archive-modal"
         onClick={(e) => e.stopPropagation()}
         style={{
           width: 980, maxWidth: "96vw", maxHeight: "88vh",
@@ -1344,6 +1347,7 @@ export default function ShiftsPage() {
 
       {overtimeEditor && (
         <div
+          className="mo open"
           onClick={() => setOvertimeEditor(null)}
           style={{
             position: "fixed", inset: 0, zIndex: 1000,
@@ -1352,6 +1356,7 @@ export default function ShiftsPage() {
           }}
         >
           <form
+            className="mc shift-compact-modal"
             onClick={(e) => e.stopPropagation()}
             onSubmit={(e) => { e.preventDefault(); void saveOvertimeEditor(); }}
             style={{

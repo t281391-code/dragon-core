@@ -1822,11 +1822,14 @@ input[type="date"] {
   display: none;
   position: fixed;
   inset: 0;
-  z-index: 60;
+  z-index: 1000;
   align-items: center;
   justify-content: center;
   background: rgba(3, 7, 18, 0.72);
   padding: 20px;
+  overflow: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
 }
 
 .mo.open {
@@ -1834,14 +1837,40 @@ input[type="date"] {
 }
 
 .mc {
+  box-sizing: border-box;
   width: min(560px, 100%);
   max-height: calc(100vh - 40px);
+  max-height: calc(100dvh - 40px);
   overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+  -webkit-overflow-scrolling: touch;
   background: linear-gradient(180deg, #1d2743 0%, #182238 100%);
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 18px;
   padding: 24px;
   box-shadow: 0 28px 80px rgba(0, 0, 0, 0.42);
+}
+
+.mo.open > .mc,
+.mo.open > :not(.mc) {
+  max-width: calc(100vw - 40px) !important;
+  max-height: calc(100dvh - 40px) !important;
+  margin: auto 0;
+  overflow-y: auto !important;
+  overscroll-behavior: contain;
+  box-sizing: border-box;
+  -webkit-overflow-scrolling: touch;
+}
+
+.mo.open > .mc {
+  overflow-x: hidden;
+}
+
+.mc *,
+.mo.open > :not(.mc) * {
+  min-width: 0;
+  box-sizing: border-box;
 }
 
 .production-log-modal {
@@ -2326,6 +2355,117 @@ input[type="date"] {
   background: rgba(59, 130, 246, 0.18);
 }
 
+.logistics-waybill-print {
+  width: min(1180px, calc(100vw - 24px));
+  padding: 0;
+  background: #f8fafc;
+}
+
+.waybill-modal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 16px 18px;
+  border-bottom: 1px solid var(--border);
+  background: linear-gradient(180deg, rgba(29, 42, 73, 0.96), rgba(22, 33, 61, 0.98));
+}
+
+.waybill-modal-head h3 {
+  margin: 3px 0 0;
+  color: var(--text);
+  font-size: 16px;
+  font-weight: 900;
+}
+
+.waybill-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.waybill-scroll {
+  max-width: 100%;
+  overflow: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.waybill-sheet {
+  width: 1120px;
+  min-height: 760px;
+  padding: 0;
+  background: #ffffff;
+  color: #000000;
+}
+
+.waybill-table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+  font-family: "Times New Roman", Times, serif;
+  color: #000000;
+}
+
+.waybill-table th,
+.waybill-table td {
+  height: 31px;
+  border: 1px solid #000000;
+  padding: 0;
+  background: #ffffff;
+  color: #000000;
+  text-align: center;
+  vertical-align: middle;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.15;
+}
+
+.waybill-table thead th {
+  background: #92d050;
+}
+
+.waybill-title {
+  height: 26px !important;
+  font-size: 20px !important;
+  font-weight: 900 !important;
+  letter-spacing: 0 !important;
+}
+
+.waybill-col-no {
+  width: 28px;
+}
+
+.waybill-row-no {
+  background: #ffffff !important;
+  font-size: 13px !important;
+}
+
+.waybill-input {
+  display: block;
+  width: 100%;
+  height: 30px;
+  margin: 0;
+  padding: 0 5px;
+  border: 0;
+  border-radius: 0;
+  outline: none;
+  background: transparent;
+  color: #000000;
+  text-align: center;
+  font: 700 12px/1.15 "Times New Roman", Times, serif;
+}
+
+.waybill-input:focus {
+  background: rgba(146, 208, 80, 0.18);
+  box-shadow: inset 0 0 0 1px #22c55e;
+}
+
+.waybill-table tbody tr:nth-child(n) td {
+  height: 31px;
+}
+
 .department-shifts {
   --accent: #06b6d4;
   --accent-glow: rgba(6, 182, 212, 0.18);
@@ -2613,6 +2753,15 @@ input[type="date"] {
   max-height: calc(100dvh - 24px);
   padding: 0;
   overflow-y: auto;
+}
+
+.shift-compact-modal {
+  max-height: calc(100dvh - 24px) !important;
+  overflow-y: auto !important;
+}
+
+.shift-archive-modal {
+  max-height: calc(100dvh - 24px) !important;
 }
 
 .shift-report-print {
@@ -3862,11 +4011,12 @@ body.theme-light .empty-row td {
   }
 
   .mc {
-    width: min(100%, calc(100vw - 84px)) !important;
-    max-width: calc(100vw - 84px) !important;
-    max-height: calc(100dvh - 24px);
+    width: min(100%, calc(100vw - 24px)) !important;
+    max-width: calc(100vw - 24px) !important;
+    max-height: calc(100dvh - 24px) !important;
     padding: 16px;
     overflow-x: hidden;
+    overflow-y: auto !important;
   }
 
   .mc [style*="grid-template-columns"] {
@@ -3880,6 +4030,56 @@ body.theme-light .empty-row td {
   .mc div:has(> table) {
     overflow-x: auto !important;
     -webkit-overflow-scrolling: touch;
+  }
+
+  .shift-archive-modal {
+    display: flex !important;
+    flex-direction: column;
+  }
+
+  .shift-archive-modal > aside {
+    max-height: 210px;
+    border-right: 0 !important;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .mo {
+    align-items: flex-start;
+    padding: 12px;
+  }
+
+  .mo.open > .mc,
+  .mo.open > :not(.mc) {
+    max-width: calc(100vw - 24px) !important;
+    max-height: calc(100dvh - 24px) !important;
+    margin: auto 0;
+  }
+
+  .mh {
+    align-items: flex-start;
+  }
+
+  .mf {
+    flex-wrap: wrap;
+  }
+
+  .mf .btn,
+  .report-print-actions .btn {
+    flex: 1 1 130px;
+    min-height: 40px;
+  }
+
+  .waybill-modal-head {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .waybill-actions {
+    justify-content: stretch;
+  }
+
+  .waybill-actions .btn {
+    flex: 1 1 150px;
   }
 
   .topbar {
@@ -3897,6 +4097,31 @@ body.theme-light .empty-row td {
   .mat-footer,
   .fr2 {
     grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 560px) {
+  .mo {
+    padding: 8px;
+  }
+
+  .mc {
+    width: calc(100vw - 16px) !important;
+    max-width: calc(100vw - 16px) !important;
+    max-height: calc(100dvh - 16px) !important;
+    border-radius: 14px;
+    padding: 14px;
+  }
+
+  .mo.open > .mc,
+  .mo.open > :not(.mc) {
+    max-width: calc(100vw - 16px) !important;
+    max-height: calc(100dvh - 16px) !important;
+  }
+
+  .mh {
+    gap: 10px;
+    margin-bottom: 14px;
   }
 }
 
@@ -4792,6 +5017,74 @@ body.theme-light .agent-chat {
     border: 1px solid #d1d5db !important;
     background: #ffffff !important;
     color: #111827 !important;
+  }
+
+  .logistics-waybill-print,
+  .logistics-waybill-print * {
+    font-family: "Times New Roman", Times, serif !important;
+    letter-spacing: 0 !important;
+    color: #000000 !important;
+    text-rendering: optimizeLegibility;
+  }
+
+  .logistics-waybill-print {
+    padding: 0 !important;
+  }
+
+  .logistics-waybill-print .waybill-scroll,
+  .logistics-waybill-print .waybill-sheet {
+    width: 100% !important;
+    min-height: 0 !important;
+    overflow: visible !important;
+    background: #ffffff !important;
+  }
+
+  .logistics-waybill-print .waybill-table {
+    width: 100% !important;
+    min-width: 0 !important;
+    table-layout: fixed !important;
+    border-collapse: collapse !important;
+  }
+
+  .logistics-waybill-print .waybill-table th,
+  .logistics-waybill-print .waybill-table td {
+    height: 25px !important;
+    border: 1px solid #000000 !important;
+    padding: 0 !important;
+    background: #ffffff !important;
+    color: #000000 !important;
+    font-size: 9px !important;
+    line-height: 1.1 !important;
+    text-align: center !important;
+    vertical-align: middle !important;
+  }
+
+  .logistics-waybill-print .waybill-table thead th,
+  .logistics-waybill-print .waybill-title {
+    background: #92d050 !important;
+    color: #000000 !important;
+  }
+
+  .logistics-waybill-print .waybill-title {
+    height: 22px !important;
+    font-size: 16px !important;
+    font-weight: 900 !important;
+  }
+
+  .logistics-waybill-print .waybill-row-no {
+    background: #ffffff !important;
+  }
+
+  .logistics-waybill-print .waybill-input {
+    height: 24px !important;
+    padding: 0 2px !important;
+    border: 0 !important;
+    background: transparent !important;
+    color: #000000 !important;
+    font-size: 9px !important;
+    font-weight: 700 !important;
+    text-align: center !important;
+    box-shadow: none !important;
   }
 
   .production-report-print,

@@ -11,6 +11,33 @@ export function printReport() {
   document.getElementById("report-print-style")?.remove();
 
   const clone = source.cloneNode(true) as HTMLElement;
+  const sourceControls = source.querySelectorAll<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>("input, textarea, select");
+  const cloneControls = clone.querySelectorAll<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>("input, textarea, select");
+  sourceControls.forEach((control, index) => {
+    const clonedControl = cloneControls[index];
+    if (!clonedControl) return;
+
+    if (control instanceof HTMLInputElement && clonedControl instanceof HTMLInputElement) {
+      clonedControl.value = control.value;
+      clonedControl.setAttribute("value", control.value);
+      if (control.checked) clonedControl.setAttribute("checked", "checked");
+      else clonedControl.removeAttribute("checked");
+      return;
+    }
+
+    if (control instanceof HTMLTextAreaElement && clonedControl instanceof HTMLTextAreaElement) {
+      clonedControl.value = control.value;
+      clonedControl.textContent = control.value;
+      return;
+    }
+
+    if (control instanceof HTMLSelectElement && clonedControl instanceof HTMLSelectElement) {
+      clonedControl.value = control.value;
+      [...clonedControl.options].forEach((option) => {
+        option.selected = option.value === control.value;
+      });
+    }
+  });
   clone.querySelectorAll(".report-print-actions, .print-hidden").forEach((node) => node.remove());
 
   const host = document.createElement("div");
