@@ -2157,7 +2157,7 @@ input[type="date"] {
 
 .logistics-live-body {
   display: grid;
-  grid-template-columns: minmax(280px, 0.95fr) minmax(340px, 1.05fr);
+  grid-template-columns: minmax(260px, 0.9fr) minmax(340px, 1.1fr);
   gap: 10px;
   align-items: stretch;
 }
@@ -2165,11 +2165,11 @@ input[type="date"] {
 .logistics-map-card,
 .logistics-live-list {
   min-height: 290px;
-  border: 1px solid rgba(148, 163, 184, 0.16);
+  border: 1px solid rgba(87, 110, 151, 0.28);
   border-radius: 8px;
-  background: linear-gradient(180deg, rgba(29, 42, 73, 0.96), rgba(22, 33, 61, 0.98));
+  background: linear-gradient(180deg, rgba(24, 36, 65, 0.98), rgba(17, 27, 52, 0.99));
   overflow: hidden;
-  box-shadow: 0 18px 38px rgba(2, 8, 23, 0.24), inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  box-shadow: 0 18px 38px rgba(2, 8, 23, 0.28), inset 0 1px 0 rgba(255, 255, 255, 0.04);
 }
 
 .logistics-live-list {
@@ -2207,9 +2207,9 @@ input[type="date"] {
   grid-template-columns: 34px minmax(0, 1fr) auto;
   gap: 10px;
   align-items: center;
-  border: 1px solid rgba(148, 163, 184, 0.12);
+  border: 1px solid rgba(75, 98, 139, 0.28);
   border-radius: 8px;
-  background: rgba(15, 23, 42, 0.24);
+  background: linear-gradient(180deg, rgba(25, 37, 67, 0.62), rgba(15, 25, 49, 0.54));
   color: inherit;
   padding: 11px 12px;
   text-align: left;
@@ -4021,8 +4021,22 @@ body.theme-light .empty-row td {
   height: 100%;
   min-height: 290px;
   overflow: hidden;
-  background: radial-gradient(circle at 52% 44%, rgba(37, 99, 235, 0.26), transparent 34%),
-    #0b1424;
+  background:
+    radial-gradient(circle at 48% 45%, rgba(14, 165, 233, 0.24), transparent 30%),
+    linear-gradient(180deg, #0a1528, #081223);
+}
+
+.transport-map::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 499;
+  pointer-events: none;
+  background:
+    linear-gradient(90deg, rgba(148, 163, 184, 0.06) 1px, transparent 1px),
+    linear-gradient(180deg, rgba(148, 163, 184, 0.05) 1px, transparent 1px);
+  background-size: 52px 52px;
+  opacity: 0.18;
 }
 
 .transport-map::after {
@@ -4032,8 +4046,8 @@ body.theme-light .empty-row td {
   z-index: 500;
   pointer-events: none;
   background:
-    linear-gradient(180deg, rgba(11, 20, 36, 0.18), transparent 35%, rgba(11, 20, 36, 0.24)),
-    radial-gradient(circle at 50% 50%, transparent 35%, rgba(5, 10, 22, 0.28) 100%);
+    linear-gradient(180deg, rgba(5, 12, 25, 0.1), transparent 33%, rgba(5, 12, 25, 0.36)),
+    radial-gradient(circle at 50% 48%, transparent 30%, rgba(4, 9, 19, 0.38) 100%);
 }
 
 .transport-map__canvas,
@@ -4044,12 +4058,12 @@ body.theme-light .empty-row td {
 }
 
 .transport-map .leaflet-container {
-  background: #0b1424;
+  background: #081223;
   font-family: var(--font-syne, sans-serif);
 }
 
 .transport-map .leaflet-tile {
-  filter: brightness(0.76) saturate(1.22) contrast(1.08) hue-rotate(172deg);
+  filter: brightness(0.62) saturate(1.2) contrast(1.18) hue-rotate(174deg);
 }
 
 .transport-map__badge,
@@ -4113,8 +4127,8 @@ body.theme-light .empty-row td {
 
 .tmap-truck {
   position: relative;
-  width: 42px;
-  height: 36px;
+  width: 34px;
+  height: 30px;
   display: grid;
   place-items: center;
 }
@@ -4125,24 +4139,25 @@ body.theme-light .empty-row td {
 }
 
 .tmap-truck__ring {
-  width: 36px;
-  height: 36px;
+  width: 30px;
+  height: 30px;
   border-radius: 999px;
   border: 2px solid color-mix(in srgb, var(--tmap-color) 72%, white);
   background: color-mix(in srgb, var(--tmap-color) 13%, transparent);
-  box-shadow: 0 0 0 5px color-mix(in srgb, var(--tmap-color) 15%, transparent),
-    0 0 24px color-mix(in srgb, var(--tmap-color) 58%, transparent);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--tmap-color) 14%, transparent),
+    0 0 18px color-mix(in srgb, var(--tmap-color) 56%, transparent);
 }
 
 .tmap-truck__body {
   display: grid;
   place-items: center;
-  width: 29px;
-  height: 25px;
-  border-radius: 8px;
+  width: 25px;
+  height: 21px;
+  border: 1px solid rgba(255, 255, 255, 0.36);
+  border-radius: 7px;
   background: linear-gradient(180deg, color-mix(in srgb, var(--tmap-color) 78%, #dbeafe), var(--tmap-color));
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.45), 0 7px 18px rgba(2, 8, 23, 0.35);
-  font-size: 16px;
+  font-size: 14px;
   line-height: 1;
 }
 
@@ -4152,16 +4167,16 @@ body.theme-light .empty-row td {
 
 .tmap-depot {
   position: relative;
-  width: 42px;
-  height: 42px;
+  width: 40px;
+  height: 40px;
   display: grid;
   place-items: center;
 }
 
 .tmap-depot__pulse {
   position: absolute;
-  width: 42px;
-  height: 42px;
+  width: 40px;
+  height: 40px;
   border-radius: 999px;
   border: 2px solid rgba(56, 189, 248, 0.65);
   background: rgba(14, 165, 233, 0.14);
@@ -4172,8 +4187,8 @@ body.theme-light .empty-row td {
   position: relative;
   display: grid;
   place-items: center;
-  width: 24px;
-  height: 24px;
+  width: 23px;
+  height: 23px;
   border-radius: 7px;
   background: #1e3a8a;
   color: #bae6fd;
@@ -4181,10 +4196,18 @@ body.theme-light .empty-row td {
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.28);
 }
 
+.transport-map .tmap-route-glow,
 .transport-map .tmap-route-line {
   stroke-linecap: round;
   stroke-linejoin: round;
+}
+
+.transport-map .tmap-route-line {
   filter: drop-shadow(0 0 5px currentColor);
+}
+
+.transport-map .tmap-route-glow {
+  filter: blur(1px);
 }
 
 .tmap-popup-wrap .leaflet-popup-content-wrapper {
