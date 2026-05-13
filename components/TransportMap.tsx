@@ -13,29 +13,49 @@ interface VehicleEvent {
   destination?: string;
 }
 
-const STATUS_CFG: Record<VehicleStatus, { color: string; label: string }> = {
-  active:  { color: "#22c55e", label: "Идэвхтэй" },
-  waiting: { color: "#f59e0b", label: "Хүлээгдэж байна" },
-  delayed: { color: "#ef4444", label: "Саатал" },
+const MAP_CENTER: [number, number] = [47.89, 106.9];
+
+const STATUS_CFG: Record<VehicleStatus, { color: string; label: string; tone: string }> = {
+  active:  { color: "#22c55e", label: "Идэвхтэй", tone: "active" },
+  waiting: { color: "#f59e0b", label: "Хүлээгдэж байна", tone: "waiting" },
+  delayed: { color: "#ef4444", label: "Саатал", tone: "delayed" },
 };
 
-function makePin(L: typeof import("leaflet"), status: VehicleStatus) {
-  const { color } = STATUS_CFG[status] ?? STATUS_CFG.active;
-  const pulse = status === "delayed"
-    ? `style="animation:tmap-pulse 1.4s ease-out infinite;"`
-    : "";
-  const svg = `
-    <svg xmlns="http://www.w3.org/2000/svg" width="28" height="40" viewBox="0 0 28 40" ${pulse}>
-      <path d="M14 0C6.27 0 0 6.27 0 14c0 10.5 14 26 14 26S28 24.5 28 14C28 6.27 21.73 0 14 0z"
-            fill="${color}" stroke="white" stroke-width="1.5"/>
-      <circle cx="14" cy="14" r="5.5" fill="white"/>
-    </svg>`;
+function escapeHtml(value: string) {
+  return value.replace(/[&<>"']/g, (char) => ({
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    '"': "&quot;",
+    "'": "&#39;",
+  })[char] ?? char);
+}
+
+function makeTruckPin(L: typeof import("leaflet"), status: VehicleStatus) {
+  const { color, tone } = STATUS_CFG[status] ?? STATUS_CFG.active;
   return L.divIcon({
-    className: "",
-    html: `<div style="filter:drop-shadow(0 3px 6px rgba(0,0,0,0.35)) drop-shadow(0 0 8px ${color}88)">${svg}</div>`,
-    iconSize:    [28, 40],
-    iconAnchor:  [14, 40],
-    popupAnchor: [0, -42],
+    className: "tmap-vehicle-icon",
+    html: `
+      <div class="tmap-truck tmap-truck--${tone}" style="--tmap-color:${color}">
+        <span class="tmap-truck__ring"></span>
+        <span class="tmap-truck__body">🚚</span>
+      </div>`,
+    iconSize: [42, 36],
+    iconAnchor: [21, 18],
+    popupAnchor: [0, -18],
+  });
+}
+
+function makeDepotPin(L: typeof import("leaflet")) {
+  return L.divIcon({
+    className: "tmap-depot-icon",
+    html: `
+      <div class="tmap-depot">
+        <span class="tmap-depot__pulse"></span>
+        <span class="tmap-depot__mark">▣</span>
+      </div>`,
+    iconSize: [42, 42],
+    iconAnchor: [21, 21],
   });
 }
 
@@ -50,6 +70,9 @@ export default function TransportMap() {
     if (!containerRef.current || mapRef.current) return;
 
     let mounted = true;
+    const markers = markersRef.current;
+    const polylines = polylinesRef.current;
+    const trails = trailsRef.current;
 
     const init = async () => {
       const L = (await import("leaflet")).default;
@@ -61,19 +84,31 @@ export default function TransportMap() {
       delete (L.Icon.Default.prototype as any)._getIconUrl;
 
       const map = L.map(containerRef.current, {
-        center: [47.89, 106.9],
-        zoom: 6,
+        center: MAP_CENTER,
+        zoom: 10,
         zoomControl: false,
         attributionControl: false,
+        preferCanvas: true,
       });
 
       L.tileLayer(
-        "https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}",
-        { attribution: "Tiles &copy; Esri", maxZoom: 19 }
+        "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",
+        { attribution: "&copy; OpenStreetMap &copy; CARTO", maxZoom: 19, subdomains: "abcd" }
       ).addTo(map);
 
       L.control.zoom({ position: "bottomright" }).addTo(map);
+      L.circle(MAP_CENTER, {
+        radius: 4200,
+        color: "#38bdf8",
+        weight: 1,
+        opacity: 0.3,
+        fillColor: "#38bdf8",
+        fillOpacity: 0.04,
+        interactive: false,
+      }).addTo(map);
+      L.marker(MAP_CENTER, { icon: makeDepotPin(L), interactive: false }).addTo(map);
       mapRef.current = map;
+      window.setTimeout(() => map.invalidateSize(), 80);
 
       const socket = io("http://localhost:3002", { transports: ["websocket"] });
       const handleEscape = (event: KeyboardEvent) => {
@@ -88,13 +123,15 @@ export default function TransportMap() {
         const status2 = (status in STATUS_CFG ? status : "active") as VehicleStatus;
         const { color, label } = STATUS_CFG[status2];
         const latlng: [number, number] = [lat, lng];
-        const icon = makePin(L, status2);
+        const icon = makeTruckPin(L, status2);
+        const safeId = escapeHtml(id);
+        const safeDestination = destination ? escapeHtml(destination) : "";
 
         const popupHtml = `
           <div class="tmap-popup">
             <div class="tmap-popup__header" style="border-left:4px solid ${color}">
               <span class="tmap-popup__truck">🚛</span>
-              <span class="tmap-popup__id">${id}</span>
+              <span class="tmap-popup__id">${safeId}</span>
             </div>
             <div class="tmap-popup__body">
               <div class="tmap-popup__row">
@@ -104,37 +141,51 @@ export default function TransportMap() {
               ${destination ? `
               <div class="tmap-popup__row">
                 <span class="tmap-popup__key">Очих газар</span>
-                <span class="tmap-popup__val">${destination}</span>
+                <span class="tmap-popup__val">${safeDestination}</span>
               </div>` : ""}
             </div>
           </div>`;
 
-        if (markersRef.current.has(id)) {
-          const m = markersRef.current.get(id)!;
+        if (markers.has(id)) {
+          const m = markers.get(id)!;
           m.setLatLng(latlng);
           m.setIcon(icon);
+          m.setPopupContent(popupHtml);
         } else {
           const m = L.marker(latlng, { icon })
             .bindPopup(popupHtml, { className: "tmap-popup-wrap", maxWidth: 240, offset: [0, -4] })
             .addTo(map);
-          markersRef.current.set(id, m);
+          markers.set(id, m);
         }
 
-        const trail = trailsRef.current.get(id) ?? [];
+        const trail = trails.get(id) ?? [];
         trail.push(latlng);
         if (trail.length > 30) trail.shift();
-        trailsRef.current.set(id, trail);
+        trails.set(id, trail);
 
-        if (polylinesRef.current.has(id)) {
-          polylinesRef.current.get(id)!.setLatLngs(trail);
-        } else if (trail.length >= 2) {
-          const pl = L.polyline(trail, { color, weight: 3, opacity: 0.45, dashArray: "6 5" }).addTo(map);
-          polylinesRef.current.set(id, pl);
+        const route = trail.length >= 2 ? trail : [MAP_CENTER, latlng];
+        const routeStyle = {
+          color,
+          weight: 4,
+          opacity: 0.9,
+          lineCap: "round" as const,
+          lineJoin: "round" as const,
+          className: "tmap-route-line",
+        };
+
+        if (polylines.has(id)) {
+          polylines.get(id)!.setLatLngs(route).setStyle(routeStyle);
+        } else {
+          const pl = L.polyline(route, routeStyle).addTo(map);
+          polylines.set(id, pl);
         }
 
-        const positions = [...markersRef.current.values()].map((m) => m.getLatLng());
-        if (positions.length === 1) map.setView(latlng, 9);
-        else if (positions.length <= 8) map.fitBounds(L.latLngBounds(positions), { padding: [48, 48], maxZoom: 10 });
+        const positions = [...markers.values()].map((m) => m.getLatLng());
+        if (positions.length === 1) {
+          map.fitBounds(L.latLngBounds([MAP_CENTER, latlng]), { padding: [48, 48], maxZoom: 11 });
+        } else if (positions.length <= 8) {
+          map.fitBounds(L.latLngBounds([MAP_CENTER, ...positions]), { padding: [48, 48], maxZoom: 11 });
+        }
       });
 
       return () => {
@@ -150,36 +201,23 @@ export default function TransportMap() {
       cleanup.then((fn) => fn?.());
       mapRef.current?.remove();
       mapRef.current = null;
-      markersRef.current.clear();
-      polylinesRef.current.clear();
-      trailsRef.current.clear();
+      markers.clear();
+      polylines.clear();
+      trails.clear();
     };
   }, []);
 
   return (
-    <div style={{ position: "relative", height: "100%", minHeight: 320 }}>
-
-      {/* Realtime badge */}
-      <div style={{
-        position: "absolute", top: 12, right: 12, zIndex: 1000,
-        display: "flex", alignItems: "center", gap: 6,
-        background: "rgba(255,255,255,0.95)",
-        border: "1px solid rgba(34,197,94,0.5)",
-        borderRadius: 999, padding: "5px 13px",
-        fontSize: 10, fontWeight: 800, color: "#16a34a",
-        letterSpacing: "0.1em",
-        boxShadow: "0 2px 8px rgba(0,0,0,0.12)",
-        pointerEvents: "none",
-      }}>
-        <span style={{
-          width: 7, height: 7, borderRadius: "50%",
-          background: "#22c55e", animation: "blink 1.4s infinite",
-        }} />
+    <div className="transport-map">
+      <div className="transport-map__badge">
+        <span aria-hidden="true" />
         REALTIME
       </div>
-
-
-      <div ref={containerRef} style={{ height: "100%", width: "100%" }} />
+      <div className="transport-map__legend" aria-hidden="true">
+        <span>Plant</span>
+        <strong>Live route</strong>
+      </div>
+      <div ref={containerRef} className="transport-map__canvas" />
     </div>
   );
 }

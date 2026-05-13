@@ -7,12 +7,8 @@ import {
   AreaChart,
   Bar,
   BarChart,
-  CartesianGrid,
   Cell,
-  ComposedChart,
   LabelList,
-  Legend,
-  Line,
   Pie,
   PieChart,
   ResponsiveContainer,
@@ -24,7 +20,7 @@ import { useAuth } from "@/components/AuthProvider";
 import { AiDecisionCenter, DashboardEmptyState, PriorityStatusBar } from "@/components/DashboardUX";
 import { DeptTopbar } from "@/components/DeptTopbar";
 import { KpiCard } from "@/components/KpiCard";
-import { ChartHint, RealtimeBadge, REALTIME_REFRESH_MS } from "@/components/RealtimeBadge";
+import { RealtimeBadge, REALTIME_REFRESH_MS } from "@/components/RealtimeBadge";
 import TransportMap from "@/components/TransportMap";
 import { useEscapeClose } from "@/hooks/useEscapeClose";
 import { FINISHED_PRODUCT_CATEGORY } from "@/lib/productionFlowConfig";
@@ -111,6 +107,19 @@ function formatDateTime(date: Date | null) {
   });
 }
 
+function formatShortTime(value: string | null) {
+  if (!value) return "--:--";
+  return new Date(value).toLocaleTimeString("mn-MN", {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function transportCode(transport: Transport) {
+  const suffix = transport.id.replace(/[^a-z0-9]/gi, "").slice(-4).toUpperCase();
+  return `TR-${suffix || "0000"}`;
+}
+
 function buildCalendarCells(monthDate: Date, transports: Transport[]) {
   const year = monthDate.getFullYear();
   const month = monthDate.getMonth();
@@ -147,6 +156,13 @@ const STATUS_BADGES: Record<string, string> = {
   in_transit: "bg-b",
   delivered: "bg-g",
   cancelled: "bg-r",
+};
+
+const LIVE_STATUS_META: Record<string, { label: string; color: string; icon: string }> = {
+  pending: { label: "Хүлээгдэж", color: "#A78BFA", icon: "🚚" },
+  in_transit: { label: "Хэвийн", color: "#22C55E", icon: "🚛" },
+  delivered: { label: "Дууссан", color: "#38BDF8", icon: "✅" },
+  cancelled: { label: "Саатал", color: "#EF4444", icon: "⚠️" },
 };
 
 function buildTransportMonthlySeries(transports: Transport[]) {
@@ -437,6 +453,22 @@ export default function LogisticsPage() {
   const pendingTrips = useMemo(() => transports.filter((t) => t.status === "pending").length, [transports]);
   const cancelledTrips = useMemo(() => transports.filter((t) => t.status === "cancelled").length, [transports]);
   const deliveredTrips = useMemo(() => transports.filter((t) => t.status === "delivered").length, [transports]);
+  const completionRate = useMemo(
+    () => transports.length > 0 ? Math.round((deliveredTrips / transports.length) * 100) : 0,
+    [deliveredTrips, transports.length]
+  );
+  const liveTransportRows = useMemo(
+    () => transports
+      .filter((transport) => transport.status === "in_transit" || transport.status === "pending")
+      .sort((a, b) => {
+        const statusOrder: Record<string, number> = { in_transit: 0, pending: 1 };
+        const statusDiff = (statusOrder[a.status] ?? 9) - (statusOrder[b.status] ?? 9);
+        if (statusDiff !== 0) return statusDiff;
+        return new Date(a.transportDate).getTime() - new Date(b.transportDate).getTime();
+      })
+      .slice(0, 4),
+    [transports]
+  );
 
   const monthlySeries = useMemo(() => buildTransportMonthlySeries(transports), [transports]);
 
@@ -668,46 +700,75 @@ export default function LogisticsPage() {
             change="Хүргэлт дууссан" icon="✅" sparkline={deliveredSparkline} sparklineColor="#10B981" />
         </div>
 
-        <div className="wh-main-grid">
-          <div className="panel" style={{ overflow: "hidden" }}>
-            <div className="panel-hdr">
-              <div>
-                <div className="panel-title">Тээврийн бодит цагийн зураглал</div>
-                <div className="panel-sub">Идэвхтэй маршрут, байршил</div>
-              </div>
+        <div className="logistics-live-panel">
+          <div className="logistics-live-stats">
+            <div className="logistics-live-stat logistics-live-stat--violet">
+              <strong>{activeTrips}</strong>
+              <span>Хөдөлгөөнтэй тээвэр</span>
             </div>
-            <div style={{ height: 260 }}>
-              <TransportMap />
+            <div className="logistics-live-stat logistics-live-stat--blue">
+              <strong>{cancelledTrips}</strong>
+              <span>Саатсан</span>
+            </div>
+            <div className="logistics-live-stat logistics-live-stat--green">
+              <strong>{completionRate}%</strong>
+              <span>Цагийн гүйцэтгэл</span>
             </div>
           </div>
 
-          <div className="panel">
-            <div className="panel-hdr">
-              <div>
-                <div className="panel-title">Сарын тээврийн чиг хандлага</div>
-                <div className="panel-sub">Нийт болон хүргэгдсэн тээвэр</div>
+          <div className="logistics-live-body">
+            <div className="logistics-map-card" aria-label="Тээврийн live map">
+              <TransportMap />
+            </div>
+
+            <aside className="logistics-live-list">
+              <div className="logistics-live-list__head">
+                <div>
+                  <div className="panel-title">Идэвхтэй тээвэр</div>
+                  <div className="panel-sub">Socket.IO байршил болон DB төлөв</div>
+                </div>
+                <span>{liveTransportRows.length} мөр</span>
               </div>
-            </div>
-            <div style={{ padding: "0 20px 20px" }}>
-              <ResponsiveContainer width="100%" height={220}>
-                <ComposedChart data={monthlySeries}>
-                  <defs>
-                    <linearGradient id="lgBarGrad" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor="#3B82F6" stopOpacity={0.85} />
-                      <stop offset="100%" stopColor="#3B82F6" stopOpacity={0.3} />
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid stroke="var(--border)" vertical={false} strokeDasharray="3 3" />
-                  <XAxis dataKey="label" axisLine={false} tickLine={false} tick={{ fill: "var(--muted)", fontSize: 10 }} />
-                  <YAxis axisLine={false} tickLine={false} tick={{ fill: "var(--muted)", fontSize: 10 }} />
-                  <Legend iconSize={8} wrapperStyle={{ fontSize: 10, paddingTop: 4 }} />
-                  <Tooltip content={<LogisticsTooltip />} />
-                  <Bar dataKey="total" name="Нийт" fill="url(#lgBarGrad)" radius={[5, 5, 0, 0]} barSize={14} isAnimationActive={false} />
-                  <Line type="monotone" dataKey="delivered" name="Хүргэгдсэн" stroke="#10B981" strokeWidth={2.5} dot={{ r: 3, fill: "#10B981" }} isAnimationActive={false} />
-                </ComposedChart>
-              </ResponsiveContainer>
-            </div>
-            <ChartHint>Нийт тээвэр баганаар, хүргэгдсэн тээвэр ногоон шугамаар харагдана. Мэдээлэл 5 секунд тутам шинэчлэгдэнэ.</ChartHint>
+
+              <div className="logistics-live-list__items">
+                {liveTransportRows.length === 0 ? (
+                  <div className="logistics-live-empty">
+                    <strong>Идэвхтэй маршрут алга</strong>
+                    <span>Шинэ тээвэр бүртгэгдмэгц энд харагдана.</span>
+                  </div>
+                ) : liveTransportRows.map((transport) => {
+                  const meta = LIVE_STATUS_META[transport.status] ?? LIVE_STATUS_META.pending;
+                  return (
+                    <button
+                      key={transport.id}
+                      type="button"
+                      className="logistics-live-item"
+                      onClick={() => {
+                        setSelectedCalendarDate(transportDateKey(transport));
+                        setCalendarPopupDate(transportDateKey(transport));
+                      }}
+                    >
+                      <span className="logistics-live-item__icon" style={{ color: meta.color }}>{meta.icon}</span>
+                      <span className="logistics-live-item__main">
+                        <strong>{transportCode(transport)}</strong>
+                        <span>{transport.material.name} → {transport.destinationSite}</span>
+                        <em>{transport.quantity.toLocaleString("mn-MN")} {transport.material.unit}</em>
+                      </span>
+                      <span className="logistics-live-item__meta">
+                        <small>{formatShortTime(transport.deliveryDate ?? transport.transportDate)}</small>
+                        <b style={{ color: meta.color }}>{meta.label}</b>
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+
+              {canEdit ? (
+                <button className="logistics-live-add" type="button" onClick={() => setModal(true)}>
+                  + Тээвэр нэмэх
+                </button>
+              ) : null}
+            </aside>
           </div>
         </div>
 
