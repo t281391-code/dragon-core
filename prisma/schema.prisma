@@ -39,6 +39,7 @@ model User {
   productionLogs       ProductionLog[]
   reportedIncidents    SafetyIncident[]
   assignedTransports   Transport[]
+  transportWaybills    TransportWaybill[]
   materialTransactions MaterialTransaction[]
   aiAuditLogs          AiAgentAuditLog[]
   shiftEntries         ShiftEntry[]
@@ -229,6 +230,22 @@ model Transport {
   @@index([transportDate])
   @@index([status, transportDate])
   @@index([materialId, transportDate])
+}
+
+model TransportWaybill {
+  id          String   @id @default(cuid())
+  title       String
+  header      Json
+  rows        Json
+  reportDate  DateTime
+  createdById String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  createdBy   User     @relation(fields: [createdById], references: [id])
+
+  @@index([reportDate])
+  @@index([createdAt])
+  @@index([createdById, createdAt])
 }
 
 model AiAgentAuditLog {

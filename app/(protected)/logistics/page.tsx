@@ -82,6 +82,17 @@ type WaybillRow = {
   note: string;
 };
 
+type SavedWaybill = {
+  id: string;
+  title: string;
+  header: WaybillHeader;
+  rows: WaybillRow[];
+  reportDate: string;
+  createdAt: string;
+  updatedAt: string;
+  createdBy: { fullName: string };
+};
+
 type WaybillHeaderField = keyof WaybillHeader;
 type WaybillRowField = Exclude<keyof WaybillRow, "id">;
 
@@ -188,6 +199,51 @@ function createEmptyWaybillRows(): WaybillRow[] {
     signature: "",
     note: "",
   }));
+}
+
+function normalizeWaybillHeader(value: unknown, fallbackDate = new Date()): WaybillHeader {
+  const fallback = createWaybillHeader(fallbackDate);
+  if (!value || typeof value !== "object") return fallback;
+  const source = value as Partial<Record<WaybillHeaderField, unknown>>;
+  return {
+    orgName: typeof source.orgName === "string" ? source.orgName : fallback.orgName,
+    driverName: typeof source.driverName === "string" ? source.driverName : fallback.driverName,
+    equipmentModel: typeof source.equipmentModel === "string" ? source.equipmentModel : fallback.equipmentModel,
+    plateNumber: typeof source.plateNumber === "string" ? source.plateNumber : fallback.plateNumber,
+    reportDate: typeof source.reportDate === "string" ? source.reportDate : fallback.reportDate,
+    year: typeof source.year === "string" ? source.year : fallback.year,
+    month: typeof source.month === "string" ? source.month : fallback.month,
+    day: typeof source.day === "string" ? source.day : fallback.day,
+    routeNote: typeof source.routeNote === "string" ? source.routeNote : fallback.routeNote,
+  };
+}
+
+function normalizeWaybillRows(value: unknown): WaybillRow[] {
+  const rows = createEmptyWaybillRows();
+  if (!Array.isArray(value)) return rows;
+
+  value.slice(0, WAYBILL_ROW_COUNT).forEach((item, index) => {
+    if (!item || typeof item !== "object") return;
+    const source = item as Partial<Record<keyof WaybillRow, unknown>>;
+    rows[index] = {
+      id: rows[index].id,
+      monthDay: typeof source.monthDay === "string" ? source.monthDay : "",
+      operator: typeof source.operator === "string" ? source.operator : "",
+      purpose: typeof source.purpose === "string" ? source.purpose : "",
+      motoStart: typeof source.motoStart === "string" ? source.motoStart : "",
+      motoEnd: typeof source.motoEnd === "string" ? source.motoEnd : "",
+      motoUsed: typeof source.motoUsed === "string" ? source.motoUsed : "",
+      dieselRemain: typeof source.dieselRemain === "string" ? source.dieselRemain : "",
+      dieselTaken: typeof source.dieselTaken === "string" ? source.dieselTaken : "",
+      dieselUsed: typeof source.dieselUsed === "string" ? source.dieselUsed : "",
+      userPosition: typeof source.userPosition === "string" ? source.userPosition : "",
+      userName: typeof source.userName === "string" ? source.userName : "",
+      signature: typeof source.signature === "string" ? source.signature : "",
+      note: typeof source.note === "string" ? source.note : "",
+    };
+  });
+
+  return rows;
 }
 
 function buildWaybillRows(transports: Transport[]) {
@@ -348,8 +404,12 @@ export default function LogisticsPage() {
   const [reportModal, setReportModal] = useState(false);
   const [reportClock, setReportClock] = useState<Date | null>(null);
   const [waybillModal, setWaybillModal] = useState(false);
+  const [selectedWaybillId, setSelectedWaybillId] = useState<string | null>(null);
   const [waybillHeader, setWaybillHeader] = useState<WaybillHeader>(() => createWaybillHeader(new Date()));
   const [waybillRows, setWaybillRows] = useState<WaybillRow[]>(() => createEmptyWaybillRows());
+  const [savingWaybill, setSavingWaybill] = useState(false);
+  const [waybillNotice, setWaybillNotice] = useState("");
+  const [waybillError, setWaybillError] = useState("");
   const [modal, setModal] = useState(false);
   const [materialId, setMaterialId] = useState("");
   const [materialName, setMaterialName] = useState("");
@@ -375,9 +435,15 @@ export default function LogisticsPage() {
     fetcher,
     { refreshInterval: REALTIME_REFRESH_MS, revalidateOnFocus: false }
   );
+  const { data: waybillsData, mutate: mutateWaybills } = useSWR(
+    "/api/transport-waybills?limit=50",
+    fetcher,
+    { refreshInterval: REALTIME_REFRESH_MS, revalidateOnFocus: false }
+  );
 
   const transports: Transport[] = useMemo(() => transportsData?.data ?? [], [transportsData]);
   const materials: Material[] = useMemo(() => materialsData?.data ?? [], [materialsData]);
+  const savedWaybills: SavedWaybill[] = useMemo(() => waybillsData?.data ?? [], [waybillsData]);
   const shippableMaterials = useMemo(
     () => materials
       .filter((material) => material.category === FINISHED_PRODUCT_CATEGORY && material.name.startsWith("ANDO-") && material.currentStock > 0)
@@ -471,6 +537,9 @@ export default function LogisticsPage() {
   function openWaybillModal() {
     const now = new Date();
     const latestTransport = [...transports].sort((a, b) => new Date(b.transportDate).getTime() - new Date(a.transportDate).getTime())[0];
+    setSelectedWaybillId(null);
+    setWaybillNotice("");
+    setWaybillError("");
     setWaybillHeader((current) => ({
       ...current,
       orgName: current.orgName || "Dragon Core",
@@ -487,6 +556,18 @@ export default function LogisticsPage() {
     setWaybillModal(true);
   }
 
+  function openSavedWaybill(waybill: SavedWaybill) {
+    const reportDate = new Date(waybill.reportDate);
+    const fallbackDate = Number.isNaN(reportDate.getTime()) ? new Date() : reportDate;
+    setSelectedWaybillId(waybill.id);
+    setWaybillHeader(normalizeWaybillHeader(waybill.header, fallbackDate));
+    setWaybillRows(normalizeWaybillRows(waybill.rows));
+    setWaybillNotice(`Хадгалсан: ${waybill.title}`);
+    setWaybillError("");
+    setReportModal(false);
+    setWaybillModal(true);
+  }
+
   function updateWaybillHeader(field: WaybillHeaderField, value: string) {
     setWaybillHeader((current) => ({ ...current, [field]: value }));
   }
@@ -495,6 +576,50 @@ export default function LogisticsPage() {
     setWaybillRows((currentRows) => currentRows.map((row) => (
       row.id === rowId ? { ...row, [field]: value } : row
     )));
+  }
+
+  async function saveWaybill() {
+    if (!canEdit || savingWaybill) return;
+    setSavingWaybill(true);
+    setWaybillError("");
+    setWaybillNotice("");
+
+    const reportDate = Number.isNaN(Date.parse(waybillHeader.reportDate))
+      ? toDateKey(new Date())
+      : waybillHeader.reportDate;
+    const titleParts = [
+      waybillHeader.plateNumber.trim(),
+      waybillHeader.driverName.trim(),
+      reportDate,
+    ].filter(Boolean);
+    const payload = {
+      ...(selectedWaybillId ? { id: selectedWaybillId } : {}),
+      title: titleParts.length ? titleParts.join(" · ") : `Замын хуудас · ${reportDate}`,
+      reportDate,
+      header: { ...waybillHeader, reportDate },
+      rows: waybillRows,
+    };
+
+    try {
+      const response = await fetch("/api/transport-waybills", {
+        method: selectedWaybillId ? "PATCH" : "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const data = await response.json().catch(() => null) as { data?: SavedWaybill; error?: string } | null;
+
+      if (!response.ok || !data?.data) {
+        throw new Error(data?.error ?? "Замын хуудас хадгалах үед алдаа гарлаа");
+      }
+
+      setSelectedWaybillId(data.data.id);
+      setWaybillNotice("Замын хуудас тайланд хадгалагдлаа.");
+      await mutateWaybills();
+    } catch (error) {
+      setWaybillError(error instanceof Error ? error.message : "Замын хуудас хадгалах үед алдаа гарлаа");
+    } finally {
+      setSavingWaybill(false);
+    }
   }
 
   function getTransportDraft(transport: Transport) {
@@ -732,6 +857,13 @@ export default function LogisticsPage() {
   const reportLatestTransports = useMemo(
     () => [...reportTransports].sort((a, b) => new Date(b.transportDate).getTime() - new Date(a.transportDate).getTime()).slice(0, 20),
     [reportTransports]
+  );
+  const reportWaybills = useMemo(
+    () => savedWaybills.filter((waybill) => {
+      const time = new Date(waybill.reportDate).getTime();
+      return time >= reportStartTime && time <= reportNowTime;
+    }),
+    [reportNowTime, reportStartTime, savedWaybills]
   );
   const reportTopDestination = reportDestinationRows[0] ?? null;
   const reportHealth = reportDelayed > 0
@@ -1249,12 +1381,39 @@ export default function LogisticsPage() {
               <div>
                 <div className="panel-sub">Тээвэрлэлтийн замын хуудас</div>
                 <h3 id="logistics-waybill-title">Техник ашиглалтын тооцооны хуудас</h3>
+                <div className="waybill-save-state">
+                  {waybillError ? <span className="waybill-save-state__error">{waybillError}</span> : waybillNotice || "Бөглөөд хадгалвал тайлангийн замын хуудас хэсэгт орно."}
+                </div>
               </div>
               <div className="report-print-actions waybill-actions">
+                {canEdit ? (
+                  <button className="btn bp" type="button" onClick={saveWaybill} disabled={savingWaybill}>
+                    {savingWaybill ? "Хадгалж байна..." : "Хадгалах"}
+                  </button>
+                ) : null}
                 <button className="btn bp" type="button" onClick={printReport}>PDF татах</button>
                 <button className="btn bo2" type="button" onClick={() => setWaybillRows(createEmptyWaybillRows())}>Хүснэгт цэвэрлэх</button>
                 <button className="mx" type="button" aria-label="Замын хуудас хаах" onClick={() => setWaybillModal(false)}>×</button>
               </div>
+            </div>
+
+            <div className="waybill-editor-summary print-hidden">
+              <label>
+                <span>Байгууллага</span>
+                <input value={waybillHeader.orgName} onChange={(event) => updateWaybillHeader("orgName", event.target.value)} />
+              </label>
+              <label>
+                <span>Жолооч</span>
+                <input value={waybillHeader.driverName} onChange={(event) => updateWaybillHeader("driverName", event.target.value)} />
+              </label>
+              <label>
+                <span>Техник / улсын дугаар</span>
+                <input value={waybillHeader.equipmentModel} onChange={(event) => updateWaybillHeader("equipmentModel", event.target.value)} />
+              </label>
+              <label>
+                <span>Тайлан огноо</span>
+                <input type="date" value={waybillHeader.reportDate} onChange={(event) => updateWaybillHeader("reportDate", event.target.value)} />
+              </label>
             </div>
 
             <div className="waybill-scroll">
@@ -1398,6 +1557,7 @@ export default function LogisticsPage() {
                 {[
                   { label: "Тайлангийн хугацаа", value: `${REPORT_DAYS} хоног`, sub: `${formatShortDate(reportStart)} - ${formatShortDate(reportNow)}`, color: "#3B82F6" },
                   { label: "Нийт тээвэр", value: `${reportTransports.length}`, sub: "Энэ хугацаанд", color: ACCENT },
+                  { label: "Замын хуудас", value: `${reportWaybills.length}`, sub: "Тайланд хадгалсан", color: "#8B5CF6" },
                   { label: "Нийт ачаа", value: reportQuantitySummary, sub: `${reportMaterialRows.length} материал`, color: "#10B981" },
                   { label: "Хүргэлт дууссан", value: `${reportDelivered}`, sub: `${reportDeliveredPct}% дууссан`, color: "#10B981" },
                   { label: "Идэвхтэй/хүлээгдэж", value: `${reportInTransit + reportPending}`, sub: `Явж буй ${reportInTransit} | Хүлээгдэж ${reportPending}`, color: "#F59E0B" },
@@ -1427,6 +1587,48 @@ export default function LogisticsPage() {
                     </div>
                   ))}
                 </div>
+              </div>
+
+              <div className="panel logistics-report-waybills" style={{ padding: 18, margin: 0 }}>
+                <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12, marginBottom: 12, flexWrap: "wrap" }}>
+                  <div>
+                    <div className="panel-title">Замын хуудас</div>
+                    <div className="panel-sub" style={{ marginTop: 4 }}>Хадгалсан замын хуудсууд тайлангийн PDF-д хамт орно.</div>
+                  </div>
+                  <span style={{ color: "var(--muted)", fontSize: 11 }}>{reportWaybills.length} хуудас</span>
+                </div>
+
+                {reportWaybills.length === 0 ? (
+                  <div className="logistics-report-waybill-empty">
+                    Энэ хугацаанд хадгалсан замын хуудас байхгүй байна.
+                  </div>
+                ) : (
+                  <div className="logistics-report-waybill-grid">
+                    {reportWaybills.map((waybill) => {
+                      const waybillDate = new Date(waybill.reportDate);
+                      const header = normalizeWaybillHeader(waybill.header, waybillDate);
+                      const filledRows = normalizeWaybillRows(waybill.rows).filter((row) => (
+                        row.monthDay || row.operator || row.purpose || row.motoUsed || row.dieselUsed || row.userName || row.note
+                      )).length;
+                      return (
+                        <article className="logistics-report-waybill-card" key={waybill.id}>
+                          <div style={{ minWidth: 0 }}>
+                            <div className="logistics-report-waybill-title">{waybill.title}</div>
+                            <div className="logistics-report-waybill-meta">
+                              {formatShortDate(waybillDate)} · {header.driverName || "Жолооч оруулаагүй"} · {header.equipmentModel || header.plateNumber || "Техник оруулаагүй"}
+                            </div>
+                            <div className="logistics-report-waybill-meta">
+                              {filledRows} мөр бөглөгдсөн · {waybill.createdBy.fullName}
+                            </div>
+                          </div>
+                          <button className="btn bo2 print-hidden" type="button" onClick={() => openSavedWaybill(waybill)}>
+                            Нээх
+                          </button>
+                        </article>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
 
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 320px), 1fr))", gap: 16 }}>

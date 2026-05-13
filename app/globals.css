@@ -2357,7 +2357,7 @@ input[type="date"] {
 
 .logistics-waybill-print {
   width: min(1180px, calc(100vw - 24px));
-  padding: 0;
+  padding: 0 !important;
   background: #f8fafc;
 }
 
@@ -2378,6 +2378,18 @@ input[type="date"] {
   font-weight: 900;
 }
 
+.waybill-save-state {
+  margin-top: 6px;
+  color: #9ba9c5;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.35;
+}
+
+.waybill-save-state__error {
+  color: #f87171;
+}
+
 .waybill-actions {
   display: flex;
   align-items: center;
@@ -2386,9 +2398,53 @@ input[type="date"] {
   justify-content: flex-end;
 }
 
+.waybill-editor-summary {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--border);
+  background: linear-gradient(180deg, rgba(15, 23, 42, 0.98), rgba(17, 24, 39, 0.96));
+}
+
+.waybill-editor-summary label {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.waybill-editor-summary span {
+  color: #90a2c3;
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.waybill-editor-summary input {
+  width: 100%;
+  min-width: 0;
+  min-height: 38px;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  border-radius: 8px;
+  outline: none;
+  background: rgba(15, 23, 42, 0.72);
+  color: #f8fafc;
+  padding: 0 10px;
+  font-size: 13px;
+  font-weight: 750;
+}
+
+.waybill-editor-summary input:focus {
+  border-color: rgba(59, 130, 246, 0.58);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.14);
+}
+
 .waybill-scroll {
   max-width: 100%;
   overflow: auto;
+  padding: 18px;
+  background: #e8eef7;
   -webkit-overflow-scrolling: touch;
 }
 
@@ -2398,6 +2454,7 @@ input[type="date"] {
   padding: 0;
   background: #ffffff;
   color: #000000;
+  box-shadow: 0 20px 44px rgba(15, 23, 42, 0.18);
 }
 
 .waybill-table {
@@ -2464,6 +2521,50 @@ input[type="date"] {
 
 .waybill-table tbody tr:nth-child(n) td {
   height: 31px;
+}
+
+.logistics-report-waybill-empty {
+  border: 1px dashed rgba(148, 163, 184, 0.28);
+  border-radius: 10px;
+  padding: 18px 14px;
+  color: var(--muted);
+  text-align: center;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.logistics-report-waybill-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr));
+  gap: 10px;
+}
+
+.logistics-report-waybill-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-width: 0;
+  border: 1px solid rgba(139, 92, 246, 0.26);
+  border-radius: 12px;
+  background: rgba(139, 92, 246, 0.07);
+  padding: 12px 14px;
+}
+
+.logistics-report-waybill-title {
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 900;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.logistics-report-waybill-meta {
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
 }
 
 .department-shifts {
@@ -4082,6 +4183,24 @@ body.theme-light .empty-row td {
     flex: 1 1 150px;
   }
 
+  .waybill-editor-summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    padding: 12px;
+  }
+
+  .waybill-scroll {
+    padding: 12px;
+  }
+
+  .logistics-report-waybill-card {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .logistics-report-waybill-card .btn {
+    width: 100%;
+  }
+
   .topbar {
     height: auto;
     min-height: 68px;
@@ -4111,6 +4230,18 @@ body.theme-light .empty-row td {
     max-height: calc(100dvh - 16px) !important;
     border-radius: 14px;
     padding: 14px;
+  }
+
+  .waybill-modal-head {
+    padding: 14px;
+  }
+
+  .waybill-editor-summary {
+    grid-template-columns: 1fr;
+  }
+
+  .waybill-scroll {
+    padding: 8px;
   }
 
   .mo.open > .mc,
