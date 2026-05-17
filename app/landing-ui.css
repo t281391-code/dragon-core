@@ -4921,5 +4921,32 @@ footer {
     0 0 16px rgba(0, 212, 255, 0.12) !important;
 }
 
+.landing-login-page,
+.landing-login-page .login-modal,
+.landing-login-page .login-modal__panel {
+  overflow-x: hidden !important;
+  scrollbar-width: none;
+}
+
+.landing-login-page::-webkit-scrollbar,
+.landing-login-page .login-modal::-webkit-scrollbar,
+.landing-login-page .login-modal__panel::-webkit-scrollbar {
+  width: 0 !important;
+  height: 0 !important;
+  display: none;
+}
+
+.landing-login-page .login-modal__panel {
+  border-color: transparent !important;
+}
+
+.landing-login-page .login-modal {
+  border-color: transparent !important;
+}
+
+.landing-login-page .login-modal__panel::before {
+  border-color: transparent !important;
+}
+
 
 
