@@ -38,6 +38,7 @@ model User {
   department           Department            @relation(fields: [departmentId], references: [id])
   productionLogs       ProductionLog[]
   reportedIncidents    SafetyIncident[]
+  safetyRiskAssessments SafetyRiskAssessment[]
   assignedTransports   Transport[]
   transportWaybills    TransportWaybill[]
   materialTransactions MaterialTransaction[]
@@ -209,6 +210,23 @@ model SafetyIncident {
 
   @@index([incidentDate])
   @@index([status, incidentDate])
+}
+
+model SafetyRiskAssessment {
+  id             String   @id @default(cuid())
+  employeeName   String
+  taskName       String
+  workArea       String
+  assessmentDate DateTime
+  answers        Json
+  createdById    String
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  createdBy      User     @relation(fields: [createdById], references: [id])
+
+  @@index([assessmentDate])
+  @@index([createdAt])
+  @@index([createdById, createdAt])
 }
 
 model Transport {

@@ -52,6 +52,26 @@ type ReporterUser = {
   department: { name: string };
 };
 
+type RiskAssessmentAnswerValue = "yes" | "no" | "";
+
+type RiskAssessmentAnswer = {
+  sectionTitle: string;
+  question: string;
+  answer: RiskAssessmentAnswerValue;
+};
+
+type SafetyRiskAssessment = {
+  id: string;
+  employeeName: string;
+  taskName: string;
+  workArea: string;
+  assessmentDate: string;
+  answers: RiskAssessmentAnswer[];
+  createdAt: string;
+  updatedAt: string;
+  createdBy: { fullName: string };
+};
+
 const ACCENT = "#EF4444";
 const MONTH_SEEDS = [3, 5, 2, 7, 4, 6];
 const PAGE_SIZE = 20;
@@ -125,6 +145,28 @@ const RISK_ASSESSMENT_SECTIONS = [
     note: "",
   },
 ];
+
+function createRiskAssessmentAnswers(): RiskAssessmentAnswer[] {
+  return RISK_ASSESSMENT_SECTIONS.flatMap((section) =>
+    section.items.map((question) => ({
+      sectionTitle: section.title,
+      question,
+      answer: "" as RiskAssessmentAnswerValue,
+    }))
+  );
+}
+
+function countRiskAnswers(answers: RiskAssessmentAnswer[]) {
+  return answers.reduce(
+    (acc, item) => {
+      if (item.answer === "yes") acc.yes += 1;
+      else if (item.answer === "no") acc.no += 1;
+      else acc.empty += 1;
+      return acc;
+    },
+    { yes: 0, no: 0, empty: 0 }
+  );
+}
 
 function formatDateTime(value: Date | null) {
   if (!value) return "--:--:--";
@@ -244,6 +286,13 @@ export default function SafetyPage() {
   const [status, setStatus] = useState("open");
   const [location, setLocation] = useState("");
   const [incidentDate, setIncidentDate] = useState(new Date().toISOString().split("T")[0]);
+  const [riskEmployeeName, setRiskEmployeeName] = useState(user?.fullName ?? "");
+  const [riskTaskName, setRiskTaskName] = useState("");
+  const [riskWorkArea, setRiskWorkArea] = useState("");
+  const [riskAssessmentDate, setRiskAssessmentDate] = useState(new Date().toISOString().split("T")[0]);
+  const [riskAnswers, setRiskAnswers] = useState<RiskAssessmentAnswer[]>(() => createRiskAssessmentAnswers());
+  const [riskSaveError, setRiskSaveError] = useState("");
+  const [savingRiskAssessment, setSavingRiskAssessment] = useState(false);
   const [reporterSearch, setReporterSearch] = useState("");
   const [reporterResults, setReporterResults] = useState<ReporterUser[]>([]);
   const [selectedReporter, setSelectedReporter] = useState<ReporterUser | null>(null);
@@ -259,8 +308,14 @@ export default function SafetyPage() {
     fetcher,
     { refreshInterval: REALTIME_REFRESH_MS, revalidateOnFocus: false, onSuccess: () => setLastUpdated(new Date()) }
   );
+  const { data: riskAssessmentsData, mutate: mutateRiskAssessments } = useSWR(
+    "/api/safety-risk-assessments?limit=100",
+    fetcher,
+    { refreshInterval: REALTIME_REFRESH_MS, revalidateOnFocus: false, onSuccess: () => setLastUpdated(new Date()) }
+  );
 
   const incidents: SafetyIncident[] = useMemo(() => incidentsData?.data ?? [], [incidentsData]);
+  const riskAssessments: SafetyRiskAssessment[] = useMemo(() => riskAssessmentsData?.data ?? [], [riskAssessmentsData]);
 
   useEscapeClose(Boolean(modal || riskModal || reportModal || selectedIncident), () => {
     if (selectedIncident) {
@@ -284,16 +339,23 @@ export default function SafetyPage() {
     const refreshReport = () => {
       setReportClock(new Date());
       void mutate();
+      void mutateRiskAssessments();
     };
 
     refreshReport();
     const intervalId = window.setInterval(refreshReport, REALTIME_REFRESH_MS);
     return () => window.clearInterval(intervalId);
-  }, [mutate, reportModal]);
+  }, [mutate, mutateRiskAssessments, reportModal]);
 
   function openReportModal() {
     setReportClock(new Date());
     setReportModal(true);
+  }
+
+  function openRiskAssessmentModal() {
+    if (!riskEmployeeName && user?.fullName) setRiskEmployeeName(user.fullName);
+    setRiskSaveError("");
+    setRiskModal(true);
   }
 
   function updateTableFilter(nextFilter: string) {
@@ -304,6 +366,54 @@ export default function SafetyPage() {
   function updateTableSearch(nextSearch: string) {
     setTableSearch(nextSearch);
     setTablePage(0);
+  }
+
+  function resetRiskAssessmentForm() {
+    setRiskEmployeeName(user?.fullName ?? "");
+    setRiskTaskName("");
+    setRiskWorkArea("");
+    setRiskAssessmentDate(new Date().toISOString().split("T")[0]);
+    setRiskAnswers(createRiskAssessmentAnswers());
+    setRiskSaveError("");
+  }
+
+  function updateRiskAnswer(index: number, answer: RiskAssessmentAnswerValue) {
+    setRiskAnswers((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, answer } : item));
+  }
+
+  async function saveRiskAssessment() {
+    if (savingRiskAssessment) return;
+    const employeeName = riskEmployeeName.trim();
+    if (!employeeName || !riskAssessmentDate) {
+      setRiskSaveError("Ажилтны нэр болон огноог бөглөнө үү.");
+      return;
+    }
+
+    setSavingRiskAssessment(true);
+    setRiskSaveError("");
+    const response = await fetch("/api/safety-risk-assessments", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        employeeName,
+        taskName: riskTaskName.trim(),
+        workArea: riskWorkArea.trim(),
+        assessmentDate: riskAssessmentDate,
+        answers: riskAnswers,
+      }),
+    });
+    const data = await response.json().catch(() => null) as { error?: string } | null;
+
+    if (!response.ok) {
+      setRiskSaveError(data?.error ?? "Эрсдэлийн үнэлгээ хадгалахад алдаа гарлаа.");
+      setSavingRiskAssessment(false);
+      return;
+    }
+
+    await mutateRiskAssessments();
+    setSavingRiskAssessment(false);
+    setRiskModal(false);
+    resetRiskAssessmentForm();
   }
 
   const searchReporterUsers = useCallback(async (searchValue = reporterSearch) => {
@@ -526,6 +636,19 @@ export default function SafetyPage() {
       return time >= reportStartTime && time <= reportNowTime;
     }),
     [incidents, reportNowTime, reportStartTime]
+  );
+  const reportRiskAssessments = useMemo(
+    () => riskAssessments.filter((assessment) => {
+      const time = new Date(assessment.assessmentDate).getTime();
+      return time >= reportStartTime && time <= reportNowTime;
+    }),
+    [riskAssessments, reportNowTime, reportStartTime]
+  );
+  const reportLatestRiskAssessments = useMemo(
+    () => [...reportRiskAssessments]
+      .sort((a, b) => new Date(b.assessmentDate).getTime() - new Date(a.assessmentDate).getTime())
+      .slice(0, 8),
+    [reportRiskAssessments]
   );
   const reportOpenIncidents = reportIncidents.filter((incident) => incident.status === "open" || incident.status === "investigating").length;
   const reportHighSeverity = reportIncidents.filter((incident) => incident.severity === "high").length;
@@ -855,8 +978,11 @@ export default function SafetyPage() {
                 {[
                   { icon: "🛡️", label: "Incident нэмэх", onClick: () => setModal(true) },
                   { icon: "📋", label: "Тайлан гаргах", onClick: openReportModal },
-                  { icon: "⚠️", label: "Эрсдэл үнэлэх", onClick: () => setRiskModal(true) },
-                  { icon: "🔄", label: "Шинэчлэх", onClick: () => void mutate() },
+                  { icon: "⚠️", label: "Эрсдэл үнэлэх", onClick: openRiskAssessmentModal },
+                  { icon: "🔄", label: "Шинэчлэх", onClick: () => {
+                    void mutate();
+                    void mutateRiskAssessments();
+                  } },
                 ].map((a) => (
                   <button key={a.label} type="button" onClick={a.onClick}
                     style={{ padding: "10px 8px", borderRadius: 12, border: "1.5px solid var(--border)", background: "transparent", color: "var(--text)", fontSize: 11, fontWeight: 600, cursor: "pointer", display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
@@ -907,10 +1033,14 @@ export default function SafetyPage() {
                 <h3 id="risk-assessment-title">Өдөр тутмын эрсдэлийн үнэлгээ</h3>
               </div>
               <div className="report-print-actions">
+                <button className="btn bp" type="button" onClick={saveRiskAssessment} disabled={savingRiskAssessment}>
+                  {savingRiskAssessment ? "Хадгалж байна..." : "Хадгалах"}
+                </button>
                 <button className="btn bp" type="button" onClick={printReport}>PDF татах</button>
                 <button className="mx" type="button" aria-label="Эрсдэлийн үнэлгээ хаах" onClick={() => setRiskModal(false)}>×</button>
               </div>
             </div>
+            {riskSaveError ? <div className="risk-assessment-error print-hidden">{riskSaveError}</div> : null}
 
             <div className="risk-assessment-body">
               <section className="risk-assessment-sheet" aria-label="Өдөр тутмын эрсдэлийн үнэлгээ">
@@ -929,14 +1059,14 @@ export default function SafetyPage() {
 
                 <div className="risk-assessment-meta">
                   {[
-                    { label: "Ажилтны нэр", value: user?.fullName ?? "" },
-                    { label: "Гүйцэтгэх ажил", value: "" },
-                    { label: "Ажлын талбар", value: "" },
-                    { label: "Огноо", value: incidentDate, type: "date" },
+                    { label: "Ажилтны нэр", value: riskEmployeeName, setValue: setRiskEmployeeName },
+                    { label: "Гүйцэтгэх ажил", value: riskTaskName, setValue: setRiskTaskName },
+                    { label: "Ажлын талбар", value: riskWorkArea, setValue: setRiskWorkArea },
+                    { label: "Огноо", value: riskAssessmentDate, setValue: setRiskAssessmentDate, type: "date" },
                   ].map((field) => (
                     <label key={field.label}>
                       <span>{field.label}:</span>
-                      <input type={field.type ?? "text"} defaultValue={field.value} />
+                      <input type={field.type ?? "text"} value={field.value} onChange={(event) => field.setValue(event.target.value)} />
                     </label>
                   ))}
                 </div>
@@ -954,15 +1084,33 @@ export default function SafetyPage() {
                       <div className="risk-assessment-questions">
                         {section.items.map((item, itemIndex) => {
                           const inputName = `risk-assessment-${sectionIndex}-${itemIndex}`;
+                          const answerIndex = RISK_ASSESSMENT_SECTIONS
+                            .slice(0, sectionIndex)
+                            .reduce((total, current) => total + current.items.length, 0) + itemIndex;
+                          const selectedAnswer = riskAnswers[answerIndex]?.answer ?? "";
                           return (
                             <div className="risk-assessment-row" key={item}>
                               <div className="risk-assessment-question">- {item}</div>
                               <label className="risk-answer-box">
-                                <input type="radio" name={inputName} value="yes" aria-label={`${item} тийм`} />
+                                <input
+                                  type="radio"
+                                  name={inputName}
+                                  value="yes"
+                                  checked={selectedAnswer === "yes"}
+                                  onChange={() => updateRiskAnswer(answerIndex, "yes")}
+                                  aria-label={`${item} тийм`}
+                                />
                                 <span />
                               </label>
                               <label className="risk-answer-box">
-                                <input type="radio" name={inputName} value="no" aria-label={`${item} үгүй`} />
+                                <input
+                                  type="radio"
+                                  name={inputName}
+                                  value="no"
+                                  checked={selectedAnswer === "no"}
+                                  onChange={() => updateRiskAnswer(answerIndex, "no")}
+                                  aria-label={`${item} үгүй`}
+                                />
                                 <span />
                               </label>
                             </div>
@@ -1016,6 +1164,7 @@ export default function SafetyPage() {
                   onClick={() => {
                     setReportClock(new Date());
                     void mutate();
+                    void mutateRiskAssessments();
                   }}
                 >
                   Шинэчлэх
@@ -1031,6 +1180,7 @@ export default function SafetyPage() {
                   { label: "Нийт incident", value: `${reportIncidents.length}`, sub: "Энэ хугацаанд", color: ACCENT },
                   { label: "Нээлттэй", value: `${reportOpenIncidents}`, sub: "Шалгах шаардлагатай", color: "#F59E0B" },
                   { label: "Өндөр эрсдэл", value: `${reportHighSeverity}`, sub: "Priority incident", color: "#EF4444" },
+                  { label: "Эрсдэлийн үнэлгээ", value: `${reportRiskAssessments.length}`, sub: "Хадгалсан хуудас", color: "#8B5CF6" },
                   { label: "Шийдвэрлэгдсэн", value: `${reportClosedIncidents}`, sub: `${reportClosurePct}% хаалтын хувь`, color: "#10B981" },
                   { label: "Төлөв", value: reportHealth.label, sub: "Тайлангийн үнэлгээ", color: reportHealth.color },
                 ].map((card) => (
@@ -1058,6 +1208,40 @@ export default function SafetyPage() {
                     </div>
                   ))}
                 </div>
+              </div>
+
+              <div className="panel safety-risk-report-panel" style={{ padding: 18, margin: 0 }}>
+                <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12, marginBottom: 12, flexWrap: "wrap" }}>
+                  <div>
+                    <div className="panel-title">Өдөр тутмын эрсдэлийн үнэлгээ</div>
+                    <div className="panel-sub" style={{ marginTop: 4 }}>Хадгалсан үнэлгээнүүд энэ тайланд хамт орно.</div>
+                  </div>
+                  <span style={{ color: "var(--muted)", fontSize: 11 }}>{reportRiskAssessments.length} хуудас</span>
+                </div>
+
+                {reportLatestRiskAssessments.length === 0 ? (
+                  <div className="safety-risk-report-empty">Энэ хугацаанд хадгалсан эрсдэлийн үнэлгээ байхгүй байна.</div>
+                ) : (
+                  <div className="safety-risk-report-grid">
+                    {reportLatestRiskAssessments.map((assessment) => {
+                      const answerCount = countRiskAnswers(assessment.answers);
+                      return (
+                        <article className="safety-risk-report-card" key={assessment.id}>
+                          <div style={{ minWidth: 0 }}>
+                            <div className="safety-risk-report-title">{assessment.employeeName}</div>
+                            <div className="safety-risk-report-meta">
+                              {formatShortDate(new Date(assessment.assessmentDate))} · {assessment.taskName || "Гүйцэтгэх ажил оруулаагүй"} · {assessment.workArea || "Талбар оруулаагүй"}
+                            </div>
+                            <div className="safety-risk-report-meta">
+                              Тийм {answerCount.yes} · Үгүй {answerCount.no} · Хоосон {answerCount.empty} · {assessment.createdBy.fullName}
+                            </div>
+                          </div>
+                          <span className="bg bg-b print-hidden">Хадгалсан</span>
+                        </article>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
 
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 320px), 1fr))", gap: 16 }}>

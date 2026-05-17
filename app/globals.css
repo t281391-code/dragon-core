@@ -2155,6 +2155,15 @@ input[type="date"] {
   font-weight: 900;
 }
 
+.risk-assessment-error {
+  padding: 10px 18px;
+  border-bottom: 1px solid rgba(239, 68, 68, 0.18);
+  background: rgba(239, 68, 68, 0.1);
+  color: #fecaca;
+  font-size: 12px;
+  font-weight: 800;
+}
+
 .risk-assessment-body {
   max-width: 100%;
   overflow: auto;
@@ -2366,6 +2375,50 @@ input[type="date"] {
   font-size: 21px;
   font-style: italic;
   font-weight: 750;
+}
+
+.safety-risk-report-empty {
+  border: 1px dashed rgba(148, 163, 184, 0.28);
+  border-radius: 10px;
+  padding: 18px 14px;
+  color: var(--muted);
+  text-align: center;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.safety-risk-report-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr));
+  gap: 10px;
+}
+
+.safety-risk-report-card {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  min-width: 0;
+  border: 1px solid rgba(239, 68, 68, 0.24);
+  border-radius: 12px;
+  background: rgba(239, 68, 68, 0.07);
+  padding: 12px 14px;
+}
+
+.safety-risk-report-title {
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 900;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.safety-risk-report-meta {
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
 }
 
 .department-logistics {
@@ -4561,6 +4614,11 @@ body.theme-light .empty-row td {
 
   .logistics-report-waybill-card .btn {
     width: 100%;
+  }
+
+  .safety-risk-report-card {
+    align-items: stretch;
+    flex-direction: column;
   }
 
   .topbar {
