@@ -63,7 +63,7 @@ function userFromSession(session: SessionPayload | null): AuthUser | null {
   };
 }
 
-export async function getRequestUser(): Promise<AuthUser | null> {
+async function getRequestIdentity(): Promise<AuthUser | null> {
   const { headers } = await import("next/headers");
   const requestHeaders = await headers();
   const headerUser = userFromTrustedHeaders(requestHeaders);
@@ -74,21 +74,7 @@ export async function getRequestUser(): Promise<AuthUser | null> {
   return userFromSession(session);
 }
 
-export async function getCurrentUser(): Promise<AuthUser | null> {
-  const { headers } = await import("next/headers");
-  const requestHeaders = await headers();
-  const headerUser = userFromTrustedHeaders(requestHeaders);
-  let fallbackUser = headerUser;
-  let userId = headerUser?.id ?? null;
-
-  if (!userId) {
-    const { getSession } = await import("@/lib/session");
-    const session = await getSession();
-    fallbackUser = userFromSession(session);
-    if (!fallbackUser) return null;
-    userId = fallbackUser.id;
-  }
-
+async function lookupActiveUser(userId: string): Promise<AuthUser | null> {
   const { prisma } = await import("@/lib/prisma");
   try {
     const user = await prisma.user.findUnique({
@@ -104,7 +90,7 @@ export async function getCurrentUser(): Promise<AuthUser | null> {
     });
 
     if (!user || !user.isActive) return null;
-    if (!isRoleName(user.role.name) || !isDepartmentName(user.department.name)) return fallbackUser;
+    if (!isRoleName(user.role.name) || !isDepartmentName(user.department.name)) return null;
 
     return {
       id: user.id,
@@ -115,9 +101,19 @@ export async function getCurrentUser(): Promise<AuthUser | null> {
       isActive: user.isActive
     };
   } catch (error) {
-    console.error("Current user lookup failed; using session header fallback.", error);
-    return fallbackUser;
+    console.error("Current user lookup failed.", error);
+    return null;
   }
+}
+
+export async function getRequestUser(): Promise<AuthUser | null> {
+  const identity = await getRequestIdentity();
+  if (!identity) return null;
+  return lookupActiveUser(identity.id);
+}
+
+export async function getCurrentUser(): Promise<AuthUser | null> {
+  return getRequestUser();
 }
 
 export async function requireCurrentUser(): Promise<AuthUser> {

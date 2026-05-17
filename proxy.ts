@@ -19,6 +19,7 @@ const AUTHENTICATED_ROUTES = ["/agent", "/shifts"];
 const ADMIN_ONLY_ROUTES = ["/users"];
 const DEFAULT_HOME = "/warehouse";
 const SESSION_SECRET = getJwtSecret();
+const SAFE_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
 
 function homeFor(department: string) {
   return DEPT_HOME[department] ?? DEFAULT_HOME;
@@ -103,10 +104,41 @@ function nextWithSessionHeaders(request: NextRequest, session: VerifiedSession |
   return NextResponse.next({ request: { headers: requestHeaders } });
 }
 
+function validateSameOriginApiMutation(request: NextRequest) {
+  if (SAFE_METHODS.has(request.method) || !request.nextUrl.pathname.startsWith("/api/")) return null;
+
+  const origin = request.headers.get("origin");
+  if (origin) {
+    return origin === request.nextUrl.origin
+      ? null
+      : NextResponse.json({ error: "Cross-origin request blocked" }, { status: 403 });
+  }
+
+  const referer = request.headers.get("referer");
+  if (referer) {
+    try {
+      return new URL(referer).origin === request.nextUrl.origin
+        ? null
+        : NextResponse.json({ error: "Cross-origin request blocked" }, { status: 403 });
+    } catch {
+      return NextResponse.json({ error: "Cross-origin request blocked" }, { status: 403 });
+    }
+  }
+
+  if (process.env.NODE_ENV === "production") {
+    return NextResponse.json({ error: "Origin header required" }, { status: 403 });
+  }
+
+  return null;
+}
+
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const blockReason = await inspectRequest(request);
   if (blockReason) return blockedResponse(blockReason);
+
+  const sameOriginBlock = validateSameOriginApiMutation(request);
+  if (sameOriginBlock) return sameOriginBlock;
 
   const verifiedSession = await getVerifiedSession(request);
 
