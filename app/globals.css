@@ -2350,17 +2350,59 @@ input[type="date"] {
 
 .risk-answer-box span {
   display: block;
+  position: relative;
   width: 26px;
   height: 26px;
   border: 2px solid #777777;
   background: transparent;
 }
 
-.risk-answer-box input:checked + span {
-  border-color: #374151;
-  background:
-    linear-gradient(45deg, transparent 42%, #374151 42%, #374151 58%, transparent 58%),
-    linear-gradient(-45deg, transparent 42%, #374151 42%, #374151 58%, transparent 58%);
+.risk-answer-box span::before,
+.risk-answer-box span::after {
+  content: "";
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.risk-answer-box input[value="yes"]:checked + span {
+  border-color: #6d7f3d;
+  background: rgba(109, 127, 61, 0.08);
+}
+
+.risk-answer-box input[value="yes"]:checked + span::after {
+  opacity: 1;
+  left: 7px;
+  top: 1px;
+  width: 8px;
+  height: 16px;
+  border: solid #5f7437;
+  border-width: 0 3px 3px 0;
+  transform: rotate(45deg);
+}
+
+.risk-answer-box input[value="no"]:checked + span {
+  border-color: #a15a5a;
+  background: rgba(161, 90, 90, 0.08);
+}
+
+.risk-answer-box input[value="no"]:checked + span::before,
+.risk-answer-box input[value="no"]:checked + span::after {
+  left: 11px;
+  top: 4px;
+  width: 3px;
+  height: 15px;
+  border-radius: 999px;
+  background: #9a4b4b;
+  opacity: 1;
+}
+
+.risk-answer-box input[value="no"]:checked + span::before {
+  transform: rotate(45deg);
+}
+
+.risk-answer-box input[value="no"]:checked + span::after {
+  transform: rotate(-45deg);
 }
 
 .risk-answer-box input:focus-visible + span {
@@ -5826,6 +5868,22 @@ body.theme-light .agent-chat {
   .risk-assessment-modal .risk-answer-box span {
     width: 16px !important;
     height: 16px !important;
+  }
+
+  .risk-assessment-modal .risk-answer-box input[value="yes"]:checked + span::after {
+    left: 4px !important;
+    top: 0 !important;
+    width: 5px !important;
+    height: 10px !important;
+    border-width: 0 2px 2px 0 !important;
+  }
+
+  .risk-assessment-modal .risk-answer-box input[value="no"]:checked + span::before,
+  .risk-assessment-modal .risk-answer-box input[value="no"]:checked + span::after {
+    left: 7px !important;
+    top: 2px !important;
+    width: 2px !important;
+    height: 10px !important;
   }
 
   .report-print-root .print-hidden,
