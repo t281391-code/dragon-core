@@ -86,6 +86,46 @@ const DEPT_MN: Record<string, string> = {
   LOGISTICS: "Тээвэр",
 };
 
+const RISK_ASSESSMENT_SECTIONS = [
+  {
+    title: "1. Ажлын бэлтгэл",
+    items: [
+      "Ажлаа нарийн тооцож, төлөвлөсөн үү?",
+      "Шаардлагатай мэдлэг ур чадвар танд бий юу?",
+      "Энэ ажлыг гүйцэтгэх зөвшөөрөл бий юу?",
+      "Багаж тоног төхөөрөмж бүгд эвдрэл гэмтэлгүй байна уу?",
+      "Та тохирох НБХХ-ээ бүрэн зөв өмссөн үү?",
+      "Та өөрийн биеэр ажлын байрны эмх цэгц талбайн зохион байгуулалтыг хангаж чадах уу?",
+      "Энэ ажилд тохирсон горим, журам байна уу?",
+    ],
+    note: "ҮГҮЙ бол Ахлах ажилтнаас зааварчилгаа авах",
+  },
+  {
+    title: "2. Аюулыг илрүүл",
+    items: [
+      "Та ажил хийх бүрэн чадвартай байна уу? /Сайн амарсан, согтууруулах ундаа, эмийн нөлөөнд автаагүй, биед зовиургүй/",
+      "Хаалт хашилт, тэмдэглэгээг зөв байршуулж тавьсан уу?",
+      "Зам, талбай, шал тавцан шаардлага хангахуйц байна уу?",
+      "Гэрэлтүүлэг, агааржуулалт хангалттай байна уу?",
+    ],
+    note: "ҮГҮЙ бол Ахлах ажилтнаас зааварчилгаа авах",
+  },
+  {
+    title: "3. Би дараах ажилд оролцоно.",
+    items: [
+      "Энергийн эх үүсвэрүүдийг шалгах шаардлагатай ажил",
+      "1.5 м-ээс өндөрт ажиллах",
+      "Өндөр хэмжээний ажил, даралтат савтай харьцах ажил",
+      "Хязгаарлагдмал орчин, хориотой бүсэд нэвтрэх ажил",
+      "Өргөгдсөн ачааны ойролцоо, тогтворгүй гадаргуу дээрх ажил",
+      "Хөдөлгөөнт техникүүдийн дунд эсвэл ойролцоо ажиллах",
+      "Цахилгаан хүчдэлтэй харьцах ажил",
+      "Ухалт малталтын ажил",
+    ],
+    note: "",
+  },
+];
+
 function formatDateTime(value: Date | null) {
   if (!value) return "--:--:--";
   return value.toLocaleString("mn-MN", {
@@ -194,6 +234,7 @@ export default function SafetyPage() {
   const [tableSearch, setTableSearch] = useState("");
   const [tablePage, setTablePage] = useState(0);
   const [modal, setModal] = useState(false);
+  const [riskModal, setRiskModal] = useState(false);
   const [reportModal, setReportModal] = useState(false);
   const [selectedIncident, setSelectedIncident] = useState<SafetyIncident | null>(null);
   const [reportClock, setReportClock] = useState<Date | null>(null);
@@ -221,13 +262,17 @@ export default function SafetyPage() {
 
   const incidents: SafetyIncident[] = useMemo(() => incidentsData?.data ?? [], [incidentsData]);
 
-  useEscapeClose(Boolean(modal || reportModal || selectedIncident), () => {
+  useEscapeClose(Boolean(modal || riskModal || reportModal || selectedIncident), () => {
     if (selectedIncident) {
       setSelectedIncident(null);
       return;
     }
     if (reportModal) {
       setReportModal(false);
+      return;
+    }
+    if (riskModal) {
+      setRiskModal(false);
       return;
     }
     if (modal) setModal(false);
@@ -810,7 +855,7 @@ export default function SafetyPage() {
                 {[
                   { icon: "🛡️", label: "Incident нэмэх", onClick: () => setModal(true) },
                   { icon: "📋", label: "Тайлан гаргах", onClick: openReportModal },
-                  { icon: "⚠️", label: "Эрсдэл үнэлэх" },
+                  { icon: "⚠️", label: "Эрсдэл үнэлэх", onClick: () => setRiskModal(true) },
                   { icon: "🔄", label: "Шинэчлэх", onClick: () => void mutate() },
                 ].map((a) => (
                   <button key={a.label} type="button" onClick={a.onClick}
@@ -846,6 +891,93 @@ export default function SafetyPage() {
           </div>
         </div>
       </div>
+
+      {riskModal ? (
+        <div
+          className="mo open"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="risk-assessment-title"
+          onClick={(event) => event.target === event.currentTarget && setRiskModal(false)}
+        >
+          <div className="mc report-print-root risk-assessment-modal" onClick={(event) => event.stopPropagation()}>
+            <div className="risk-assessment-toolbar print-hidden">
+              <div>
+                <div className="panel-sub">ХЭАБО өдөр тутмын хяналт</div>
+                <h3 id="risk-assessment-title">Өдөр тутмын эрсдэлийн үнэлгээ</h3>
+              </div>
+              <div className="report-print-actions">
+                <button className="btn bp" type="button" onClick={printReport}>PDF татах</button>
+                <button className="mx" type="button" aria-label="Эрсдэлийн үнэлгээ хаах" onClick={() => setRiskModal(false)}>×</button>
+              </div>
+            </div>
+
+            <div className="risk-assessment-body">
+              <section className="risk-assessment-sheet" aria-label="Өдөр тутмын эрсдэлийн үнэлгээ">
+                <header className="risk-assessment-head">
+                  <div className="risk-assessment-logo" aria-label="MERA">
+                    <span className="risk-logo-mark" aria-hidden="true">
+                      <span />
+                    </span>
+                    <span className="risk-logo-copy">
+                      <strong>MERA</strong>
+                      <small>БАЯЛАГ БҮТЭЭХ ХҮЧ</small>
+                    </span>
+                  </div>
+                  <div className="risk-assessment-title-box">Өдөр тутмын эрсдэлийн үнэлгээ</div>
+                </header>
+
+                <div className="risk-assessment-meta">
+                  {[
+                    { label: "Ажилтны нэр", value: user?.fullName ?? "" },
+                    { label: "Гүйцэтгэх ажил", value: "" },
+                    { label: "Ажлын талбар", value: "" },
+                    { label: "Огноо", value: incidentDate, type: "date" },
+                  ].map((field) => (
+                    <label key={field.label}>
+                      <span>{field.label}:</span>
+                      <input type={field.type ?? "text"} defaultValue={field.value} />
+                    </label>
+                  ))}
+                </div>
+
+                <div className="risk-assessment-answer-head" aria-hidden="true">
+                  <span />
+                  <b>Тийм</b>
+                  <b>Үгүй</b>
+                </div>
+
+                <div className="risk-assessment-sections">
+                  {RISK_ASSESSMENT_SECTIONS.map((section, sectionIndex) => (
+                    <section className="risk-assessment-section" key={section.title}>
+                      <h4>{section.title}</h4>
+                      <div className="risk-assessment-questions">
+                        {section.items.map((item, itemIndex) => {
+                          const inputName = `risk-assessment-${sectionIndex}-${itemIndex}`;
+                          return (
+                            <div className="risk-assessment-row" key={item}>
+                              <div className="risk-assessment-question">- {item}</div>
+                              <label className="risk-answer-box">
+                                <input type="radio" name={inputName} value="yes" aria-label={`${item} тийм`} />
+                                <span />
+                              </label>
+                              <label className="risk-answer-box">
+                                <input type="radio" name={inputName} value="no" aria-label={`${item} үгүй`} />
+                                <span />
+                              </label>
+                            </div>
+                          );
+                        })}
+                      </div>
+                      {section.note ? <div className="risk-section-note">{section.note}</div> : null}
+                    </section>
+                  ))}
+                </div>
+              </section>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       {/* Live Report Modal */}
       {reportModal ? (
