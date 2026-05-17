@@ -46,6 +46,7 @@ type ProductionLog = {
   note: string | null;
   createdBy: { fullName: string };
   material: { name: string; unit: string };
+  materialUsage: { materialName: string; quantity: number; unit: string }[];
   telemetryLogs: EquipmentTelemetryLog[];
 };
 
@@ -2263,6 +2264,23 @@ export default function ProductionPage() {
                   <div style={{fontSize:13,color:"#fff",fontWeight:700,wordBreak:"break-word"}}>{value}</div>
                 </div>
               ))}
+            </div>
+
+            <div style={{padding:"14px",borderRadius:12,border:"1px solid rgba(245,158,11,0.2)",background:"rgba(245,158,11,0.06)",marginBottom:12}}>
+              <div style={{fontSize:12,color:"#F59E0B",fontWeight:800,marginBottom:10}}>Орцын зарцуулалт</div>
+              <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(min(100%,160px),1fr))",gap:8}}>
+                {MANUAL_EXPLOSIVE_INPUTS.map((materialName) => {
+                  const usage = selectedLog.materialUsage.find((item) => item.materialName === materialName);
+                  const quantity = usage?.quantity ?? 0;
+                  const unit = usage?.unit ?? "кг";
+                  return (
+                    <div key={materialName} style={{padding:"10px 12px",borderRadius:10,border:"1px solid rgba(245,158,11,0.18)",background:"rgba(8,14,26,0.35)"}}>
+                      <div style={{fontSize:10,color:"#fbbf24",fontWeight:850,textTransform:"uppercase",marginBottom:5}}>{materialName}</div>
+                      <div style={{fontSize:15,color:"#fff",fontWeight:850}}>{quantity.toLocaleString("mn-MN")} {unit}</div>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
 
             <div style={{padding:"14px",borderRadius:12,border:"1px solid rgba(16,185,129,0.18)",background:"rgba(16,185,129,0.06)",marginBottom:12}}>

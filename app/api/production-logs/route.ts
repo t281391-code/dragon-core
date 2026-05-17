@@ -157,6 +157,42 @@ export async function GET(request: Request) {
     telemetryByLog.set(row.productionLogId, rows);
   }
 
+  async function readMaterialUsageRows(productionLogIds: string[]) {
+    if (!productionLogIds.length) return [];
+
+    return prisma.materialTransaction.findMany({
+      where: {
+        type: "OUT",
+        material: { name: { in: [...MANUAL_EXPLOSIVE_INPUTS] } },
+        OR: productionLogIds.map((id) => ({ note: { contains: `[flow:production:${id}]` } })),
+      },
+      orderBy: [{ transactionDate: "asc" }, { createdAt: "asc" }],
+      select: {
+        quantity: true,
+        note: true,
+        material: { select: { name: true, unit: true } },
+      },
+    });
+  }
+
+  const materialUsageRows = await readMaterialUsageRows(logRows.map((row) => row.id)).catch((error) => {
+    console.error("Production material usage fetch failed; returning logs without usage detail.", error);
+    return [] as Awaited<ReturnType<typeof readMaterialUsageRows>>;
+  });
+  const materialUsageByLog = new Map<string, Array<{ materialName: string; quantity: number; unit: string }>>();
+  for (const row of materialUsageRows) {
+    const logId = row.note?.match(/\[flow:production:([^\]]+)\]/)?.[1];
+    if (!logId) continue;
+
+    const rows = materialUsageByLog.get(logId) ?? [];
+    rows.push({
+      materialName: row.material.name,
+      quantity: row.quantity,
+      unit: row.material.unit,
+    });
+    materialUsageByLog.set(logId, rows);
+  }
+
   const logs = logRows.map((row) => ({
     id: row.id,
     lotNumber: row.lotNumber,
@@ -171,6 +207,7 @@ export async function GET(request: Request) {
     density: row.density,
     note: row.note,
     material: { name: row.materialName, unit: row.materialUnit },
+    materialUsage: materialUsageByLog.get(row.id) ?? [],
     createdBy: { fullName: row.createdByFullName },
     telemetryLogs: telemetryByLog.get(row.id) ?? [],
   }));
