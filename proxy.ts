@@ -3,7 +3,7 @@ import type { NextRequest } from "next/server";
 import { getJwtSecret } from "@/lib/env";
 import { blockedResponse, inspectRequest } from "@/lib/security/edge";
 
-const PUBLIC_PATHS = ["/", "/login"];
+const PUBLIC_PATHS = ["/", "/login", "/thesis"];
 const API_PUBLIC_PATHS = ["/api/auth/login", "/api/auth/register"];
 const STATIC_EXT = /\.(glb|gltf|fbx|obj|png|jpg|jpeg|webp|svg|ico|woff2?|ttf|otf|mp4|mp3|pdf)$/i;
 
