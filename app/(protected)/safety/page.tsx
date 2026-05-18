@@ -882,7 +882,7 @@ export default function SafetyPage() {
               ) : null}
             </div>
 
-            <div style={{ padding: "10px 20px", display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+            <div className="safety-incident-filters" style={{ padding: "10px 20px", display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
               {[
                 { key: "all", label: "Бүгд", color: "#6b7280" },
                 { key: "open", label: "Нээлттэй", color: "#EF4444" },
@@ -894,12 +894,12 @@ export default function SafetyPage() {
                   {chip.label}
                 </button>
               ))}
-              <input value={tableSearch} onChange={(e) => updateTableSearch(e.target.value)} placeholder="Хайх..."
+              <input className="safety-incident-search" value={tableSearch} onChange={(e) => updateTableSearch(e.target.value)} placeholder="Хайх..."
                 style={{ marginLeft: "auto", padding: "4px 12px", borderRadius: 999, fontSize: 11, border: "1.5px solid var(--border)", background: "transparent", color: "var(--text)", outline: "none", width: 140 }} />
             </div>
 
-            <div style={{ borderTop: "1px solid var(--border)" }}>
-              <table className="safety-table">
+            <div className="safety-incident-table-wrap" style={{ borderTop: "1px solid var(--border)" }}>
+              <table className="safety-table safety-incident-table">
                 <thead>
                   <tr>
                     <th>Огноо</th>
@@ -913,7 +913,7 @@ export default function SafetyPage() {
                 </thead>
                 <tbody>
                   {paginatedIncidents.length === 0 ? (
-                                        <tr className="empty-row">
+                    <tr className="empty-row">
                       <td colSpan={7} style={{ padding: 18 }}>
                         <DashboardEmptyState
                           icon="🛡️"
@@ -928,25 +928,25 @@ export default function SafetyPage() {
                   ) : (
                     paginatedIncidents.map((incident) => (
                       <tr key={incident.id} className="wh-tr-hover">
-                        <td>{incident.incidentDate.slice(0, 10)}</td>
-                        <td>
+                        <td data-label="Огноо">{incident.incidentDate.slice(0, 10)}</td>
+                        <td data-label="Гарчиг">
                           <strong style={{ color: "var(--text)" }}>{incident.title}</strong>
                           <div style={{ color: "var(--muted)", fontSize: 11 }}>{incident.description}</div>
                         </td>
-                        <td>{incident.location}</td>
-                        <td>
+                        <td data-label="Байршил">{incident.location}</td>
+                        <td data-label="Эрсдэл">
                           <span className={`bg ${incident.severity === "high" ? "bg-r" : incident.severity === "medium" ? "bg-a" : "bg-b"}`}>
                             {SEVERITY_LABELS[incident.severity] ?? incident.severity}
                           </span>
                         </td>
-                        <td>
+                        <td data-label="Төлөв">
                           <span className={`bg ${STATUS_BADGES[incident.status] ?? "bg-gr"}`}>
                             {STATUS_LABELS[incident.status] ?? incident.status}
                           </span>
                         </td>
-                        <td>{incident.reportedBy.fullName}</td>
-                        <td>
-                          <button type="button" onClick={() => openIncidentDetails(incident)} style={{
+                        <td data-label="Мэдэгдсэн">{incident.reportedBy.fullName}</td>
+                        <td className="safety-incident-action-cell" data-label="Үйлдэл">
+                          <button className="safety-incident-detail-button" type="button" onClick={() => openIncidentDetails(incident)} style={{
                             padding: "4px 10px", borderRadius: 7, whiteSpace: "nowrap", fontSize: 10, fontWeight: 700, cursor: "pointer",
                             border: `1px solid ${incident.status === "open" || incident.severity === "high" ? "rgba(239,68,68,0.4)" : "var(--border)"}`,
                             background: incident.status === "open" || incident.severity === "high" ? "rgba(239,68,68,0.08)" : "transparent",
