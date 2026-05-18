@@ -4634,19 +4634,163 @@ body.theme-light .empty-row td {
     flex-direction: column;
   }
 
+  .risk-assessment-toolbar h3 {
+    font-size: 15px;
+    line-height: 1.25;
+  }
+
+  .risk-assessment-toolbar .report-print-actions {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 44px;
+    gap: 8px;
+    width: 100%;
+  }
+
+  .risk-assessment-toolbar .report-print-actions .btn,
+  .risk-assessment-toolbar .report-print-actions .mx {
+    width: 100%;
+    min-width: 0;
+    min-height: 42px;
+  }
+
   .risk-assessment-body {
+    max-width: 100%;
+    overflow-x: hidden;
     padding: 12px;
   }
 
   .risk-assessment-sheet {
-    width: 760px;
-    min-height: 980px;
-    padding: 32px 34px 38px;
+    width: 100%;
+    min-width: 0;
+    min-height: 0;
+    padding: 24px;
+    border-radius: 12px;
   }
 
   .risk-assessment-head {
-    grid-template-columns: 1fr minmax(280px, 0.9fr);
-    gap: 24px;
+    grid-template-columns: 1fr;
+    gap: 18px;
+    margin-bottom: 28px;
+  }
+
+  .risk-assessment-logo {
+    grid-template-columns: 54px minmax(0, 1fr);
+    gap: 8px;
+  }
+
+  .risk-logo-mark {
+    width: 52px;
+    height: 39px;
+  }
+
+  .risk-logo-mark span {
+    width: 30px;
+    height: 10px;
+  }
+
+  .risk-logo-copy strong {
+    font-size: 32px;
+  }
+
+  .risk-logo-copy small {
+    font-size: 9px;
+    letter-spacing: 0.22em;
+  }
+
+  .risk-assessment-title-box {
+    padding: 13px 15px;
+    font-size: 22px;
+    line-height: 1.16;
+  }
+
+  .risk-assessment-meta {
+    gap: 12px;
+    margin-bottom: 28px;
+  }
+
+  .risk-assessment-meta label {
+    grid-template-columns: 1fr;
+    gap: 6px;
+    font-size: 16px;
+  }
+
+  .risk-assessment-meta input {
+    min-height: 40px;
+    font-size: 16px;
+  }
+
+  .risk-assessment-answer-head {
+    display: none;
+  }
+
+  .risk-assessment-sections {
+    gap: 18px;
+  }
+
+  .risk-assessment-section h4 {
+    font-size: 18px;
+  }
+
+  .risk-assessment-questions {
+    gap: 0;
+  }
+
+  .risk-assessment-row {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    grid-template-areas:
+      "question question"
+      "yes no";
+    gap: 8px;
+    padding: 11px 0;
+    border-bottom: 1px solid rgba(86, 86, 86, 0.18);
+  }
+
+  .risk-assessment-question {
+    grid-area: question;
+    font-size: 16px;
+    line-height: 1.35;
+  }
+
+  .risk-answer-box {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    min-height: 44px;
+    border: 1px solid rgba(86, 86, 86, 0.25);
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.34);
+    color: #4b4b4b;
+    font-size: 14px;
+    font-weight: 800;
+    touch-action: manipulation;
+  }
+
+  .risk-answer-box--yes {
+    grid-area: yes;
+  }
+
+  .risk-answer-box--no {
+    grid-area: no;
+  }
+
+  .risk-answer-box--yes::after {
+    content: "Тийм";
+  }
+
+  .risk-answer-box--no::after {
+    content: "Үгүй";
+  }
+
+  .risk-answer-box span {
+    width: 22px;
+    height: 22px;
+  }
+
+  .risk-section-note {
+    padding-left: 0;
+    font-size: 15px;
+    line-height: 1.35;
   }
 
   .logistics-report-waybill-card {
@@ -4711,12 +4855,64 @@ body.theme-light .empty-row td {
   }
 
   .risk-assessment-sheet {
-    width: 700px;
-    padding: 28px 28px 34px;
+    width: 100%;
+    padding: 18px 14px 22px;
   }
 
   .risk-assessment-title-box {
-    font-size: 25px;
+    font-size: 20px;
+  }
+
+  .risk-assessment-toolbar {
+    padding: 13px 12px;
+  }
+
+  .risk-assessment-toolbar .report-print-actions {
+    grid-template-columns: 1fr;
+  }
+
+  .risk-assessment-toolbar .report-print-actions .mx {
+    justify-self: stretch;
+  }
+
+  .risk-assessment-logo {
+    grid-template-columns: 44px minmax(0, 1fr);
+  }
+
+  .risk-logo-mark {
+    width: 42px;
+    height: 32px;
+  }
+
+  .risk-logo-copy strong {
+    font-size: 27px;
+  }
+
+  .risk-logo-copy small {
+    font-size: 8px;
+    letter-spacing: 0.14em;
+  }
+
+  .risk-assessment-meta label,
+  .risk-assessment-question {
+    font-size: 15px;
+  }
+
+  .risk-assessment-section h4 {
+    font-size: 16px;
+  }
+
+  .risk-assessment-row {
+    grid-template-columns: 1fr;
+    grid-template-areas:
+      "question"
+      "yes"
+      "no";
+  }
+
+  .risk-answer-box {
+    justify-content: flex-start;
+    padding: 0 12px;
   }
 
   .mo.open > .mc,

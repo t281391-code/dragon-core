@@ -1091,7 +1091,7 @@ export default function SafetyPage() {
                           return (
                             <div className="risk-assessment-row" key={item}>
                               <div className="risk-assessment-question">- {item}</div>
-                              <label className="risk-answer-box">
+                              <label className="risk-answer-box risk-answer-box--yes">
                                 <input
                                   type="radio"
                                   name={inputName}
@@ -1102,7 +1102,7 @@ export default function SafetyPage() {
                                 />
                                 <span />
                               </label>
-                              <label className="risk-answer-box">
+                              <label className="risk-answer-box risk-answer-box--no">
                                 <input
                                   type="radio"
                                   name={inputName}
