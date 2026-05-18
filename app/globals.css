@@ -2129,8 +2129,11 @@ input[type="date"] {
 }
 
 .risk-assessment-modal {
+  display: flex;
+  flex-direction: column;
   width: min(980px, calc(100vw - 24px));
   padding: 0 !important;
+  overflow: hidden !important;
   background:
     radial-gradient(circle at top right, rgba(239, 68, 68, 0.16), transparent 36%),
     linear-gradient(180deg, #1d2743 0%, #182238 100%);
@@ -2139,6 +2142,7 @@ input[type="date"] {
 }
 
 .risk-assessment-toolbar {
+  flex: 0 0 auto;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -2156,6 +2160,7 @@ input[type="date"] {
 }
 
 .risk-assessment-error {
+  flex: 0 0 auto;
   padding: 10px 18px;
   border-bottom: 1px solid rgba(239, 68, 68, 0.18);
   background: rgba(239, 68, 68, 0.1);
@@ -2165,6 +2170,8 @@ input[type="date"] {
 }
 
 .risk-assessment-body {
+  flex: 1 1 auto;
+  min-height: 0;
   max-width: 100%;
   overflow: auto;
   padding: 18px;
@@ -2340,6 +2347,16 @@ input[type="date"] {
   display: grid;
   place-items: center;
   min-height: 28px;
+  position: relative;
+  border: 0;
+  border-radius: 0;
+  padding: 0;
+  appearance: none;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  touch-action: manipulation;
 }
 
 .risk-answer-box input {
@@ -2370,6 +2387,11 @@ input[type="date"] {
   background: rgba(109, 127, 61, 0.08);
 }
 
+.risk-answer-box--yes.risk-answer-box--selected span {
+  border-color: #6d7f3d;
+  background: rgba(109, 127, 61, 0.08);
+}
+
 .risk-answer-box input[value="yes"]:checked + span::after {
   opacity: 1;
   left: 7px;
@@ -2381,7 +2403,23 @@ input[type="date"] {
   transform: rotate(45deg);
 }
 
+.risk-answer-box--yes.risk-answer-box--selected span::after {
+  opacity: 1;
+  left: 7px;
+  top: 1px;
+  width: 8px;
+  height: 16px;
+  border: solid #5f7437;
+  border-width: 0 3px 3px 0;
+  transform: rotate(45deg);
+}
+
 .risk-answer-box input[value="no"]:checked + span {
+  border-color: #a15a5a;
+  background: rgba(161, 90, 90, 0.08);
+}
+
+.risk-answer-box--no.risk-answer-box--selected span {
   border-color: #a15a5a;
   background: rgba(161, 90, 90, 0.08);
 }
@@ -2405,7 +2443,31 @@ input[type="date"] {
   transform: rotate(-45deg);
 }
 
+.risk-answer-box--no.risk-answer-box--selected span::before,
+.risk-answer-box--no.risk-answer-box--selected span::after {
+  left: 11px;
+  top: 4px;
+  width: 3px;
+  height: 15px;
+  border-radius: 999px;
+  background: #9a4b4b;
+  opacity: 1;
+}
+
+.risk-answer-box--no.risk-answer-box--selected span::before {
+  transform: rotate(45deg);
+}
+
+.risk-answer-box--no.risk-answer-box--selected span::after {
+  transform: rotate(-45deg);
+}
+
 .risk-answer-box input:focus-visible + span {
+  outline: 2px solid rgba(239, 68, 68, 0.7);
+  outline-offset: 2px;
+}
+
+.risk-answer-box:focus-visible span {
   outline: 2px solid rgba(239, 68, 68, 0.7);
   outline-offset: 2px;
 }
@@ -6224,8 +6286,24 @@ body.theme-light .agent-chat {
     border-width: 0 2px 2px 0 !important;
   }
 
+  .risk-assessment-modal .risk-answer-box--yes.risk-answer-box--selected span::after {
+    left: 4px !important;
+    top: 0 !important;
+    width: 5px !important;
+    height: 10px !important;
+    border-width: 0 2px 2px 0 !important;
+  }
+
   .risk-assessment-modal .risk-answer-box input[value="no"]:checked + span::before,
   .risk-assessment-modal .risk-answer-box input[value="no"]:checked + span::after {
+    left: 7px !important;
+    top: 2px !important;
+    width: 2px !important;
+    height: 10px !important;
+  }
+
+  .risk-assessment-modal .risk-answer-box--no.risk-answer-box--selected span::before,
+  .risk-assessment-modal .risk-answer-box--no.risk-answer-box--selected span::after {
     left: 7px !important;
     top: 2px !important;
     width: 2px !important;

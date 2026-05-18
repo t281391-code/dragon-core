@@ -1091,28 +1091,26 @@ export default function SafetyPage() {
                           return (
                             <div className="risk-assessment-row" key={item}>
                               <div className="risk-assessment-question">- {item}</div>
-                              <label className="risk-answer-box risk-answer-box--yes">
-                                <input
-                                  type="radio"
-                                  name={inputName}
-                                  value="yes"
-                                  checked={selectedAnswer === "yes"}
-                                  onChange={() => updateRiskAnswer(answerIndex, "yes")}
-                                  aria-label={`${item} тийм`}
-                                />
-                                <span />
-                              </label>
-                              <label className="risk-answer-box risk-answer-box--no">
-                                <input
-                                  type="radio"
-                                  name={inputName}
-                                  value="no"
-                                  checked={selectedAnswer === "no"}
-                                  onChange={() => updateRiskAnswer(answerIndex, "no")}
-                                  aria-label={`${item} үгүй`}
-                                />
-                                <span />
-                              </label>
+                              <button
+                                type="button"
+                                name={`${inputName}-yes`}
+                                className={`risk-answer-box risk-answer-box--yes ${selectedAnswer === "yes" ? "risk-answer-box--selected" : ""}`}
+                                onClick={() => updateRiskAnswer(answerIndex, "yes")}
+                                aria-pressed={selectedAnswer === "yes"}
+                                aria-label={`${item} тийм`}
+                              >
+                                <span aria-hidden="true" />
+                              </button>
+                              <button
+                                type="button"
+                                name={`${inputName}-no`}
+                                className={`risk-answer-box risk-answer-box--no ${selectedAnswer === "no" ? "risk-answer-box--selected" : ""}`}
+                                onClick={() => updateRiskAnswer(answerIndex, "no")}
+                                aria-pressed={selectedAnswer === "no"}
+                                aria-label={`${item} үгүй`}
+                              >
+                                <span aria-hidden="true" />
+                              </button>
                             </div>
                           );
                         })}
