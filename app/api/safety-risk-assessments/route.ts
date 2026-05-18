@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { getRequestUser } from "@/lib/auth";
-import { checkRateLimit, forbidden, normalizePageLimit, requireDepartmentRead, safeInternalError } from "@/lib/security/api";
+import { checkRateLimit, normalizePageLimit, safeInternalError } from "@/lib/security/api";
 
 export const preferredRegion = "sin1";
 
@@ -38,7 +38,6 @@ const riskAssessmentSelect = {
 export async function GET(request: Request) {
   const user = await getRequestUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  if (!requireDepartmentRead(user, "SAFETY")) return forbidden("Safety access required");
 
   const { searchParams } = new URL(request.url);
   const limit = normalizePageLimit(searchParams.get("limit"), 50, 200);
@@ -58,7 +57,6 @@ export async function POST(request: Request) {
 
   const user = await getRequestUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  if (!requireDepartmentRead(user, "SAFETY")) return forbidden("Safety access required");
 
   const parsed = riskAssessmentBodySchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) {

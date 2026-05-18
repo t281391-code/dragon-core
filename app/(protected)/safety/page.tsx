@@ -976,7 +976,7 @@ export default function SafetyPage() {
               <div className="panel-hdr"><div className="panel-title">Үйлдэл</div></div>
               <div style={{ padding: "4px 20px 16px", display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
                 {[
-                  { icon: "🛡️", label: "Incident нэмэх", onClick: () => setModal(true) },
+                  ...(canEdit ? [{ icon: "🛡️", label: "Incident нэмэх", onClick: () => setModal(true) }] : []),
                   { icon: "📋", label: "Тайлан гаргах", onClick: openReportModal },
                   { icon: "⚠️", label: "Эрсдэл үнэлэх", onClick: openRiskAssessmentModal },
                   { icon: "🔄", label: "Шинэчлэх", onClick: () => {

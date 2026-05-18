@@ -33,10 +33,11 @@ const DEPT_COLORS: Record<string, string> = {
 
 function getNavItems(role: string, department: string): NavItem[] {
   const shiftItem: NavItem = { href: "/shifts", icon: "⛏", label: "Ээлжийн бүртгэл", section: "Үйл ажиллагаа" };
+  const safetyItem: NavItem = { href: "/safety", icon: "🛡️", label: "ХЭАБО", section: "Үйл ажиллагаа" };
   const departmentItems: NavItem[] = [
     { href: "/warehouse", icon: "🏭", label: "Агуулах", section: "Үйл ажиллагаа" },
     { href: "/production", icon: "⚙️", label: "Үйлдвэрлэл", section: "Үйл ажиллагаа" },
-    { href: "/safety", icon: "🛡️", label: "ХЭАБО", section: "Үйл ажиллагаа" },
+    safetyItem,
     { href: "/logistics", icon: "🚛", label: "Тээвэрлэлт", section: "Үйл ажиллагаа" },
     shiftItem,
   ];
@@ -56,7 +57,13 @@ function getNavItems(role: string, department: string): NavItem[] {
   };
 
   const allowedPath = departmentMap[department] ?? "/warehouse";
-  return [...departmentItems.filter((item) => item.href === allowedPath), shiftItem];
+  const ownDepartmentItem = departmentItems.find((item) => item.href === allowedPath);
+  const sharedItems = allowedPath === safetyItem.href ? [shiftItem] : [safetyItem, shiftItem];
+
+  return [
+    ...(ownDepartmentItem ? [ownDepartmentItem] : []),
+    ...sharedItems,
+  ];
 }
 
 function initials(fullName: string): string {

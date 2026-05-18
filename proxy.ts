@@ -175,6 +175,7 @@ export async function proxy(request: NextRequest) {
   const accessedDept = DEPT_ROUTES.find(r => pathname.startsWith(r));
   if (accessedDept) {
     if (role === "ADMIN") return nextWithSessionHeaders(request, verifiedSession);
+    if (accessedDept === "/safety") return nextWithSessionHeaders(request, verifiedSession);
     if (accessedDept !== DEPT_HOME[department]) {
       return NextResponse.redirect(new URL(homeFor(department), request.url));
     }
