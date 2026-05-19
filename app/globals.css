@@ -2128,6 +2128,198 @@ input[type="date"] {
   --accent-dim: rgba(239, 68, 68, 0.08);
 }
 
+.safety-chart-body {
+  min-height: 214px;
+  padding: 12px 20px 18px;
+}
+
+.safety-chart-body--split {
+  display: grid;
+  align-items: center;
+}
+
+.safety-chart-split {
+  display: grid;
+  grid-template-columns: minmax(140px, 180px) minmax(0, 1fr);
+  gap: 18px;
+  align-items: center;
+}
+
+.safety-donut-wrap {
+  position: relative;
+  min-height: 172px;
+}
+
+.safety-donut-center {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-content: center;
+  text-align: center;
+  pointer-events: none;
+}
+
+.safety-donut-center strong {
+  font-family: var(--font-numeric);
+  font-variant-numeric: tabular-nums;
+  font-size: 25px;
+  font-weight: 900;
+  color: var(--text);
+  line-height: 1;
+}
+
+.safety-donut-center span {
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.safety-chart-legend,
+.safety-risk-answer-list {
+  display: grid;
+  gap: 12px;
+}
+
+.safety-chart-legend--compact {
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.safety-chart-legend-row,
+.safety-risk-answer-row {
+  min-width: 0;
+}
+
+.safety-chart-legend-head,
+.safety-risk-answer-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 750;
+  line-height: 1.25;
+}
+
+.safety-chart-legend-head > span:not(.safety-chart-dot) {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.safety-chart-legend-head strong,
+.safety-risk-answer-head b {
+  flex-shrink: 0;
+  font-family: var(--font-numeric);
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.safety-chart-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  flex: 0 0 auto;
+}
+
+.safety-chart-meter {
+  height: 5px;
+  margin-top: 6px;
+  border-radius: 999px;
+  overflow: hidden;
+  background: rgba(148, 163, 184, 0.16);
+}
+
+.safety-chart-meter span {
+  display: block;
+  height: 100%;
+  min-width: 4px;
+  border-radius: inherit;
+  transition: width 0.22s ease;
+}
+
+.safety-chart-empty {
+  min-height: 178px;
+  display: grid;
+  place-content: center;
+  gap: 7px;
+  border: 1px dashed rgba(148, 163, 184, 0.26);
+  border-radius: 8px;
+  background: rgba(15, 23, 42, 0.24);
+  text-align: center;
+  padding: 18px;
+}
+
+.safety-chart-empty strong {
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.safety-chart-empty span {
+  max-width: 280px;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.safety-risk-answer-panel {
+  min-height: 0;
+  padding-top: 4px;
+}
+
+.safety-risk-answer-head {
+  align-items: flex-start;
+}
+
+.safety-risk-answer-head > div {
+  flex: 1;
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.safety-risk-answer-head strong {
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.safety-risk-answer-head span:not(.safety-chart-dot) {
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1.35;
+}
+
+@media (max-width: 720px) {
+  .safety-chart-body {
+    padding: 10px 12px 14px;
+  }
+
+  .safety-chart-split {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+
+  .safety-donut-wrap {
+    min-height: 150px;
+  }
+
+  .safety-risk-answer-head {
+    flex-wrap: wrap;
+  }
+
+  .safety-risk-answer-head b {
+    width: 100%;
+    padding-left: 16px;
+  }
+}
+
 .risk-assessment-modal {
   display: flex;
   flex-direction: column;

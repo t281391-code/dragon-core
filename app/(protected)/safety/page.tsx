@@ -73,7 +73,6 @@ type SafetyRiskAssessment = {
 };
 
 const ACCENT = "#EF4444";
-const MONTH_SEEDS = [3, 5, 2, 7, 4, 6];
 const PAGE_SIZE = 20;
 const REPORT_DAYS = 14;
 
@@ -205,6 +204,8 @@ function buildMonthlySeries(incidents: SafetyIncident[]) {
       label: `${date.getMonth() + 1}-р`,
       total: 0,
       resolved: 0,
+      open: 0,
+      high: 0,
     };
   });
   const map = new Map(buckets.map((b) => [b.key, b]));
@@ -214,9 +215,51 @@ function buildMonthlySeries(incidents: SafetyIncident[]) {
     const bucket = map.get(key);
     if (!bucket) continue;
     bucket.total += 1;
+    if (incident.status === "open" || incident.status === "investigating") bucket.open += 1;
+    if (incident.severity === "high") bucket.high += 1;
     if (incident.status === "resolved" || incident.status === "closed") bucket.resolved += 1;
   }
   return buckets;
+}
+
+function buildDailySeries(incidents: SafetyIncident[]) {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  const buckets = Array.from({ length: REPORT_DAYS }, (_, index) => {
+    const date = new Date(today);
+    date.setDate(today.getDate() - (REPORT_DAYS - 1 - index));
+    return {
+      key: date.toISOString().slice(0, 10),
+      label: `${date.getMonth() + 1}/${date.getDate()}`,
+      total: 0,
+      open: 0,
+      high: 0,
+      resolved: 0,
+    };
+  });
+  const map = new Map(buckets.map((bucket) => [bucket.key, bucket]));
+
+  for (const incident of incidents) {
+    const date = new Date(incident.incidentDate);
+    date.setHours(0, 0, 0, 0);
+    const bucket = map.get(date.toISOString().slice(0, 10));
+    if (!bucket) continue;
+    bucket.total += 1;
+    if (incident.status === "open" || incident.status === "investigating") bucket.open += 1;
+    if (incident.severity === "high") bucket.high += 1;
+    if (incident.status === "resolved" || incident.status === "closed") bucket.resolved += 1;
+  }
+
+  return buckets;
+}
+
+function safePercent(value: number, total: number) {
+  return total > 0 ? Math.round((value / total) * 100) : 0;
+}
+
+function hasChartData(items: { value?: number; total?: number; resolved?: number; open?: number; high?: number }[]) {
+  return items.some((item) => (item.value ?? 0) > 0 || (item.total ?? 0) > 0 || (item.resolved ?? 0) > 0 || (item.open ?? 0) > 0 || (item.high ?? 0) > 0);
 }
 
 function SafetyTooltip({ active, payload, label }: { active?: boolean; payload?: { dataKey: string; name: string; value: number; color?: string; stroke?: string }[]; label?: string }) {
@@ -229,6 +272,15 @@ function SafetyTooltip({ active, payload, label }: { active?: boolean; payload?:
           {item.name}: <strong>{item.value}</strong>
         </div>
       ))}
+    </div>
+  );
+}
+
+function SafetyChartEmpty({ title, message }: { title: string; message: string }) {
+  return (
+    <div className="safety-chart-empty">
+      <strong>{title}</strong>
+      <span>{message}</span>
     </div>
   );
 }
@@ -549,6 +601,7 @@ export default function SafetyPage() {
   );
 
   const monthlySeries = useMemo(() => buildMonthlySeries(incidents), [incidents]);
+  const dailySeries = useMemo(() => buildDailySeries(incidents), [incidents]);
   const incidentSparkline = useMemo(() => monthlySeries.map((m) => m.total), [monthlySeries]);
   const resolvedSparkline = useMemo(() => monthlySeries.map((m) => m.resolved), [monthlySeries]);
 
@@ -570,9 +623,46 @@ export default function SafetyPage() {
     { name: "Бага", value: incidents.filter((i) => i.severity === "low").length, color: "#3B82F6" },
   ], [incidents, highSeverity]);
 
-  const monthlyTrend = useMemo(
-    () => monthlySeries.map((m, idx) => ({ label: m.label, value: m.total + (MONTH_SEEDS[idx] ?? 0) })),
-    [monthlySeries]
+  const monthlyHasData = hasChartData(monthlySeries);
+  const dailyHasData = hasChartData(dailySeries);
+  const categoryHasData = hasChartData(categorySeries);
+  const severityHasData = hasChartData(severityDist);
+  const incidentChartKey = useMemo(
+    () => [
+      totalIncidents,
+      openIncidents,
+      highSeverity,
+      closedIncidents,
+      monthlySeries.map((item) => `${item.total}:${item.open}:${item.high}:${item.resolved}`).join(","),
+      categorySeries.map((item) => item.value).join(","),
+    ].join("|"),
+    [categorySeries, closedIncidents, highSeverity, monthlySeries, openIncidents, totalIncidents]
+  );
+  const riskAnswerTotals = useMemo(
+    () => riskAssessments.reduce(
+      (acc, assessment) => {
+        const counts = countRiskAnswers(assessment.answers);
+        acc.yes += counts.yes;
+        acc.no += counts.no;
+        acc.empty += counts.empty;
+        return acc;
+      },
+      { yes: 0, no: 0, empty: 0 }
+    ),
+    [riskAssessments]
+  );
+  const riskAnswerSeries = useMemo(
+    () => [
+      { label: "Тийм", value: riskAnswerTotals.yes, color: "#10B981", detail: "Аюулгүй нөхцөл баталгаажсан" },
+      { label: "Үгүй", value: riskAnswerTotals.no, color: "#EF4444", detail: "Засах шаардлагатай эрсдэл" },
+      { label: "Хоосон", value: riskAnswerTotals.empty, color: "#64748B", detail: "Дутуу бөглөгдсөн хариулт" },
+    ],
+    [riskAnswerTotals]
+  );
+  const riskAnswerTotal = riskAnswerTotals.yes + riskAnswerTotals.no + riskAnswerTotals.empty;
+  const riskChartKey = useMemo(
+    () => `${riskAssessments.length}|${riskAnswerTotals.yes}:${riskAnswerTotals.no}:${riskAnswerTotals.empty}|${riskAssessments.map((item) => item.updatedAt).join(",")}`,
+    [riskAnswerTotals, riskAssessments]
   );
 
   const filteredIncidents = useMemo(() => {
@@ -745,29 +835,37 @@ export default function SafetyPage() {
             <div className="panel-hdr">
               <div>
                 <div className="panel-title">Сарын incident чиг хандлага</div>
-                <div className="panel-sub">Нийт болон шийдвэрлэсэн бүртгэл</div>
+                <div className="panel-sub">Нийт, нээлттэй, өндөр эрсдэл, хаалтын динамик</div>
               </div>
             </div>
-            <div style={{ padding: "0 20px 20px" }}>
-              <ResponsiveContainer width="100%" height={220}>
-                <ComposedChart data={monthlySeries}>
-                  <defs>
-                    <linearGradient id="sfBarGrad" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor="#EF4444" stopOpacity={0.85} />
-                      <stop offset="100%" stopColor="#EF4444" stopOpacity={0.35} />
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid stroke="var(--border)" vertical={false} strokeDasharray="3 3" />
-                  <XAxis dataKey="label" axisLine={false} tickLine={false} tick={{ fill: "var(--muted)", fontSize: 10 }} />
-                  <YAxis axisLine={false} tickLine={false} tick={{ fill: "var(--muted)", fontSize: 10 }} />
-                  <Legend iconSize={8} wrapperStyle={{ fontSize: 10, paddingTop: 4 }} />
-                  <Tooltip content={<SafetyTooltip />} />
-                  <Bar dataKey="total" name="Нийт" fill="url(#sfBarGrad)" radius={[5, 5, 0, 0]} barSize={14} isAnimationActive={false} />
-                  <Line type="monotone" dataKey="resolved" name="Шийдвэрлэсэн" stroke="#10B981" strokeWidth={2.5} dot={{ r: 3, fill: "#10B981" }} isAnimationActive={false} />
-                </ComposedChart>
-              </ResponsiveContainer>
+            <div className="safety-chart-body chart-wrap">
+              {monthlyHasData ? (
+                <ResponsiveContainer width="100%" height={240}>
+                  <ComposedChart key={`monthly-${incidentChartKey}`} data={monthlySeries} margin={{ top: 10, right: 10, left: -18, bottom: 0 }}>
+                    <defs>
+                      <linearGradient id="sfBarGrad" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor="#EF4444" stopOpacity={0.86} />
+                        <stop offset="100%" stopColor="#EF4444" stopOpacity={0.28} />
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid stroke="var(--border)" vertical={false} strokeDasharray="3 3" />
+                    <XAxis dataKey="label" axisLine={false} tickLine={false} tick={{ fill: "var(--muted)", fontSize: 10 }} />
+                    <YAxis allowDecimals={false} axisLine={false} tickLine={false} tick={{ fill: "var(--muted)", fontSize: 10 }} />
+                    <Legend iconSize={8} wrapperStyle={{ fontSize: 10, paddingTop: 4 }} />
+                    <Tooltip content={<SafetyTooltip />} />
+                    <Bar dataKey="total" name="Нийт" fill="url(#sfBarGrad)" radius={[5, 5, 0, 0]} barSize={18} isAnimationActive={false}>
+                      <LabelList dataKey="total" position="top" fill="var(--text)" fontSize={10} />
+                    </Bar>
+                    <Line type="monotone" dataKey="open" name="Нээлттэй" stroke="#F59E0B" strokeWidth={2.2} dot={{ r: 3, fill: "#F59E0B" }} isAnimationActive={false} />
+                    <Line type="monotone" dataKey="high" name="Өндөр" stroke="#EF4444" strokeWidth={2.2} dot={{ r: 3, fill: "#EF4444" }} isAnimationActive={false} />
+                    <Line type="monotone" dataKey="resolved" name="Шийдвэрлэсэн" stroke="#10B981" strokeWidth={2.4} dot={{ r: 3, fill: "#10B981" }} isAnimationActive={false} />
+                  </ComposedChart>
+                </ResponsiveContainer>
+              ) : (
+                <SafetyChartEmpty title="Сарын incident бүртгэл алга" message="Шинэ incident нэмэгдэхэд энэ график автоматаар шинэчлэгдэнэ." />
+              )}
             </div>
-            <ChartHint>Улаан багана нь нийт incident, ногоон шугам нь шийдвэрлэсэн incident-ийг харуулна. Мэдээлэл 5 секунд тутам шинэчлэгдэнэ.</ChartHint>
+            <ChartHint>Багана нь нийт incident; шар нь нээлттэй, улаан нь өндөр эрсдэл, ногоон нь шийдвэрлэсэн incident-ийг харуулна.</ChartHint>
           </div>
 
           <div className="panel">
@@ -777,95 +875,145 @@ export default function SafetyPage() {
                 <div className="panel-sub">Өндөр / Дунд / Бага</div>
               </div>
             </div>
-            <div style={{ padding: "16px 20px 20px" }}>
-              <div style={{ display: "grid", gridTemplateColumns: "160px 1fr", gap: 16, alignItems: "center" }}>
-                <ResponsiveContainer width="100%" height={160}>
-                  <PieChart>
-                    <Pie data={severityDist} dataKey="value" innerRadius={44} outerRadius={68} paddingAngle={3} isAnimationActive={false}>
-                      {severityDist.map((item) => <Cell key={item.name} fill={item.color} />)}
-                    </Pie>
-                    <Tooltip content={<SafetyTooltip />} />
-                  </PieChart>
-                </ResponsiveContainer>
-                <div style={{ display: "grid", gap: 12 }}>
-                  {severityDist.map((item) => (
-                    <div key={item.name}>
-                      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
-                        <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
-                          <span style={{ width: 8, height: 8, borderRadius: "50%", background: item.color, display: "inline-block" }} />
-                          <span style={{ fontSize: 12, color: "var(--muted)" }}>{item.name}</span>
-                        </div>
-                        <strong style={{ fontSize: 13 }}>{item.value}</strong>
-                      </div>
-                      <div style={{ height: 3, borderRadius: 2, background: "var(--border)" }}>
-                        <div style={{ height: "100%", borderRadius: 2, background: item.color, width: `${totalIncidents > 0 ? Math.round((item.value / totalIncidents) * 100) : 0}%` }} />
-                      </div>
+            <div className="safety-chart-body safety-chart-body--split chart-wrap">
+              {severityHasData ? (
+                <div className="safety-chart-split">
+                  <div className="safety-donut-wrap">
+                    <ResponsiveContainer width="100%" height={172}>
+                      <PieChart key={`severity-${incidentChartKey}`}>
+                        <Pie data={severityDist} nameKey="name" dataKey="value" innerRadius={48} outerRadius={72} paddingAngle={3} isAnimationActive={false}>
+                          {severityDist.map((item) => <Cell key={item.name} fill={item.color} />)}
+                        </Pie>
+                        <Tooltip content={<SafetyTooltip />} />
+                      </PieChart>
+                    </ResponsiveContainer>
+                    <div className="safety-donut-center">
+                      <strong>{totalIncidents}</strong>
+                      <span>нийт</span>
                     </div>
-                  ))}
+                  </div>
+                  <div className="safety-chart-legend">
+                    {severityDist.map((item) => {
+                      const share = safePercent(item.value, totalIncidents);
+                      return (
+                        <div className="safety-chart-legend-row" key={item.name}>
+                          <div className="safety-chart-legend-head">
+                            <span className="safety-chart-dot" style={{ background: item.color }} />
+                            <span>{item.name}</span>
+                            <strong>{item.value} · {share}%</strong>
+                          </div>
+                          <div className="safety-chart-meter">
+                            <span style={{ background: item.color, width: `${share}%` }} />
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
+              ) : (
+                <SafetyChartEmpty title="Severity data байхгүй" message="Incident бүртгэх үед өндөр, дунд, бага эрсдэлийн хувь автоматаар гарна." />
+              )}
               </div>
-            </div>
           </div>
         </div>
 
         <div className="wh-chart-row">
           <div className="panel">
-            <div className="panel-hdr"><div className="panel-title">Incident ангилал</div></div>
-            <div style={{ padding: "0 16px 16px" }}>
-              <ResponsiveContainer width="100%" height={130}>
-                <PieChart>
-                  <Pie data={categorySeries} dataKey="value" innerRadius={34} outerRadius={54} paddingAngle={3} isAnimationActive={false}>
-                    {categorySeries.map((item) => <Cell key={item.label} fill={item.color} />)}
-                  </Pie>
-                  <Tooltip content={<SafetyTooltip />} />
-                </PieChart>
-              </ResponsiveContainer>
-              <div style={{ display: "grid", gap: 5, marginTop: 4 }}>
-                {categorySeries.map((item) => (
-                  <div key={item.label} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11, color: "var(--muted)" }}>
-                    <span style={{ width: 6, height: 6, borderRadius: "50%", background: item.color, flexShrink: 0 }} />
-                    <span style={{ flex: 1 }}>{item.label}</span>
-                    <strong style={{ color: "var(--text)" }}>{item.value}</strong>
-                  </div>
-                ))}
+            <div className="panel-hdr">
+              <div>
+                <div className="panel-title">Incident ангилал</div>
+                <div className="panel-sub">Тоо болон нийтэд эзлэх хувь</div>
               </div>
             </div>
-          </div>
-
-          <div className="panel">
-            <div className="panel-hdr"><div className="panel-title">Ангиллын тархалт</div></div>
-            <div style={{ padding: "0 12px 16px" }}>
-              <ResponsiveContainer width="100%" height={160}>
-                <BarChart data={categorySeries} layout="vertical" barSize={12} margin={{ left: 0, right: 8, top: 8, bottom: 0 }}>
-                  <XAxis type="number" axisLine={false} tickLine={false} tick={{ fill: "var(--muted)", fontSize: 9 }} />
-                  <YAxis type="category" dataKey="label" axisLine={false} tickLine={false} tick={{ fill: "var(--muted)", fontSize: 9 }} width={90} />
-                  <Tooltip content={<SafetyTooltip />} />
-                  <Bar dataKey="value" name="Тоо" radius={[0, 4, 4, 0]} isAnimationActive={false}>
-                    <LabelList dataKey="value" position="right" fill="var(--text)" fontSize={10} />
-                    {categorySeries.map((item) => <Cell key={item.label} fill={item.color} />)}
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
+            <div className="safety-chart-body chart-wrap">
+              {categoryHasData ? (
+                <>
+                  <ResponsiveContainer width="100%" height={144}>
+                    <PieChart key={`category-${incidentChartKey}`}>
+                      <Pie data={categorySeries} nameKey="label" dataKey="value" innerRadius={38} outerRadius={58} paddingAngle={3} isAnimationActive={false}>
+                        {categorySeries.map((item) => <Cell key={item.label} fill={item.color} />)}
+                      </Pie>
+                      <Tooltip content={<SafetyTooltip />} />
+                    </PieChart>
+                  </ResponsiveContainer>
+                  <div className="safety-chart-legend safety-chart-legend--compact">
+                    {categorySeries.map((item) => {
+                      const share = safePercent(item.value, totalIncidents);
+                      return (
+                        <div className="safety-chart-legend-row" key={item.label}>
+                          <div className="safety-chart-legend-head">
+                            <span className="safety-chart-dot" style={{ background: item.color }} />
+                            <span>{item.label}</span>
+                            <strong>{item.value} · {share}%</strong>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </>
+              ) : (
+                <SafetyChartEmpty title="Ангиллын data байхгүй" message="Гарчиг, тайлбар дээрээс ангилал автоматаар тооцогдоно." />
+              )}
             </div>
           </div>
 
           <div className="panel">
-            <div className="panel-hdr"><div className="panel-title">Сарын хандлага</div></div>
-            <div style={{ padding: "0 12px 16px" }}>
-              <ResponsiveContainer width="100%" height={160}>
-                <AreaChart data={monthlyTrend}>
-                  <defs>
-                    <linearGradient id="sfTrend" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor="#EF4444" stopOpacity={0.3} />
-                      <stop offset="100%" stopColor="#EF4444" stopOpacity={0} />
-                    </linearGradient>
-                  </defs>
-                  <XAxis dataKey="label" axisLine={false} tickLine={false} tick={{ fill: "var(--muted)", fontSize: 9 }} />
-                  <YAxis axisLine={false} tickLine={false} tick={{ fill: "var(--muted)", fontSize: 9 }} />
-                  <Tooltip content={<SafetyTooltip />} />
-                  <Area type="monotone" dataKey="value" name="Нийт" stroke="#EF4444" strokeWidth={2} fill="url(#sfTrend)" dot={false} isAnimationActive={false} />
-                </AreaChart>
-              </ResponsiveContainer>
+            <div className="panel-hdr">
+              <div>
+                <div className="panel-title">Ангиллын тархалт</div>
+                <div className="panel-sub">Хамгийн их давтагдсан эрсдэл</div>
+              </div>
+            </div>
+            <div className="safety-chart-body chart-wrap">
+              {categoryHasData ? (
+                <ResponsiveContainer width="100%" height={184}>
+                  <BarChart key={`category-bars-${incidentChartKey}`} data={categorySeries} layout="vertical" barSize={16} margin={{ left: 0, right: 24, top: 8, bottom: 0 }}>
+                    <CartesianGrid stroke="var(--border)" horizontal={false} strokeDasharray="3 3" />
+                    <XAxis type="number" allowDecimals={false} axisLine={false} tickLine={false} tick={{ fill: "var(--muted)", fontSize: 9 }} />
+                    <YAxis type="category" dataKey="label" axisLine={false} tickLine={false} tick={{ fill: "var(--muted)", fontSize: 9 }} width={104} />
+                    <Tooltip content={<SafetyTooltip />} />
+                    <Bar dataKey="value" name="Тоо" radius={[0, 6, 6, 0]} isAnimationActive={false}>
+                      <LabelList dataKey="value" position="right" fill="var(--text)" fontSize={10} />
+                      {categorySeries.map((item) => <Cell key={item.label} fill={item.color} />)}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              ) : (
+                <SafetyChartEmpty title="Тархалт харагдах data алга" message="Incident нэмэгдмэгц давтамжийн баганан график шинэчлэгдэнэ." />
+              )}
+            </div>
+          </div>
+
+          <div className="panel">
+            <div className="panel-hdr">
+              <div>
+                <div className="panel-title">14 хоногийн хандлага</div>
+                <div className="panel-sub">Өдөр бүрийн нийт, нээлттэй, өндөр эрсдэл</div>
+              </div>
+            </div>
+            <div className="safety-chart-body chart-wrap">
+              {dailyHasData ? (
+                <ResponsiveContainer width="100%" height={184}>
+                  <AreaChart key={`daily-${incidentChartKey}`} data={dailySeries} margin={{ left: -18, right: 8, top: 8, bottom: 0 }}>
+                    <defs>
+                      <linearGradient id="sfTrend" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor="#EF4444" stopOpacity={0.34} />
+                        <stop offset="100%" stopColor="#EF4444" stopOpacity={0.03} />
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid stroke="var(--border)" vertical={false} strokeDasharray="3 3" />
+                    <XAxis dataKey="label" axisLine={false} tickLine={false} tick={{ fill: "var(--muted)", fontSize: 9 }} interval="preserveStartEnd" />
+                    <YAxis allowDecimals={false} axisLine={false} tickLine={false} tick={{ fill: "var(--muted)", fontSize: 9 }} />
+                    <Legend iconSize={8} wrapperStyle={{ fontSize: 10, paddingTop: 4 }} />
+                    <Tooltip content={<SafetyTooltip />} />
+                    <Area type="monotone" dataKey="total" name="Нийт" stroke="#EF4444" strokeWidth={2} fill="url(#sfTrend)" dot={false} isAnimationActive={false} />
+                    <Line type="monotone" dataKey="open" name="Нээлттэй" stroke="#F59E0B" strokeWidth={2} dot={{ r: 2.5, fill: "#F59E0B" }} isAnimationActive={false} />
+                    <Line type="monotone" dataKey="high" name="Өндөр" stroke="#DC2626" strokeWidth={2} dot={{ r: 2.5, fill: "#DC2626" }} isAnimationActive={false} />
+                  </AreaChart>
+                </ResponsiveContainer>
+              ) : (
+                <SafetyChartEmpty title="14 хоногийн incident алга" message="Сүүлийн 14 хоногийн шинэ бүртгэл энд timeline хэлбэрээр гарна." />
+              )}
             </div>
           </div>
         </div>
@@ -972,6 +1120,41 @@ export default function SafetyPage() {
           </div>
 
           <div style={{ display: "grid", gap: 14, alignContent: "start" }}>
+            <div className="panel">
+              <div className="panel-hdr">
+                <div>
+                  <div className="panel-title">Эрсдэлийн үнэлгээ</div>
+                  <div className="panel-sub">{riskAssessments.length} хуудасны хариултын нэгтгэл</div>
+                </div>
+              </div>
+              <div className="safety-chart-body safety-risk-answer-panel" key={`risk-${riskChartKey}`}>
+                {riskAnswerTotal > 0 ? (
+                  <div className="safety-risk-answer-list">
+                    {riskAnswerSeries.map((item) => {
+                      const share = safePercent(item.value, riskAnswerTotal);
+                      return (
+                        <div className="safety-risk-answer-row" key={item.label}>
+                          <div className="safety-risk-answer-head">
+                            <span className="safety-chart-dot" style={{ background: item.color }} />
+                            <div>
+                              <strong>{item.label}</strong>
+                              <span>{item.detail}</span>
+                            </div>
+                            <b>{item.value} · {share}%</b>
+                          </div>
+                          <div className="safety-chart-meter">
+                            <span style={{ background: item.color, width: `${share}%` }} />
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <SafetyChartEmpty title="Үнэлгээ бөглөгдөөгүй" message="Эрсдэл үнэлэх маягт хадгалахад хариултын график энд гарна." />
+                )}
+              </div>
+            </div>
+
             <div className="panel">
               <div className="panel-hdr"><div className="panel-title">Үйлдэл</div></div>
               <div style={{ padding: "4px 20px 16px", display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
