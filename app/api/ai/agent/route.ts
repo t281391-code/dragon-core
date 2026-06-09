@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import type { Prisma } from "@prisma/client";
 import { z } from "zod";
 import { getRequestUser, type AuthUser } from "@/lib/auth";
-import { getOpenAiApiKey } from "@/lib/env";
+import { getOpenAiApiKey, getOpenAiModel } from "@/lib/env";
 import { prisma } from "@/lib/prisma";
 import { checkRateLimit, safeInternalError } from "@/lib/security/api";
 import type { DepartmentName } from "@/lib/permissions";
@@ -46,7 +46,7 @@ type ToolRunResult = {
   actionType: ToolActionType;
 };
 
-const OPENAI_MODEL = process.env.OPENAI_MODEL ?? "gpt-5.5";
+const OPENAI_MODEL = getOpenAiModel();
 const APP_TIME_ZONE = process.env.APP_TIME_ZONE ?? "Asia/Ulaanbaatar";
 const MAX_CHAT_MESSAGES = 12;
 const dashboardScopeSchema = z.enum(["all", "warehouse", "production", "safety", "logistics"]);

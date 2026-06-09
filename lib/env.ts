@@ -1,4 +1,5 @@
 const DEV_JWT_SECRET = "kpi-dashboard-dev-secret-change-in-prod";
+const DEFAULT_OPENAI_MODEL = "gpt-5.4-nano";
 
 const SECRET_ENV_NAMES = ["DATABASE_URL", "JWT_SECRET", "OPENAI_API_KEY"] as const;
 
@@ -40,4 +41,18 @@ export function getOpenAiApiKey() {
     throw new Error("OPENAI_API_KEY is not configured.");
   }
   return apiKey;
+}
+
+export function getOpenAiModel() {
+  assertNoPublicSecretEnv();
+
+  const model = process.env.OPENAI_MODEL?.trim();
+  if (!model) return DEFAULT_OPENAI_MODEL;
+
+  if (model.startsWith("sk-")) {
+    console.warn("OPENAI_MODEL appears to contain an API key; using the default OpenAI model.");
+    return DEFAULT_OPENAI_MODEL;
+  }
+
+  return model;
 }
