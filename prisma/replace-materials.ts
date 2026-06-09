@@ -1,6 +1,4 @@
-import { PrismaClient } from "@prisma/client";
-
-const prisma = new PrismaClient();
+import { prisma } from "@/lib/prisma";
 
 const NEW_MATERIALS = [
   { name: "ANDO-V 90MM",     unit: "ш", category: "Бүтээгдэхүүн" },

@@ -1,8 +1,6 @@
-import { PrismaClient } from "@prisma/client";
+import { prisma } from "@/lib/prisma";
 import { randomBytes, scryptSync } from "node:crypto";
 import { DEFAULT_EQUIPMENT } from "../lib/equipmentConfig";
-
-const prisma = new PrismaClient();
 
 const roles = ["ADMIN", "MODERATOR", "USER"] as const;
 const departments = ["WAREHOUSE", "PRODUCTION", "SAFETY", "LOGISTICS"] as const;
